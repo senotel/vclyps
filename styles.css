@@ -1,0 +1,2353 @@
+/* ================================================================
+   vClyps by Vevris - stylesheet
+   Black / white / crimson. DARK is the default (set in app.js — an editor
+   sits beside video, and bright chrome washes out the picture); light is
+   opt-in via Settings. :root holds light, body.dark overrides it.
+   ================================================================ */
+
+:root {
+  /* LIGHT — the landing's story section: warm paper, warm ink. Not white.
+     A pure #fff page next to a #edeae2 one reads as a mistake, and warm paper
+     is kinder beside video anyway. */
+  --bg0: #edeae2;
+  --bg1: #e7e3da;
+  --bg2: #ded9ce;
+  --bg3: #d3cec1;
+  --line: #cdc7b9;
+  --text: #111210;
+  --t1: #55534b;
+  --t2: #86837a;
+  --acc: #dc143c;             /* crimson — the ONE red, landing and editor */
+  --acc2: #a50e2d;            /* deep crimson */
+  --acc-soft: rgba(220, 20, 60, 0.10);
+  --danger: #dc143c;
+  --glow: #f2efe8;
+  --bar: rgba(237, 234, 226, 0.86);
+  --stagebg: #e4e0d6;
+
+  /* Square, near enough. The landing is literally 0 (see .lp-plus); an app
+     needs a little softening at small sizes to stop borders looking chipped,
+     so 3px — crisp and drawn, never bubbly. */
+  --r: 3px;
+  --rs: 2px;
+  --topbar-h: 54px;
+  --shadow: 0 14px 34px rgba(17, 18, 16, 0.13);
+
+  /* Switzer, the same face the landing sets. This one line does more for how
+     the editor reads than any amount of spacing work: the system stack is
+     what made it look like a default dark theme. It is already loaded by
+     index.html for the landing, so it costs nothing extra. */
+  --font: "Switzer", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body.dark {
+  /* DARK — the landing's ground, carried through. Warm, not blue: every step
+     here is on the same hue as #111210, so the whole app reads as one room
+     rather than as an app that happens to be dark. */
+  --bg0: #111210;
+  --bg1: #171815;
+  --bg2: #1d1e1a;
+  --bg3: #26271f;
+  --line: #2e2f28;
+  --text: #edeae2;
+  --t1: #a5a298;
+  --t2: #6e6c63;
+  --acc: #dc143c;             /* was #e8244b — a third red nobody chose */
+  --acc2: #a50e2d;
+  --acc-soft: rgba(220, 20, 60, 0.15);
+  --glow: #151613;
+  --bar: rgba(17, 18, 16, 0.86);
+  --stagebg: #0a0b09;
+  --shadow: 0 16px 44px rgba(0, 0, 0, 0.62);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg0);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.hidden { display: none !important; }
+button { font-family: inherit; cursor: pointer; color: inherit; }
+
+.grad {
+  background: linear-gradient(92deg, var(--acc), var(--acc2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.spark { color: var(--acc); }
+
+/* feature gating (fixed at lv3: pro-only extras hidden) */
+body.lv3 [data-min="4"] { display: none !important; }
+
+/* ===================== TOP BAR ===================== */
+
+.topbar {
+  height: var(--topbar-h);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px;
+  background: var(--bar);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+  z-index: 40;
+}
+
+.tb-left, .tb-right { display: flex; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+.tb-right { justify-content: flex-end; }
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);          /* black mark on light, white on dark */
+  cursor: pointer;
+  user-select: none;
+}
+.logo-word {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.logo-word b { color: var(--acc); font-weight: 800; }
+
+.project-name {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--rs);
+  color: var(--t1);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 9px;
+  max-width: 150px;
+  min-width: 50px;
+}
+.project-name:hover { background: var(--bg2); color: var(--text); }
+.project-name:focus { outline: none; background: var(--bg2); border-color: var(--acc); color: var(--text); }
+
+/* Buttons */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--t1);
+  transition: all 0.15s ease;
+  flex: 0 0 auto;
+}
+.icon-btn:hover { background: var(--bg3); color: var(--text); }
+.icon-btn:active { transform: scale(0.93); }
+
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: var(--rs);
+  background: var(--acc);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 12px rgba(220, 20, 60, 0.3);
+  flex: 0 0 auto;
+}
+.primary-btn:hover { filter: brightness(1.1); }
+.primary-btn:active { transform: scale(0.97); }
+
+/* secondary / ghost share a height and radius so they line up in a .set-row
+   instead of stepping up and down beside each other. */
+.secondary-btn, .ghost-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--rs);
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.secondary-btn:active, .ghost-btn:active { transform: scale(0.975); }
+.secondary-btn:focus-visible, .ghost-btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Destructive, and it says so before you touch it — then says it louder once
+   it is armed and waiting for the second tap. */
+.danger-btn { color: var(--danger); border-color: rgba(220, 20, 60, 0.35); }
+.danger-btn:hover { border-color: var(--danger); background: var(--acc-soft); }
+.danger-btn.armed {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 700;
+}
+
+.secondary-btn {
+  border: 1px solid var(--line);
+  background: var(--bg2);
+  color: var(--text);
+  font-weight: 600;
+}
+.secondary-btn:hover { background: var(--bg3); border-color: var(--t2); }
+
+.ghost-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t1);
+  font-weight: 500;
+}
+.ghost-btn:hover { background: var(--bg3); color: var(--text); }
+
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.text-btn:hover { background: var(--acc-soft); }
+
+.editor-only { display: none; }
+body[data-screen="editor"] .editor-only { display: inline-flex; }
+body[data-screen="editor"] input.editor-only { display: inline-block; }
+
+/* ===================== SCREENS ===================== */
+
+.screen { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.screen.active { display: flex; }
+
+/* ── mode picker ── */
+/* Composed like a page, not stacked like a form: room at the top, a heading
+   with real size, and the same measure the landing uses. */
+.modes-wrap {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: clamp(40px, 9vh, 96px) clamp(20px, 5vw, 40px) 60px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+.modes-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--t2);
+  margin-bottom: 16px;
+}
+/* The eyebrow's crimson square is the landing's mark, carried over. */
+.modes-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: var(--acc);
+  flex: 0 0 auto;
+}
+.modes-title {
+  font-size: clamp(30px, 4.2vw, 46px);
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  margin-bottom: clamp(34px, 6vh, 58px);
+}
+/* Two across at the widest, not three. One card in a three-column grid looks
+   like two are missing; in a two-column grid it looks like the first of a set. */
+.mode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;
+}
+.mode-card:hover { border-color: var(--acc); background: var(--bg2); }
+.mode-card:hover .mode-ico { color: var(--acc); }
+.mode-card:active { transform: scale(0.985); }
+.mode-card:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mode-ico {
+  display: block;
+  line-height: 0;
+  color: var(--t1);
+  margin-bottom: 10px;
+  transition: color 0.16s ease;
+}
+.mode-name { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
+.mode-desc { font-size: 12px; font-weight: 400; color: var(--t1); line-height: 1.5; }
+/* What the mode is best for, set apart by a hairline so it reads as a
+   footnote to the card, not a third line of description. */
+.mode-best {
+  align-self: stretch;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--t2);
+}
+#screen-home { overflow-y: auto; }
+
+/* ===================== LANDING ===================== */
+
+.landing {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 22px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 22px 70px;
+}
+
+.landing-mark {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 26px rgba(220, 20, 60, 0.2));
+}
+body.dark .landing-mark { filter: invert(1); }
+
+.logo-img { width: 22px; height: 22px; object-fit: contain; display: block; }
+body.dark .logo-img { filter: invert(1); }
+
+.landing h1 {
+  font-size: clamp(34px, 6vw, 56px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.by-vevris {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--t2);
+  margin-top: -8px;
+}
+
+.landing-sub {
+  color: var(--t1);
+  font-size: 15px;
+  line-height: 1.65;
+  max-width: 540px;
+}
+
+.landing-feats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.feat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg1);
+}
+.feat-ico { font-size: 22px; }
+.feat strong { font-size: 13.5px; font-weight: 800; }
+.feat span { font-size: 11.5px; color: var(--t1); line-height: 1.5; }
+
+.begin-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 36px;
+  margin-top: 10px;
+  border: none;
+  border-radius: var(--rs);
+  background: var(--acc);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: 0 8px 30px rgba(220, 20, 60, 0.35);
+  transition: all 0.15s ease;
+}
+.begin-btn .spark { color: #fff; }
+.begin-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.begin-btn:active { transform: scale(0.97); }
+
+.landing-hint { font-size: 11.5px; color: var(--t2); }
+
+/* ===================== EDITOR ===================== */
+
+#screen-editor { min-height: 0; }
+
+.ai-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 12px 16px 0;
+  padding: 7px 7px 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg1);
+  transition: border-color 0.18s ease;
+}
+/* The crimson arrives on focus — a response to you, not a permanent shout. */
+.ai-bar:focus-within { border-color: var(--acc); }
+.ai-bar .spark { color: var(--acc); font-size: 13px; line-height: 1; flex: 0 0 auto; }
+.ai-bar input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  padding: 4px 0;
+}
+.ai-bar input:focus { outline: none; }
+.ai-bar input::placeholder { color: var(--t2); }
+.ai-go {
+  border: none;
+  border-radius: var(--rs);
+  padding: 9px 18px;
+  background: var(--acc);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  flex: 0 0 auto;
+  transition: background 0.16s ease;
+}
+.ai-go:hover { background: var(--acc2); }
+.ai-go:disabled { background: var(--bg3); color: var(--t2); }
+
+.fmt-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 14px 0;
+}
+.fmt-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+.fmt-row .chip-row { margin: 0; gap: 6px; }
+.fmt-row .chip { padding: 5px 11px; font-size: 11px; }
+.fmt-spacer { flex: 1 1 auto; }
+
+/* Find clips: how long, and from where. Plain labelled fields, one row on a
+   computer, wrapping to two on a phone. */
+.find-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 8px 14px 0;
+}
+/* From and To wrap together: a start on one line and its end on the next
+   reads as two unrelated settings */
+.find-range { display: inline-flex; align-items: center; gap: 12px; }
+.find-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+.find-field select,
+.find-field input {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.find-field input { width: 64px; font-variant-numeric: tabular-nums; }
+.find-field select:focus,
+.find-field input:focus { outline: none; border-color: var(--acc); }
+.find-field input.bad { border-color: var(--danger); }
+.find-src {
+  flex: 1 1 100px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+/* The found clips. Same rows as the music list; the reason under each title
+   is the point, so it wraps instead of being cut off. */
+.clip-watch {
+  display: block;
+  width: 100%;
+  max-height: 34vh;
+  margin: 0 0 10px;
+  border-radius: var(--rs);
+  background: #000;
+}
+.clip-row { align-items: flex-start; }
+.clip-row .mus-meta { gap: 3px; }
+.clip-row .snd-name { white-space: normal; }
+.clip-row .snd-hear, .clip-row .snd-add { margin-top: 2px; }
+.clip-why {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--t1);
+}
+.clip-row.made .snd-add { background: var(--bg0); border-color: var(--line); color: var(--t1); }
+
+/* generation status readout — makes silent failures impossible */
+.ai-status {
+  flex: 0 0 auto;
+  margin: 6px 14px 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--t2);
+}
+.ai-status b { color: var(--text); }
+.ai-status .warn { color: var(--acc); font-weight: 600; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--t1);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.chip:hover { border-color: var(--t2); color: var(--text); }
+.chip.selected { border-color: var(--acc); background: var(--acc-soft); color: var(--acc); font-weight: 700; }
+
+.stage-zone {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  padding: 12px 14px 6px;
+}
+
+.preview-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 140px;
+  position: relative;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage video, .stage img {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* The picture fills the box the layout gives it and never sizes the box
+   itself: a tall phone video would otherwise stretch the preview to its own
+   height whenever the editor has room to scroll. */
+#pv, #pi { position: absolute; inset: 0; }
+
+/* B-roll overlay. Positioned in px by app.js against the picture box (not the
+   stage), same as headings — so it lands identically in the window, fullscreen
+   and the export. z-index sits above the video but below text and captions. */
+.broll-layer {
+  position: absolute;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: 0;
+}
+.broll-layer.inset {
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* ABOVE the fade veil (z-index 3). The veil and this layer used to share a
+   z-index, and the veil comes later in the DOM — so it painted over the hook.
+   A hook starts at 0.1s and the opening fade runs 0.4s, meaning the single most
+   important text in the video spent most of its life behind a black curtain. */
+.overlay-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+/* Position and size come from app.js (headingLayout), NOT from here — the
+   same numbers drive the canvas export, so the two cannot drift. left/top are
+   set inline as the CENTRE of the line, which is why the translate is
+   unconditional; there are no longer per-position rules to disagree with it.
+   Anton is weight 400 only: asking for 800 gets a faked bold that the canvas
+   renders differently from the DOM. */
+/* The box gets an EXPLICIT width from app.js and is only shifted vertically.
+   It used to be placed by its centre (left + translateX(-50%)) with no width,
+   which makes CSS shrink-to-fit offer it just `container − left` — half the
+   picture. Long headings therefore wrapped to ~50% width no matter what
+   max-width said, and the re-centring hid the cause: the line looked fine in
+   the small preview and "stacked up" the moment fullscreen made it wider. */
+.overlay-text {
+  position: absolute;
+  transform: translateY(-50%);
+  text-align: center;
+  font-family: "Anton", "Arial Narrow", Impact, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 400;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
+  white-space: pre-wrap;
+  line-height: 1.15;
+}
+
+.fade-veil {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.cap-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.stage-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: var(--t2);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: radial-gradient(500px 260px at 50% 40%, #141418, #000);
+}
+.stage-add {
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: var(--rs);
+  background: var(--acc);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s ease, transform 0.18s ease;
+
+  transition: all 0.15s ease;
+}
+.stage-add:hover { background: var(--acc2); transform: translateY(-1px); }
+
+/* transport */
+.transport {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px 2px;
+}
+.play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.play-btn:hover { background: var(--acc); border-color: var(--acc); color: #fff; }
+
+.tcode {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--t1);
+  min-width: 40px;
+  text-align: center;
+}
+
+.seek {
+  flex: 1 1 auto;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg3);
+  border-radius: 999px;
+  cursor: pointer;
+  min-width: 60px;
+}
+.seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--acc);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+.seek::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--acc); border: 2px solid #fff;
+}
+.seek::-moz-range-progress { background: var(--acc); border-radius: 999px; height: 4px; }
+
+/* ─── Fullscreen preview (phone-friendly: exit + scrubber) ─── */
+.fs-exit { display: none; }
+
+body.previewFs #previewWrap {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+body.previewFs .stage {
+  flex: 1 1 auto;
+  border: none;
+  border-radius: 0;
+  background: #000;
+}
+body.previewFs .transport {
+  padding: 14px 20px calc(16px + env(safe-area-inset-bottom, 8px));
+  gap: 14px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.6), transparent);
+}
+body.previewFs .transport .play-btn { width: 48px; height: 48px; }
+body.previewFs .transport .icon-btn { width: 42px; height: 42px; }
+body.previewFs .tcode { color: #fff; font-size: 13px; }
+body.previewFs .seek { height: 5px; }
+
+body.previewFs .fs-exit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: 14px;
+  z-index: 310;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  backdrop-filter: blur(6px);
+}
+body.previewFs .fs-exit:active { transform: scale(0.92); }
+
+/* inspector */
+.inspector {
+  flex: 0 0 auto;
+  margin: 8px 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+  animation: rise 0.18s ease;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+.ins-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--t1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 180px;
+  overflow: hidden;
+}
+.ins-title em { font-style: normal; color: var(--acc); }
+
+.ins-group { display: flex; align-items: center; gap: 9px; }
+.ins-group label { font-size: 11px; font-weight: 700; color: var(--t2); white-space: nowrap; }
+.ins-group input[type="range"] {
+  width: 110px;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg3);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.ins-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--acc);
+}
+.ins-group input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--acc); border: none;
+}
+.ins-group output { font-size: 11px; color: var(--t1); min-width: 34px; font-variant-numeric: tabular-nums; }
+
+.ins-group input[type="text"] {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  width: 190px;
+}
+.ins-group input[type="text"]:focus { outline: none; border-color: var(--acc); }
+.ins-group input[type="color"] {
+  width: 30px; height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg2);
+  padding: 2px;
+  cursor: pointer;
+}
+
+.ins-seg { display: flex; gap: 3px; padding: 3px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--rs); }
+/* Every option takes an equal share of the track. Without this the buttons
+   size to their own label, so a short word like "Light" sat as a small pill
+   beside a wide empty "Dark" half. */
+.ins-seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--t1);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: var(--rs);
+  text-align: center;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.ins-seg button:hover:not(.active) { color: var(--text); background: var(--bg3); }
+.ins-seg button.active { background: var(--acc); color: #fff; }
+.ins-seg button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+.filter-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.fchip {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--t1);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.fchip:hover { color: var(--text); border-color: var(--t2); }
+.fchip.active { border-color: var(--acc); background: var(--acc-soft); color: var(--acc); }
+
+.ins-toggle {
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--t1);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+}
+.ins-toggle.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+
+.ins-close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--t2);
+  font-size: 14px;
+  width: 28px; height: 28px;
+  border-radius: 7px;
+}
+.ins-close:hover { background: var(--bg3); color: var(--text); }
+
+.ins-meta { font-size: 11px; color: var(--t2); font-variant-numeric: tabular-nums; }
+
+/* toolbar */
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 16px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toolbar::-webkit-scrollbar { display: none; }
+
+.tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 64px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--t1);
+  /* Small caps with real tracking. A 10px label set solid looks like a
+     placeholder; tracked out, the same label looks specified. */
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.tool svg { opacity: 0.9; }
+.tool:hover { background: var(--bg2); color: var(--text); }
+.tool:hover svg { opacity: 1; }
+.tool:active { transform: translateY(0.5px); }
+.tool-danger:hover { color: var(--danger); }
+
+/* media strip */
+.media-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.media-strip::-webkit-scrollbar { display: none; }
+
+.ms-add {
+  flex: 0 0 auto;
+  width: 74px;
+  height: 52px;
+  border: 1px dashed var(--line);
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--t2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+.ms-add:hover { border-color: var(--acc); color: var(--acc); }
+
+.ms-item {
+  position: relative;
+  flex: 0 0 auto;
+  width: 74px;
+  height: 52px;
+  border-radius: var(--rs);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+  cursor: pointer;
+}
+.ms-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ms-item .ms-dur {
+  position: absolute;
+  bottom: 3px; right: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.ms-item .ms-plus {
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 20px; height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.ms-item:hover .ms-plus { opacity: 1; }
+.ms-item .ms-plus:hover { background: var(--acc); }
+
+.ms-state {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 6px rgba(220, 20, 60, 0.8);
+}
+.ms-state.work { animation: blink 1s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+/* ===================== TIMELINE ===================== */
+
+.tl-zone {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  background: var(--bg1);
+  margin-top: 8px;
+}
+
+.tl-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px 7px;
+  border-bottom: 1px solid var(--line);
+}
+.tl-time {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--acc);
+}
+.tl-hint {
+  flex: 1 1 auto;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-zoom { display: flex; align-items: center; gap: 7px; color: var(--t2); }
+.tl-zoom input {
+  width: 100px;
+  height: 3px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg3);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tl-zoom input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--t1);
+}
+.tl-zoom input::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: var(--t1); border: none; }
+
+.tl-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0 12px;
+}
+
+.tl-inner { position: relative; min-width: 100%; width: max-content; padding: 0 20px; }
+
+.ruler {
+  height: 22px;
+  position: relative;
+  user-select: none;
+  cursor: crosshair;
+}
+.ruler span {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--t2);
+}
+.rt {
+  position: absolute;
+  bottom: 0;
+  height: 6px;
+  border-left: 1px solid var(--t2);
+  pointer-events: none;
+}
+.rt span {
+  position: absolute;
+  bottom: 8px;
+  left: 3px;
+  font-size: 9px;
+  color: var(--t2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track { position: relative; }
+.track-text {
+  height: 26px;
+  margin: 4px 0;
+  border-radius: var(--rs);
+  background: var(--bg1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* The main track is the spine, so it is the tallest and the only one with a
+   solid ground rather than a tint. */
+.track-video {
+  height: 58px;
+  border-radius: var(--rs);
+  background: var(--bg2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: crosshair;
+}
+
+.clip {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+  background: var(--bg3);
+  display: flex;
+  align-items: stretch;
+  cursor: grab;
+  touch-action: none;
+  min-width: 26px;
+  user-select: none;
+}
+.clip img { height: 100%; aspect-ratio: 1; object-fit: cover; opacity: 0.95; pointer-events: none; flex: 0 0 auto; }
+.clip .cname {
+  align-self: center;
+  padding: 0 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.clip .cdur {
+  position: absolute;
+  bottom: 2px; right: 5px;
+  font-size: 8.5px;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.clip.sel { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); z-index: 3; }
+.clip.dragging { opacity: 0.75; z-index: 8; cursor: grabbing; }
+
+.handle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 4;
+}
+.handle::after {
+  content: "";
+  width: 3.5px;
+  height: 55%;
+  border-radius: 3px;
+  background: #fff;
+}
+.handle.hl { left: 0; background: linear-gradient(90deg, var(--acc), transparent); }
+.handle.hr { right: 0; background: linear-gradient(-90deg, var(--acc), transparent); }
+
+.tclip {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 7px;
+  background: var(--acc-soft);
+  border: 1px solid rgba(220, 20, 60, 0.45);
+  color: var(--acc2);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  min-width: 24px;
+  user-select: none;
+}
+.tclip.sel { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); z-index: 3; }
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--text);
+  z-index: 6;
+  pointer-events: none;
+}
+.playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4.5px;
+  border: 5.5px solid transparent;
+  border-top: 7px solid var(--text);
+}
+
+
+/* ===================== OVERLAY + AUDIO TRACKS =====================
+
+   CapCut's structure, vClyps' palette. Each track carries its own colour so a
+   glance down the timeline tells you what kind of thing is where without
+   reading a single label: crimson is the footage you cut, amber sits over it,
+   violet is sound. Height differences do the same job — the main track is the
+   tallest because it is the spine of the edit. */
+
+/* Every lane is drawn whether or not it holds anything — the empty lane is
+   what tells you where a thing can go. Neutral, though: see the note above. */
+.track-overlay {
+  height: 30px;
+  margin: 4px 0 3px;
+  border-radius: var(--rs);
+  background: var(--bg1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.track-audio {
+  height: 30px;
+  margin: 5px 0 0;
+  border-radius: var(--rs);
+  background: var(--bg1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.oclip, .aclip {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Overlay — amber. It is a picture, so it shows its thumbnail like a clip. */
+.oclip {
+  min-width: 26px;
+  background: rgba(214, 138, 20, 0.14);
+  border: 1px solid rgba(214, 138, 20, 0.5);
+  color: #8a5709;
+}
+.oclip img {
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  flex: 0 0 auto;
+  pointer-events: none;
+  opacity: 0.95;
+}
+.oclip .oname {
+  padding: 0 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.oclip.sel {
+  border-color: #d68a14;
+  box-shadow: 0 0 0 3px rgba(214, 138, 20, 0.22);
+  z-index: 3;
+}
+
+/* Sound — violet, and it wears a waveform so it never reads as a picture. */
+.aclip {
+  min-width: 22px;
+  background: rgba(109, 76, 214, 0.14);
+  border: 1px solid rgba(109, 76, 214, 0.5);
+  color: #4a2fa8;
+  padding: 0 6px;
+  gap: 6px;
+}
+.aclip .aname {
+  font-size: 9.5px;
+  font-weight: 700;
+  pointer-events: none;
+  flex: 0 0 auto;
+}
+.aclip .awave {
+  display: flex;
+  align-items: center;
+  gap: 1.5px;
+  height: 60%;
+  flex: 1 1 auto;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.aclip .awave i {
+  width: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.aclip.sel {
+  border-color: #6d4cd6;
+  box-shadow: 0 0 0 3px rgba(109, 76, 214, 0.22);
+  z-index: 3;
+}
+
+/* The + at the end of the main track. Dashed, so it reads as a slot waiting to
+   be filled rather than as a clip that is already there. */
+.clip-add {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 40px;
+  margin-left: 6px;
+  border-radius: 9px;
+  border: 1.5px dashed var(--t2);
+  background: transparent;
+  color: var(--t2);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.16s, color 0.16s, background 0.16s;
+}
+.clip-add:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+  background: var(--acc-soft);
+}
+
+/* The playhead is fixed in the middle now, so it is permanent furniture rather
+   than a marker that comes and goes — it earns a bit more presence. */
+.playhead { width: 2px; }
+.playhead::before {
+  left: -5px;
+  border: 6px solid transparent;
+  border-top: 8px solid var(--acc);
+}
+.playhead { background: var(--acc); }
+
+/* Dark theme: the amber and violet inks are readable on white and invisible
+   on near-black, so only the TEXT colour flips — the fills and borders were
+   picked to work on both and are left alone. */
+body.dark .oclip { color: #f0b455; }
+body.dark .aclip { color: #b7a2f5; }
+
+/* ===================== SOUNDS SHEET =====================
+
+   A list, not a gallery of cards. Ten sounds is something you scan down, and a
+   row that is the same height as the thing it names is quicker to read than a
+   tile that has to be looked AT. Name on the left, length beside it, then the
+   two things you can do. */
+
+.sheet-sub {
+  font-size: 11.5px;
+  color: var(--t2);
+  font-variant-numeric: tabular-nums;
+}
+
+.snd-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 6px;
+}
+
+.snd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--rs);
+  border: 1px solid transparent;
+  transition: background 0.14s, border-color 0.14s;
+}
+.snd-row:hover { background: var(--bg1); }
+.snd-row + .snd-row { border-top: 1px solid var(--line); border-radius: var(--rs); }
+.snd-row.lit { border-color: #6d4cd6; background: rgba(109, 76, 214, 0.09); }
+
+.snd-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snd-dur {
+  font-size: 10.5px;
+  color: var(--t2);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.snd-hear, .snd-add {
+  flex: 0 0 auto;
+  cursor: pointer;
+  /* Square like the rest of the product. The round PREVIEW button below is
+     the exception on purpose — a play affordance is round everywhere. */
+  border-radius: var(--rs);
+  border: 1px solid var(--line);
+  background: var(--bg0);
+  color: var(--t1);
+  font-size: 11px;
+  font-weight: 600;
+  transition: border-color 0.14s, color 0.14s, background 0.14s, transform 0.1s;
+}
+.snd-hear:active, .snd-add:active { transform: scale(0.94); }
+
+/* Preview is a round play button — it does one obvious thing and needs no word. */
+.snd-hear {
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.snd-hear svg { margin-left: 1.5px; }   /* a triangle looks off-centre when it is centred */
+.snd-hear:hover { border-color: var(--t2); color: var(--text); }
+
+.snd-add {
+  padding: 6px 14px;
+  border-color: var(--acc);
+  background: var(--acc);
+  color: #fff;
+}
+.snd-add:hover { background: var(--acc2); border-color: var(--acc2); }
+
+/* Library, when it is being used to pick an overlay rather than to browse */
+.lib-note {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--acc);
+  font-weight: 600;
+}
+.lib-item.pickable { cursor: pointer; }
+.lib-item.pickable:hover {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-soft);
+}
+
+/* ===================== SHEETS ===================== */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 8, 10, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: var(--bg0);
+  border: 1px solid var(--line);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(26px + env(safe-area-inset-bottom));
+  animation: sheetUp 0.22s ease;
+}
+@keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.sheet-grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--bg3);
+  margin: 4px auto 14px;
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sheet-head h3 { font-size: 16px; font-weight: 800; }
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 9px;
+}
+.lib-item {
+  position: relative;
+  aspect-ratio: 16 / 11;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+}
+.lib-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lib-item .li-badge {
+  position: absolute;
+  bottom: 4px; left: 5px;
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.lib-item .li-x {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lib-item .li-x:hover { background: var(--danger); }
+.lib-empty { text-align: center; color: var(--t2); font-size: 13px; padding: 26px 0; }
+
+/* settings sheet */
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.set-group:last-of-type { border-bottom: none; }
+.set-group > label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.set-note { font-size: 11px; font-weight: 500; color: var(--t2); line-height: 1.5; }
+.set-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.set-input {
+  flex: 1 1 180px;
+  height: 38px;              /* matches .secondary-btn so the row sits flush */
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* ── Settings → About ──
+   Subtle by design: the version is for support and debugging, so it sits at the
+   bottom of Settings and never on the editing interface. */
+.about-group { padding-top: 16px; }
+.about-app { display: flex; align-items: center; gap: 11px; }
+.about-logo { width: 30px; height: 30px; object-fit: contain; opacity: 0.9; }
+body.dark .about-logo { filter: invert(1); }
+.about-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.about-lines strong { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.about-version {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t2);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.set-input::placeholder { color: var(--t2); }
+.set-input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+.set-soon {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--t2);
+}
+
+/* ===================== EXPORT OVERLAY ===================== */
+
+.export-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 8, 10, 0.7);
+  backdrop-filter: blur(5px);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.export-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg0);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px 24px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.export-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 20px; }
+.exp-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg3);
+  overflow: hidden;
+}
+.exp-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--acc), var(--acc2));
+  transition: width 0.2s linear;
+}
+.exp-status { margin: 12px 0 20px; font-size: 12px; color: var(--t1); }
+#expPct { color: var(--acc); font-weight: 700; }
+
+/* ===================== TOAST ===================== */
+
+.toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  border-radius: var(--r);
+  background: var(--bg0);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow);
+  z-index: 200;
+  max-width: min(92vw, 440px);
+  text-align: center;
+  animation: toastIn 0.2s ease;
+}
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ===================== SCROLLBARS ===================== */
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 99px; border: 2px solid var(--bg1); }
+::-webkit-scrollbar-thumb:hover { background: var(--t2); }
+
+/* ===================== RESPONSIVE ===================== */
+
+/* A phone's browser bars come and go; the dynamic height is the part that is
+   actually on screen, so the bottom of the timeline is never under them. */
+@supports (height: 100dvh) {
+  body { height: 100dvh; }
+}
+
+/* The editor scrolls when it is taller than the window (a short laptop
+   screen with a clip's settings open, or any phone) and the preview stays
+   pinned at the top while it does, so you always see what you are changing.
+   Before this the preview shrank to nothing and slid over the settings. */
+#screen-editor { overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: env(safe-area-inset-bottom); }
+.stage-zone { flex: 1 0 auto; position: sticky; top: 0; z-index: 20; background: var(--bg0); }
+/* sticky makes a stacking layer, which would trap the fullscreen preview
+   under the top bar */
+body.previewFs .stage-zone { position: static; }
+/* A phone on its side is too short to keep the preview pinned and still
+   leave room to work, so there it scrolls away with everything else. */
+@media (max-height: 500px) {
+  .stage-zone { position: static; }
+}
+
+/* Touchscreens have no hover, so what hover reveals on a computer is simply
+   shown, and the trim handles are wide enough for a finger. */
+@media (hover: none) {
+  .ms-item .ms-plus { opacity: 1; }
+}
+@media (pointer: coarse) {
+  .handle { width: 20px; }
+}
+
+@media (max-width: 760px) {
+  .topbar { padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); gap: 6px; }
+  .logo-word { font-size: 14px; }
+  /* In the editor the title takes the logo's place: Back already goes home,
+     and naming the video matters more than the mark. */
+  body[data-screen="editor"] .logo { display: none; }
+  .tb-left { gap: 4px; }
+  .tb-right { flex: 0 0 auto; gap: 2px; }
+  .topbar .icon-btn { width: 32px; height: 36px; }
+  .project-name { flex: 1 1 auto; width: 100%; min-width: 0; max-width: none; padding: 7px 8px; font-size: 13px; color: var(--text); }
+  body[data-screen="editor"] .project-name { border-color: var(--line); }
+  #exportBtn { padding: 8px 11px; gap: 6px; }
+
+  .ai-bar { margin: 8px 10px 0; }
+  .fmt-row { margin: 8px 10px 0; }
+  .find-row { margin: 8px 10px 0; }
+  .ai-status { margin: 6px 10px 0; }
+  .stage-zone { padding: 8px 10px 2px; }
+  /* A third of the screen for the picture, the rest for the work, the split
+     CapCut uses on a phone */
+  .stage { min-height: clamp(190px, 34vh, 420px); }
+  .transport { gap: 6px; padding-top: 6px; }
+  .tcode { min-width: 36px; font-size: 11px; }
+
+  /* The settings for what is selected open under the timeline (see
+     revealInspector in app.js) */
+  .inspector { order: 1; margin: 8px 10px 12px; padding: 10px 12px; gap: 12px 14px; }
+  .ins-group { flex-wrap: wrap; }
+  .ins-group input[type="range"] { width: 120px; }
+  .ins-group input[type="text"] { width: 160px; }
+
+  .toolbar { justify-content: flex-start; gap: 4px; padding: 4px 8px; margin-top: 6px; }
+  .tool { min-width: 56px; padding: 6px 8px; gap: 5px; white-space: nowrap; }
+  .media-strip { padding: 6px 10px; gap: 7px; }
+  .ms-add, .ms-item { width: 62px; height: 44px; }
+
+  .tl-zone { margin-top: 0; border-top: 0; }
+  .tl-top { padding: 6px 12px; }
+  .tl-hint { display: none; }
+  .tl-scroll { padding: 4px 0 10px; }
+
+  .sheet { border-radius: 18px 18px 0 0; }
+  .toast { bottom: 110px; }
+}
+
+/* On phones and tablets, lanes with nothing on them fold away and give the
+   room to the preview; each comes back the moment something is put on it */
+@media (max-width: 1100px) {
+  .track.empty { display: none; }
+}
+
+/* Room for the title on the narrowest phones */
+@media (max-width: 350px) {
+  #exportBtn .exp-word { display: none; }
+  #exportBtn { padding: 8px 10px; }
+}
+
+
+/* ===================== TOLD, NOT INTERRUPTED =====================
+
+   Two surfaces that speak for the app itself rather than for the browser. */
+
+/* One notification language in fullscreen, compact preview and completion.
+   Opaque fallback first; glass is a progressive enhancement. */
+.notice-card {
+  --swipe-x: 0px;
+  --swipe-y: 0px;
+  --notice-enter: 10px;
+  position: fixed;
+  z-index: 420;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 20px 12px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg1);
+  color: var(--text);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 20%), 0 2px 6px rgb(0 0 0 / 8%), inset 0 1px 0 rgb(255 255 255 / 6%);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(var(--swipe-x), calc(var(--swipe-y) + var(--notice-enter)));
+  transition: opacity .22s ease, transform .32s cubic-bezier(.22, 1, .36, 1), visibility .32s;
+  touch-action: none;
+}
+@supports (backdrop-filter: blur(20px)) {
+  .notice-card { background: var(--bar); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+}
+.notice-card.on { --notice-enter: 0px; visibility: visible; opacity: var(--swipe-opacity, 1); pointer-events: auto; }
+.notice-card.dragging { transition: none; cursor: grabbing; user-select: none; }
+.fs-notice { left: 0; right: 0; margin-inline: auto; bottom: max(100px, calc(env(safe-area-inset-bottom) + 88px)); }
+.done-card { top: calc(var(--topbar-h) + 96px + env(safe-area-inset-top)); right: max(20px, env(safe-area-inset-right)); }
+.notice-symbol { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 5px; color: var(--t1); }
+.notice-symbol svg { width: 19px; height: 19px; }
+.notice-success { color: var(--acc); background: var(--acc-soft); border-color: transparent; }
+.notice-copy { flex: 1; min-width: 0; padding-top: 1px; }
+.notice-eyebrow { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; color: var(--t2); font-size: 9px; line-height: 1.3; font-weight: 600; text-transform: uppercase; letter-spacing: .13em; }
+.notice-dot { width: 3px; height: 3px; background: var(--acc); }
+.notice-title { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.notice-detail { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 5px; color: var(--t1); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.notice-detail:empty { display: none; }
+.notice-close { display: grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; margin: -8px -4px 0 0; padding: 12px; border: 0; border-radius: 4px; background: transparent; color: var(--t2); cursor: pointer; transition: background .15s, color .15s; }
+.notice-close svg { width: 16px; height: 16px; }
+.notice-close:hover { background: var(--bg3); color: var(--text); }
+.notice-close:focus-visible, .notice-action:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.notice-action { display: inline-flex; align-items: center; gap: 16px; min-height: 44px; margin-top: 4px; color: var(--text); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.notice-action span { color: var(--acc); }
+@media (max-width: 640px) {
+  .notice-card { width: auto; max-width: none; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); padding: 16px 12px 16px 16px; gap: 12px; }
+  .fs-notice { bottom: max(92px, calc(env(safe-area-inset-bottom) + 80px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notice-card { transition: none; }
+}
+
+
+/* Sound search. Sits between the sheet head and the list, quiet until used. */
+.snd-search { margin: 2px 0 10px; }
+.snd-search input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg1);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color .16s ease;
+}
+.snd-search input::placeholder { color: var(--t2); }
+.snd-search input:focus { outline: none; border-color: var(--acc); }
+.snd-search input::-webkit-search-cancel-button { filter: grayscale(1) opacity(.5); }
+.snd-none { padding: 14px 2px; font-size: 12.5px; color: var(--t2); }
+
+
+/* ===================== PAGES =====================
+
+   Settings and the admin panel are screens, not sheets. A bottom sheet is for
+   a quick choice you make and dismiss; these are places you go, read, and
+   change deliberately, so they get a page's composition: room at the top, a
+   heading with real size, and sections separated by rules. Same measure as the
+   modes screen so the three feel like one product. */
+
+.page-wrap {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: clamp(36px, 8vh, 88px) clamp(20px, 5vw, 40px) 72px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+.page-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--t2);
+  margin-bottom: 16px;
+}
+.page-eyebrow::before { content: ""; width: 7px; height: 7px; background: var(--acc); flex: 0 0 auto; }
+.page-title {
+  font-size: clamp(30px, 4.2vw, 46px);
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  margin-bottom: clamp(30px, 5vh, 52px);
+}
+
+/* Each setting is its own band with a rule above it, so the page reads as a
+   list of decisions rather than a wall of controls. */
+.page-wrap .set-group {
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+}
+.page-wrap .set-group:first-of-type { border-top: 0; padding-top: 0; }
+.page-wrap .set-group > label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+}
+.page-wrap .set-note {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--t1);
+  max-width: 62ch;
+  margin-top: 6px;
+}
+.page-wrap .set-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.page-wrap .set-soon { font-size: 12px; color: var(--t2); padding: 20px 0 0; font-style: italic; }
+.page-wrap .about-group { border-top: 1px solid var(--line); }
+.page-wrap .about-version { font-size: 11.5px; color: var(--t2); margin-top: 12px; font-variant-numeric: tabular-nums; }
+
+/* ===================== ADMIN ===================== */
+
+.admin-lock { max-width: 460px; }
+.admin-err { margin-top: 10px; font-size: 12px; color: var(--danger); }
+.admin-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+.admin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 132px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg1);
+}
+.admin-tile-v { font-size: 26px; font-weight: 500; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.admin-tile-k { font-size: 9.5px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: var(--t2); }
+.admin-list { margin-top: 26px; }
+.admin-sub { font-size: 9.5px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: var(--t2); margin: 26px 0 10px; }
+.admin-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.admin-row-k { color: var(--text); }
+.admin-row-n { color: var(--t2); font-variant-numeric: tabular-nums; }
+.admin-json {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg1);
+  color: var(--t1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+/* .ins-seg was built for the inspector, where it sits inline in a narrow
+   column. On a full-width page it stretched edge to edge and read as two
+   enormous buttons, so it is pinned to its content here. */
+.page-wrap .ins-seg { width: fit-content; max-width: 100%; }
+.page-wrap .ins-seg button { min-width: 88px; }
+
+
+/* ===================== AUDIO: MUSIC AND EFFECTS =====================
+
+   Two tabs in one sheet, the way TikTok and Instagram keep music behind a
+   single Sounds control. Square, per the house rules. */
+
+.aud-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.aud-tab {
+  position: relative;
+  padding: 10px 14px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--t2);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .16s ease;
+}
+.aud-tab:hover { color: var(--text); }
+/* The active tab is marked by a rule under it, not by a filled lozenge. */
+.aud-tab.active { color: var(--text); }
+.aud-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 14px; right: 14px; bottom: -1px;
+  height: 2px;
+  background: var(--acc);
+}
+
+.mus-status { min-height: 18px; margin: 0 0 8px; font-size: 11.5px; color: var(--t2); }
+.mus-row .mus-meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mus-row .snd-name { flex: 0 1 auto; }
+.mus-by {
+  font-size: 10.5px;
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mus-licence {
+  margin: 14px 0 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--t2);
+}
+
+/* ===================== THE MUSIC LANE =====================
+
+   Below sound effects, its own lane, as CapCut does it: a bed runs the whole
+   length and on the effects lane it would sit behind every effect and steal
+   their clicks. Neutral like the other lanes, with the brand crimson as a
+   single edge rather than a fill. */
+.track-music {
+  height: 26px;
+  margin: 5px 0 0;
+  border-radius: var(--rs);
+  background: var(--bg1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.mclip {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-radius: var(--rs);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--acc);
+  background: var(--bg3);
+  color: var(--t1);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.mclip::before { content: "\266A"; font-size: 11px; color: var(--acc); }
+.mclip .mname { font-size: 10px; font-weight: 600; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; }
+.mclip.sel { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); color: var(--text); z-index: 3; }
+
+/* ===================== ADD MEDIA =====================
+   One sheet for every way in. The device comes first and largest because it
+   is what most people use; a link sits under it because pasting is one
+   gesture; the cloud services follow, and only the ones that are set up. */
+.add-device {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg1);
+  color: var(--text);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.add-device:hover { border-color: var(--acc); background: var(--bg2); }
+.add-device:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.add-device-main { font-size: 14px; font-weight: 700; }
+.add-device-sub { font-size: 11.5px; color: var(--t2); }
+/* A phone's other ways in, under the gallery: same card, half the width */
+.add-ways { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.add-ways:has(#addCamera.hidden) #addFiles { grid-column: 1 / -1; }
+.add-way {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg1);
+  color: var(--text);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.add-way:hover { border-color: var(--acc); background: var(--bg2); }
+.add-way:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.add-way-main { font-size: 13px; font-weight: 700; }
+.add-way-sub { font-size: 11px; color: var(--t2); }
+
+/* Your audio: a sound opens to a player and its Download */
+.mine-row { cursor: pointer; }
+.mine-row.lit { border-color: var(--acc); background: var(--acc-soft); }
+.mine-row:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.mine-open { display: flex; flex-direction: column; gap: 10px; padding: 10px 10px 14px; }
+.mine-open audio { width: 100%; height: 40px; }
+.mine-dl { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.mine-fmt { flex: 1 1 160px; min-width: 0; font-size: 11.5px; line-height: 1.45; color: var(--t2); overflow-wrap: anywhere; }
+.add-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.add-src {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg0);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.add-src:hover { border-color: var(--t2); }
+.add-src:disabled { opacity: 0.5; cursor: default; }
+.add-src.on { border-color: var(--acc); color: var(--acc); }
+.add-status { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; }
+.add-status .mus-status { flex: 1 1 auto; margin: 0; }
+.add-note {
+  margin: 14px 0 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--t2);
+}
+.add-more { margin: 8px 0 0; }
+
+/* ===================== AUDIO CLIPS =====================
+   Imported audio and sound extracted from a video. Blue, so it never reads as
+   a sound effect (violet), the music bed (crimson edge) or an overlay (amber).
+   Same shape as a sound, and it trims like an overlay. */
+.track-uaudio {
+  height: 30px;
+  margin: 5px 0 0;
+  border-radius: var(--rs);
+  background: var(--bg1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.uclip {
+  position: absolute;
+  top: 1px;            /* set per row by renderUserAudioTrack */
+  height: 28px;
+  min-width: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  background: rgba(43, 127, 184, 0.14);
+  border: 1px solid rgba(43, 127, 184, 0.5);
+  color: #1d5d88;
+}
+.uclip .uname { font-size: 9.5px; font-weight: 700; pointer-events: none; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.uclip .awave { display: flex; align-items: center; gap: 1.5px; height: 60%; flex: 1 1 auto; overflow: hidden; pointer-events: none; opacity: 0.55; }
+.uclip .awave i { width: 1.5px; border-radius: 1px; background: currentColor; flex: 0 0 auto; }
+.uclip.sel { border-color: #2b7fb8; box-shadow: 0 0 0 3px rgba(43, 127, 184, 0.22); z-index: 3; }
+body.dark .uclip { color: #7fb8e0; }
+
+/* An audio file in the strip and the library: it has no picture, so it shows
+   what it is instead. */
+.ms-item.ms-audio, .lib-item.li-audio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg2);
+  color: #2b7fb8;
+}
+.ms-audio svg, .li-audio svg { width: 26px; height: 26px; }
+.ms-audio .ms-name {
+  position: absolute;
+  top: 4px; left: 5px; right: 24px;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mine-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 12px; }
+
+
+/* ===================== CAPTIONS SHEET =====================
+
+   Make them, then three tabs: how they look, what they say, which language.
+   The style grid is the centre of it, so it gets the room: small moving
+   previews, three across on a phone, more on a computer. */
+
+#captionSheet { max-width: 640px; }
+.cap-actions { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
+.cap-make { padding: 10px 18px; font-size: 12.5px; }
+.cap-status { min-height: 18px; }
+
+.cap-cats {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 0 10px;
+  padding-bottom: 2px;
+}
+.cap-cats::-webkit-scrollbar { display: none; }
+.cap-cat { flex: 0 0 auto; padding: 6px 11px; font-size: 11px; }
+
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.cap-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg1);
+  color: var(--t1);
+  overflow: hidden;
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+.cap-tile:hover { border-color: var(--t2); }
+.cap-tile.selected { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft); color: var(--text); }
+.cap-tile:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+/* a dark frame whatever the theme: captions are designed to sit on footage */
+.cap-tile-cv {
+  display: block;
+  width: 100%;
+  height: 64px;
+  background: linear-gradient(180deg, #23251f, #0d0e0c);
+}
+.cap-tile-name {
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cap-pane { padding-bottom: 6px; }
+.cap-field { display: flex; flex-direction: column; gap: 7px; margin: 0 0 16px; }
+.cap-field > label, .cap-sliders > label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.cap-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cap-inline select { flex: 1 1 180px; }
+#captionSheet select,
+#captionSheet textarea {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+#captionSheet select { height: 38px; padding: 0 10px; }
+#captionSheet textarea { resize: vertical; line-height: 1.5; }
+#captionSheet select:focus, #captionSheet textarea:focus { outline: none; border-color: var(--acc); }
+.cap-seg { flex-wrap: wrap; }
+.cap-seg button { flex: 1 0 auto; }
+.cap-seg button:disabled { opacity: 0.4; cursor: default; }
+
+.cap-sliders { gap: 10px; }
+.cap-sliders > label { display: flex; flex-direction: column; gap: 6px; }
+.cap-sliders output { font-weight: 500; color: var(--t2); margin-left: 6px; }
+.cap-sliders input[type="range"] { width: 100%; accent-color: var(--acc); }
+.cap-sliders .text-btn { align-self: flex-start; padding-left: 0; }
+
+.cap-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.cap-toggle:first-child { padding-top: 2px; }
+.cap-toggle input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--acc); flex: 0 0 auto; }
+.cap-toggle span { display: flex; flex-direction: column; gap: 3px; }
+.cap-toggle b { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.cap-toggle small { font-size: 11px; line-height: 1.45; color: var(--t2); }
+.cap-pane .cap-toggle + .cap-field { margin-top: 14px; }
+
+@media (min-width: 761px) {
+  .cap-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+  .cap-tile-cv { height: 72px; }
+}
+/* three across on a phone: more styles in view, each still readable */
+@media (max-width: 760px) {
+  .cap-grid { grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 6px; }
+  .cap-tile-cv { height: 58px; }
+}

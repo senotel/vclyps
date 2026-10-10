@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Where a Zoom or Vimeo sign-in window lands when the sign-in page has cut
+     its link back to vClyps (see resultPage in worker.js). This page is on
+     vClyps' own site, so it can hand the result to the open editor over a
+     BroadcastChannel, then it closes itself. It keeps nothing. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>vClyps sign-in</title>
+  <style>
+    :root { --bg: #ffffff; --text: #111111; --muted: #666666; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0d0d0f; --text: #f2f2f2; --muted: #9a9a9a; } }
+    body { margin: 0; padding: 28px 16px; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+    p { margin: 0 0 6px; max-width: 420px; }
+    .muted { color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <p id="msg">Finishing sign-in…</p>
+  <p class="muted" id="sub"></p>
+  <script>
+    (function () {
+      var data = null;
+      try { data = JSON.parse(decodeURIComponent(location.hash.slice(1))); } catch (e) {}
+      // the result is in the address bar; take it out before anything else
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}
+      var msg = document.getElementById("msg"), sub = document.getElementById("sub");
+      if (!data || data.type !== "vclyps-oauth") {
+        msg.textContent = "This sign-in link isn't valid.";
+        sub.textContent = "Close this window and try again from vClyps.";
+        return;
+      }
+      try {
+        var ch = new BroadcastChannel("vclyps-oauth");
+        ch.postMessage(data);
+        ch.close();
+      } catch (e) {
+        msg.textContent = "This browser couldn't pass the sign-in back to vClyps.";
+        sub.textContent = "Close this window and try again, or use another browser.";
+        return;
+      }
+      msg.textContent = data.error ? data.error : "Signed in. You can close this window.";
+      sub.textContent = "Back to vClyps.";
+      setTimeout(function () { window.close(); }, 300);
+    })();
+  </script>
+</body>
+</html>

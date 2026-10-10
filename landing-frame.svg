@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" fill="none">
+  <!-- Original vector film study for the landing page. Not user footage. -->
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="1500" gradientUnits="userSpaceOnUse"><stop stop-color="#292825"/><stop offset=".47" stop-color="#c7b6a0"/><stop offset="1" stop-color="#b39172"/></linearGradient>
+    <linearGradient id="back" x1="300" y1="580" x2="900" y2="1230" gradientUnits="userSpaceOnUse"><stop stop-color="#6d6960"/><stop offset="1" stop-color="#1e2725"/></linearGradient>
+    <linearGradient id="dune" x1="300" y1="940" x2="700" y2="1420" gradientUnits="userSpaceOnUse"><stop stop-color="#b5a28b"/><stop offset=".32" stop-color="#716758"/><stop offset="1" stop-color="#272b26"/></linearGradient>
+    <linearGradient id="front" x1="850" y1="1100" x2="500" y2="1500" gradientUnits="userSpaceOnUse"><stop stop-color="#171e1c"/><stop offset="1" stop-color="#070e0e"/></linearGradient>
+    <radialGradient id="haze"><stop stop-color="#f8d8ac" stop-opacity=".28"/><stop offset="1" stop-color="#e7c2a5" stop-opacity="0"/></radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".78" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".13"/></feComponentTransfer><feBlend in="SourceGraphic" mode="soft-light"/></filter>
+  </defs>
+  <g filter="url(#grain)">
+    <path fill="url(#sky)" d="M0 0h1200v1500H0z"/>
+    <ellipse cx="650" cy="630" rx="620" ry="450" fill="url(#haze)"/>
+    <circle cx="795" cy="448" r="148" fill="#ef3b38"/>
+    <circle cx="795" cy="448" r="144" stroke="#ff8165" stroke-opacity=".22"/>
+    <path d="M0 950 82 930 119 897 145 901 232 796 261 807 356 674 401 721 433 735 484 691 533 757 555 748 605 806 670 802 715 842 785 816 866 878 914 868 1012 917 1117 867 1200 900V1500H0Z" fill="url(#back)"/>
+    <path d="m0 950 119-53 26 4 87-105 29 11 95-133-48 145-26 41-105 40-48 46Z" fill="#c1b49f" fill-opacity=".27"/>
+    <path d="m356 674 45 47 32 14 51-44-38 80 58 82-75-73-30-9Z" fill="#eee1c7" fill-opacity=".16"/>
+    <path d="M0 1155C239 1111 326 940 603 956c231 13 349 226 597 222v322H0Z" fill="url(#dune)"/>
+    <path d="M0 1155C239 1111 326 940 603 956c231 13 349 226 597 222" stroke="#d6c5aa" stroke-opacity=".6" stroke-width="2"/>
+    <path d="M603 956c-103 126-154 275-114 544h711v-322c-248 4-366-209-597-222Z" fill="#131c1a" fill-opacity=".57"/>
+    <path d="M1200 1058c-298 12-353 164-523 260-217 124-436 126-677 114v68h1200Z" fill="url(#front)"/>
+    <path d="M1200 1058c-298 12-353 164-523 260-217 124-436 126-677 114" stroke="#a99b7e" stroke-opacity=".32" stroke-width="2"/>
+    <g stroke="#e7d4b3" stroke-opacity=".1">
+      <path d="M0 1180c255-21 348-208 595-198"/><path d="M0 1191c255-21 344-206 581-194"/><path d="M0 1207c255-21 338-211 567-194"/><path d="M0 1227c255-21 336-214 555-200"/><path d="M0 1250c255-21 336-223 543-208"/><path d="M0 1276c255-21 330-234 533-218"/><path d="M0 1303c255-21 321-245 524-227"/><path d="M0 1334c255-21 314-259 517-242"/><path d="M0 1367c255-21 307-272 510-255"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script>
+    // The AI proxy intentionally rejects insecure origins. Preserve the page
+    // and query when someone opens a bare/http link on another device.
+    if (location.protocol === "http:" && /^(www\.)?vclyps\.com$/i.test(location.hostname) && !location.port) {
+      const secure = new URL(location.href);
+      secure.protocol = "https:";
+      location.replace(secure.href);
+    }
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>vClyps. The story was always there.</title>
+  <meta name="description" content="vClyps by Vevris. AI that watches your footage, listens to the audio, and edits it for you. Every cut lands on a real timeline you can polish by hand. Free and private, right in your browser." />
+  <meta name="theme-color" content="#000000" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="vClyps. The story was always there." />
+  <meta property="og:description" content="vClyps watches your footage, finds the story, and edits your video around it, not just the highlights. One upload. One story. One click." />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="vClyps. The story was always there." />
+  <meta name="twitter:description" content="Every story deserves to be seen. vClyps turns raw footage into a polished short, built around your story." />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Switzer: free Neue-Montreal-class grotesque (swap for licensed Neue Montreal woff2 here if owned) -->
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600&display=swap" />
+  <!-- Anton: the heading face burned into the video. Free (SIL Open Font
+       License) and weight 400 only — asking for a bolder weight just makes
+       the browser fake one, so both the DOM and the canvas request 400. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&display=swap" />
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="logo.png" />
+  <noscript><style>
+    .lp-skip { display: none !important; }
+    .lp-scene[data-scene="0"] { opacity: 1 !important; visibility: visible !important; }
+  </style></noscript>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="landing.css" />
+</head>
+<body class="lv3" data-screen="home">
+
+  <!-- ══════════════ TOP BAR (always visible) ══════════════ -->
+  <header class="topbar">
+    <div class="tb-left">
+      <button class="icon-btn hidden" id="backBtn" title="Back to modes" aria-label="Back">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <div class="logo" id="logoHome" title="vClyps by Vevris">
+        <img src="logo.png" class="logo-img" alt="Vevris logo" />
+        <span class="logo-word"><b>v</b>Clyps</span>
+      </div>
+      <input id="projectName" class="project-name editor-only" type="text" value="Untitled" spellcheck="false" aria-label="Project name" />
+    </div>
+
+    <div class="tb-right">
+      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+      <button class="icon-btn" id="libraryBtn" title="Your library" aria-label="Library">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+      </button>
+      <button class="icon-btn editor-only" id="undoBtn" data-min="2" title="Undo (Ctrl+Z)" aria-label="Undo">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+      </button>
+      <button class="icon-btn editor-only" id="redoBtn" data-min="2" title="Redo (Ctrl+Y)" aria-label="Redo">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"></polyline><path d="M4 20v-7a4 4 0 0 1 4-4h12"></path></svg>
+      </button>
+      <button class="primary-btn hidden" id="exportBtn" aria-label="Export">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span class="exp-word">Export</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════ LANDING ══════════════ -->
+  <section class="screen active" id="screen-home">
+    <div class="lp-root">
+      <canvas class="lp-world" id="lpWorld" aria-hidden="true"></canvas>
+
+      <!-- skip intro — arrow only -->
+      <button class="lp-skip" id="lpSkip" type="button" aria-label="Skip intro">→</button>
+
+      <!-- The edit line is decoration, not an editor control. -->
+      <div class="lp-progress" aria-hidden="true"><span id="lpProgress"></span></div>
+
+      <!-- HERO -->
+      <section class="lp-hero">
+        <h1 class="lp-sr-only">vClyps. The story was always there. Every story deserves to be seen.</h1>
+        <div class="lp-hero-center">
+          <img class="lp-logo" id="lpLogo" src="logo.png" alt="vClyps logo" />
+          <div class="lp-taglines">
+            <div class="lp-title" id="lpTag1"><span>The story</span> <span>was always</span> <span>there.</span></div>
+            <div class="lp-subtitle" id="lpTag2">Every story deserves to be seen.</div>
+          </div>
+        </div>
+        <!-- One original image, in three displaced film frames. Scroll finds
+             the sequence. No stock requests, video downloads or editor state. -->
+        <div class="lp-contact" id="lpContact" aria-hidden="true">
+          <div class="lp-contact-bed"></div>
+          <div class="lp-film lp-film-a"><div class="lp-film-window"></div><i></i></div>
+          <div class="lp-film lp-film-b"><div class="lp-film-window"></div><i></i></div>
+          <div class="lp-film lp-film-c"><div class="lp-film-window"></div><i></i></div>
+          <div class="lp-cut-line"><span></span></div>
+          <div class="lp-contact-reticle"></div>
+        </div>
+        <span class="lp-cue-line" id="lpCue" aria-hidden="true"></span>
+        <div class="lp-hero-ruler" aria-hidden="true"></div>
+      </section>
+
+      <!-- NARRATIVE — the story text we established -->
+      <section class="lp-story" id="lpStory">
+        <div class="lp-story-inner">
+        <div class="lp-eyebrow lp-reveal">vClyps</div>
+        <h2 class="lp-h2 lp-reveal">The story was always there.</h2>
+        <div class="lp-story-copy">
+        <p class="lp-body lp-reveal">The best edits aren't created by cutting randomly. They're created by understanding the story.</p>
+        <p class="lp-body lp-reveal">vClyps watches your footage from beginning to end, identifies the moments that matter, builds a narrative, and edits your video around that story, <em>not just the highlights.</em></p>
+        <p class="lp-body lp-reveal">Whether it's a vlog, gaming clip, podcast, tutorial, or a video of your dog digging for treats, vClyps transforms raw footage into a polished short designed to keep people watching.</p>
+        </div>
+        <div class="lp-triad lp-reveal"><span>One upload.</span><span>One story.</span><span>One click.</span></div>
+        <div class="lp-splice" aria-hidden="true"><i></i><i></i><i></i></div>
+        </div>
+      </section>
+
+      <!-- Native-scroll walkthrough. This presentation never mounts or calls
+           the real editor: the existing + gateway remains the only entry. -->
+      <section class="lp-walk" id="lpWalk">
+        <div class="lp-walk-grid">
+
+            <!-- A portrait canvas inside an assembling editing workspace. -->
+            <div class="lp-phone-col">
+              <div class="lp-workspace" id="lpWorkspace" data-phase="0">
+                <div class="lp-workspace-top" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+                <div class="lp-workspace-stage">
+                <div class="lp-source-stack" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="lp-phone" id="lpPhone">
+                <div class="lp-phone-notch"></div>
+                <div class="lp-phone-screen">
+
+                  <!-- 0 · Upload -->
+                  <div class="lp-scene lp-scene-upload" data-scene="0">
+                    <div class="lp-raw-clip">
+                      <span class="lp-clip-play"></span>
+                      <span class="lp-clip-tag">RAW · 04:12</span>
+                    </div>
+                  </div>
+
+                  <!-- 1 · Understand -->
+                  <div class="lp-scene lp-scene-understand" data-scene="1">
+                    <div class="lp-scan"><span class="lp-scan-line"></span></div>
+                    <div class="lp-transcript">
+                      <span></span><span></span><span></span><span></span>
+                    </div>
+                    <div class="lp-verdict">Finds the story.</div>
+                  </div>
+
+                  <!-- 2 · Edit -->
+                  <div class="lp-scene lp-scene-edit" data-scene="2">
+                    <div class="lp-frame"></div>
+                    <div class="lp-caption-chip">every story deserves to be seen</div>
+                    <div class="lp-timeline">
+                      <span class="lp-seg lp-seg-keep"></span>
+                      <span class="lp-seg lp-seg-cut"></span>
+                      <span class="lp-seg lp-seg-keep"></span>
+                      <span class="lp-seg lp-seg-cut"></span>
+                      <span class="lp-seg lp-seg-keep"></span>
+                    </div>
+                  </div>
+
+                  <!-- 3 · Export -->
+                  <div class="lp-scene lp-scene-export" data-scene="3">
+                    <svg class="lp-check" viewBox="0 0 64 64" aria-hidden="true">
+                      <circle class="lp-check-ring" cx="32" cy="32" r="26"></circle>
+                      <path class="lp-check-mark" d="M20 33 L28 41 L45 23"></path>
+                    </svg>
+                    <div class="lp-export-text">Ready to share.</div>
+                  </div>
+
+                </div>
+              </div>
+                <div class="lp-output-guide" aria-hidden="true"><i></i><i></i></div>
+                </div>
+                <div class="lp-workspace-tracks" aria-hidden="true">
+                  <div class="lp-track-ruler"></div>
+                  <div class="lp-demo-track lp-demo-overlay"><i></i><i></i></div>
+                  <div class="lp-demo-track lp-demo-text"><i></i><i></i><i></i><i></i></div>
+                  <div class="lp-demo-track lp-demo-video"><i></i><i></i><i></i><i></i></div>
+                  <div class="lp-demo-track lp-demo-audio"><i></i></div>
+                  <span class="lp-demo-playhead"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- workflow -->
+            <div class="lp-steps-col">
+              <ol class="lp-steps" id="lpSteps">
+                <li class="lp-step-marker" id="lpMarker" aria-hidden="true"></li>
+                <li class="lp-step" data-step="0"><span class="lp-step-idx">01</span><span class="lp-step-name">Upload</span><span class="lp-step-note">Drop in raw footage</span></li>
+                <li class="lp-step" data-step="1"><span class="lp-step-idx">02</span><span class="lp-step-name">Understand</span><span class="lp-step-note">It watches, listens, finds the story</span></li>
+                <li class="lp-step" data-step="2"><span class="lp-step-idx">03</span><span class="lp-step-name">Edit</span><span class="lp-step-note">Cuts, captions and polish, built around the story</span></li>
+                <li class="lp-step" data-step="3"><span class="lp-step-idx">04</span><span class="lp-step-name">Export</span><span class="lp-step-note">A finished short, ready to share</span></li>
+              </ol>
+            </div>
+
+        </div>
+      </section>
+
+      <!-- Same + gateway and accessible label; always available. -->
+      <div class="lp-dock" id="lpDock">
+        <div class="lp-cta-magnet" id="lpMagnet">
+          <button class="lp-plus" id="lpPlus" type="button" aria-label="Start editing"><span class="lp-entry-label">Start editing</span></button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ══════════════ SETTINGS ══════════════
+       A page, not a sheet. A bottom sheet is for a quick choice you make and
+       dismiss; settings are somewhere you go, read, and change deliberately. -->
+  <section class="screen" id="screen-settings">
+    <div class="page-wrap">
+      <p class="page-eyebrow">vClyps</p>
+      <h2 class="page-title">Settings</h2>
+
+      <div class="set-group">
+        <label>Theme</label>
+        <div class="ins-seg" id="themeSeg">
+          <button data-t="light">Light</button>
+          <button data-t="dark" class="active">Dark</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <label>Vision-1.0 training data
+          <span class="set-note">Every AI edit is saved on this device as structured training data for Vevris's own future editing model. <strong id="dsCount">0 examples</strong> collected so far.</span>
+        </label>
+        <div class="set-row">
+          <button class="secondary-btn" id="dsExport">Download dataset</button>
+          <button class="ghost-btn" id="dsClear">Clear</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <label>Notify me when it's ready
+          <span class="set-note">Get a device notification when your edit or export finishes, even while you are using another app. Turn this on and allow notifications in your browser.</span>
+        </label>
+        <div class="ins-seg" id="notifySeg">
+          <button data-n="0" class="active">Off</button>
+          <button data-n="1">On</button>
+        </div>
+        <p class="set-note" id="notifyStatus" role="status" aria-live="polite"></p>
+        <button class="secondary-btn" id="testNotification" type="button">Send a test notification</button>
+        <p class="set-note" id="bgNote">Keep this tab open. Supported desktop browsers can continue exporting while you switch tabs or minimize the window. If your browser suspends video or recording, return here to resume or retry. Closing the tab or locking your phone can stop work. On iPhone or iPad, add vClyps to your Home Screen for device notifications.</p>
+        <a class="secondary-btn hidden" id="lastExportDownload" download>Save latest video</a>
+      </div>
+
+      <!-- Starting over. Deliberately a two-tap control: it throws away the
+           footage, the edit and the saved session in one go, and there is no
+           undo for it — the history goes with everything else. -->
+      <div class="set-group">
+        <label>Start a new video
+          <span class="set-note">Clears this project completely: footage, timeline, overlays, sounds and captions, plus the saved session. <strong>This cannot be undone.</strong> Your settings, theme and training data are kept.</span>
+        </label>
+        <div class="set-row">
+          <button class="ghost-btn danger-btn" id="resetProject">Start a new video</button>
+        </div>
+      </div>
+
+      <p class="set-soon">More controls are on the way.</p>
+
+      <!-- About: the only place the version is shown. Deliberately kept out of
+           the editor chrome — it is for support and debugging, not decoration. -->
+      <div class="set-group about-group">
+        <label>About</label>
+        <div class="about-app">
+          <img src="logo.png" class="about-logo" alt="" />
+          <div class="about-lines">
+            <strong>vClyps</strong>
+            <span class="set-note">By Vevris</span>
+          </div>
+        </div>
+        <p class="about-version" id="aboutVersion">vClyps</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════ ADMIN ══════════════
+       Reached by typing /clypsadmin. The gate is a soft one on purpose and is
+       described as such: the dataset it shows lives in this browser's own
+       localStorage, so it is already the visitor's to read. The password stops
+       the panel being stumbled into, it does not protect a secret. -->
+  <section class="screen" id="screen-admin">
+    <div class="page-wrap">
+      <p class="page-eyebrow">Vevris</p>
+      <h2 class="page-title">Training data</h2>
+
+      <div class="admin-lock" id="adminLock">
+        <p class="set-note">This panel is for the people building vClyps. It reads the training data stored in this browser.</p>
+        <div class="set-row">
+          <input type="password" class="set-input" id="adminPass" placeholder="Passphrase" autocomplete="off" />
+          <button class="secondary-btn" id="adminGo">Open</button>
+        </div>
+        <p class="admin-err hidden" id="adminErr">That passphrase is not right.</p>
+      </div>
+
+      <div class="admin-body hidden" id="adminBody">
+        <div class="admin-stats" id="adminStats"></div>
+        <div class="set-row">
+          <button class="secondary-btn" id="adminExport">Download dataset</button>
+          <button class="ghost-btn" id="adminRefresh">Refresh</button>
+          <button class="ghost-btn danger-btn" id="adminClear">Clear all</button>
+        </div>
+        <div class="admin-list" id="adminList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ MODES ══════════════
+       One list of modes, no categories (owner's call, 2026-10-07). Each card
+       says what it does and, last, what it is best for, so a new mode just
+       adds a card. -->
+  <section class="screen" id="screen-modes">
+    <div class="modes-wrap">
+      <p class="modes-eyebrow">New project</p>
+      <h2 class="modes-title">What are you making?</h2>
+
+      <div class="mode-grid">
+          <button class="mode-card" data-mode="entertainment">
+            <span class="mode-ico">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2.5" y="4.5" width="19" height="15" rx="1.5"></rect>
+                <path d="M7.5 4.5v15M16.5 4.5v15"></path>
+                <path d="M2.5 12h5M16.5 12h5"></path>
+              </svg>
+            </span>
+            <span class="mode-name">Entertainment</span>
+            <span class="mode-desc">Finds the story, cuts around it, captions and hooks it</span>
+            <span class="mode-best">Best for Instagram Reels, YouTube Shorts and TikTok</span>
+          </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ EDITOR ══════════════ -->
+  <section class="screen" id="screen-editor">
+
+    <div class="ai-bar" id="aiBar">
+      <span class="spark">✦</span>
+      <input id="semiPrompt" type="text" placeholder="Describe your edit…" title="Tell vClyps what you want, or leave it blank and let it decide" />
+      <button class="ai-go" id="semiGenerate">Edit</button>
+    </div>
+
+    <!-- ENTERTAINMENT mode (Short videos). The AI decides format, pacing and
+         structure from the footage itself, so there is no format picker — the
+         old Shorts/Recap/Film/Story chips are gone. Other modes are chosen on
+         the mode screen, not here. -->
+    <div class="fmt-row">
+      <span class="fmt-label">Entertainment</span>
+      <span class="fmt-spacer"></span>
+      <button class="chip hidden" id="clipsChip" title="The clips found in your video">Clips</button>
+      <button class="chip" id="findChip" aria-pressed="false" title="Find the best short clips in a long video">Find clips</button>
+      <button class="chip" id="speechChip" title="Transcribes what's said so cuts respect it. Downloads a small model the first time">Speech: off</button>
+    </div>
+
+    <!-- FIND CLIPS. The prompt bar above becomes "what should the clips be
+         about", and these say how long and from where. Everything is
+         measured on the device; one Director call picks the moments. -->
+    <div class="find-row hidden" id="findRow">
+      <label class="find-field">
+        <span>Length</span>
+        <select id="findLen">
+          <option value="auto">Auto</option>
+          <option value="short">Under 30s</option>
+          <option value="mid">30 to 60s</option>
+          <option value="long">60 to 90s</option>
+          <option value="xl">90s to 3 min</option>
+        </select>
+      </label>
+      <span class="find-range">
+        <label class="find-field">
+          <span>From</span>
+          <input id="findFrom" type="text" inputmode="numeric" placeholder="0:00" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="find-field">
+          <span>To</span>
+          <input id="findTo" type="text" inputmode="numeric" placeholder="End" autocomplete="off" spellcheck="false" />
+        </label>
+      </span>
+      <span class="find-src" id="findSrc"></span>
+    </div>
+
+    <div class="ai-status hidden" id="aiStatus"></div>
+
+    <div class="stage-zone" id="editorStage"></div>
+
+    <div class="inspector hidden" id="inspector"></div>
+
+    <div class="toolbar" id="toolbar">
+      <button class="tool" id="tbAdd">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <span>Add</span>
+      </button>
+      <button class="tool" id="tbSplit">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+        <span>Split</span>
+      </button>
+      <button class="tool" id="tbOverlay" title="Put a photo or clip over the footage. The speaker keeps talking underneath">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="11" rx="2"></rect><rect x="9" y="10" width="13" height="10" rx="2" fill="currentColor" fill-opacity=".18"></rect></svg>
+        <span>Overlay</span>
+      </button>
+      <button class="tool" id="tbAudio" title="Drop a sound effect on the timeline">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+        <span>Audio</span>
+      </button>
+      <button class="tool" id="tbExtract" title="Choose a video and put its sound on the audio track">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="13" height="9" rx="2"></rect><polyline points="15 6.5 21 4 21 11 15 8.5"></polyline><path d="M5 17v3M9 15v7M13 16v5M17 17.5v2"></path></svg>
+        <span>Extract audio</span>
+      </button>
+      <button class="tool" id="tbText">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+        <span>Text</span>
+      </button>
+      <button class="tool" id="tbCaptions">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="6" y1="14" x2="10" y2="14"></line><line x1="13" y1="14" x2="18" y2="14"></line></svg>
+        <span>Captions</span>
+      </button>
+      <button class="tool" id="tbFilter">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20"></path></svg>
+        <span>Look</span>
+      </button>
+      <button class="tool" id="tbDuplicate" data-min="3">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span>Copy</span>
+      </button>
+      <button class="tool tool-danger" id="tbDelete">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        <span>Delete</span>
+      </button>
+    </div>
+
+    <div class="media-strip hidden" id="mediaStrip"></div>
+
+    <div class="tl-zone">
+      <div class="tl-top">
+        <span class="tl-time" id="tlTimecode" data-min="4">00:00.0</span>
+        <span class="tl-hint" id="tlHint">Tap a clip to edit it · drag to reorder · pull the edges to trim</span>
+        <div class="tl-zoom" data-min="2">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="range" id="zoomSlider" min="8" max="60" value="24" aria-label="Timeline zoom" />
+        </div>
+      </div>
+      <div class="tl-scroll" id="tlScroll">
+        <div class="tl-inner" id="tlInner">
+          <div class="ruler" id="ruler"></div>
+          <!-- Track order is CapCut's: overlays ride above the footage, text
+               sits with them, the main video is the spine, audio runs underneath.
+               The main track is MAGNETIC (clips butt up against each other) and
+               overlay/audio are free — which is exactly how CapCut behaves, not a
+               shortcut. -->
+          <div class="track track-overlay" id="overlayTrack"></div>
+          <div class="track track-text" id="textTrack"></div>
+          <div class="track track-video" id="videoTrack"></div>
+          <!-- Audio clips: imported audio files and sound extracted from a
+               video, placed freely like overlays. Under the video, where
+               extracted sound lines up with the footage it came from. -->
+          <div class="track track-uaudio" id="uaudioTrack"></div>
+          <div class="track track-audio" id="audioTrack"></div>
+          <div class="track track-music" id="musicTrack"></div>
+          <div class="playhead" id="playhead"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ SHARED PREVIEW (moves between screens) ══════════════ -->
+  <div id="previewWrap" class="preview-wrap">
+    <button class="fs-exit" id="fsExit" aria-label="Exit fullscreen" title="Exit fullscreen">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+    <div class="stage" id="stage">
+      <video id="pv" playsinline></video>
+      <audio id="musicEl" crossorigin="anonymous" preload="auto" hidden></audio>
+      <img id="pi" class="hidden" alt="" />
+      <!-- B-roll sits OVER the footage rather than replacing it, so the speaker
+           keeps talking underneath. Always muted — two audio sources fighting is
+           never what you want. -->
+      <video id="pvB" class="broll-layer hidden" playsinline muted loop></video>
+      <img id="piB" class="broll-layer hidden" alt="" />
+      <div class="overlay-layer" id="overlayLayer"></div>
+      <div class="fade-veil" id="fadeVeil"></div>
+      <canvas class="cap-canvas" id="capCanvas"></canvas>
+      <div class="stage-empty" id="stageEmpty">
+        <button class="stage-add" id="stageAddBtn">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <p>Add your footage to get started</p>
+      </div>
+    </div>
+    <div class="transport">
+      <button class="icon-btn play-btn" id="playBtn" aria-label="Play or pause">
+        <svg id="playIco" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+        <svg id="pauseIco" class="hidden" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1"></rect><rect x="14" y="3" width="5" height="18" rx="1"></rect></svg>
+      </button>
+      <span class="tcode" id="tCur">00:00</span>
+      <input type="range" class="seek" id="seekBar" min="0" max="1000" value="0" aria-label="Seek" />
+      <span class="tcode" id="tTot">00:00</span>
+      <button class="icon-btn" id="muteBtn" aria-label="Mute">
+        <svg id="mOn" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        <svg id="mOff" class="hidden" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+      </button>
+      <button class="icon-btn" id="fsBtn" data-min="2" aria-label="Fullscreen">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════ SHEETS ══════════════ -->
+  <div class="sheet-backdrop hidden" id="sheetBackdrop">
+    <div class="sheet hidden" id="librarySheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Your library</h3>
+        <button class="text-btn" id="libAddBtn">+ Add more</button>
+      </div>
+      <div class="lib-grid" id="libGrid"></div>
+      <p class="lib-note hidden" id="libNote"></p>
+      <p class="lib-empty hidden" id="libEmpty">Nothing here yet. Tap <strong>+</strong> to add videos and photos.</p>
+    </div>
+
+    <!-- The soundboard, folded into the editor. Same ten voices sfx.js
+         generates for soundboard.html — no files, nothing downloaded. Preview
+         plays it where you stand; Add drops it on the audio track at the
+         playhead. -->
+    <div class="sheet hidden" id="soundSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Audio</h3>
+        <span class="sheet-sub" id="sndWhere">at 00:00.0</span>
+      </div>
+
+      <div class="aud-tabs" role="tablist" aria-label="Audio">
+        <button class="aud-tab active" id="tabMusic" data-pane="music" role="tab" aria-selected="true">Music</button>
+        <button class="aud-tab" id="tabFx" data-pane="fx" role="tab" aria-selected="false">Sound effects</button>
+        <button class="aud-tab" id="tabMine" data-pane="mine" role="tab" aria-selected="false">Your audio</button>
+      </div>
+
+      <!-- MUSIC. Searched live against Openverse, restricted to CC0: public
+           domain, free for commercial use, no credit required. That licence
+           is the only one safe for people who post what they make, which is
+           everyone who uses this. -->
+      <div class="aud-pane" id="musicPane" role="tabpanel">
+        <div class="snd-search">
+          <input type="search" id="musicSearch" placeholder="Search music: lofi, cinematic, upbeat" autocomplete="off" spellcheck="false" aria-label="Search music" />
+        </div>
+        <p class="mus-status" id="musicStatus"></p>
+        <div class="snd-grid" id="musicGrid"></div>
+        <p class="mus-licence">Royalty-free. Every track here is CC0 from Freesound, free to use in any video, including commercial ones, with no credit required.</p>
+      </div>
+
+      <!-- SOUND EFFECTS. Ten sounds do not need a search box; forty will, and
+           the list is about to grow. Filtering on name AND tag means "hit"
+           finds the boom without anyone having to know it is called that. -->
+      <div class="aud-pane hidden" id="fxPane" role="tabpanel">
+        <div class="snd-search">
+          <input type="search" id="sndSearch" placeholder="Search sounds" autocomplete="off" spellcheck="false" aria-label="Search sounds" />
+        </div>
+        <div class="snd-grid" id="sndGrid"></div>
+        <p class="snd-none hidden" id="sndNone"></p>
+        <p class="lib-empty hidden" id="sndEmpty">Sound effects need Web Audio, which this browser does not have.</p>
+      </div>
+
+      <!-- YOUR AUDIO. Audio files you bring in, and every sound you extract
+           from a video, kept here to use again. -->
+      <div class="aud-pane hidden" id="minePane" role="tabpanel">
+        <div class="mine-actions">
+          <button class="secondary-btn" id="mineExtract">Extract audio</button>
+          <button class="secondary-btn" id="mineImport">Import audio</button>
+        </div>
+        <div class="snd-grid" id="mineGrid"></div>
+        <p class="snd-none hidden" id="mineNone">Nothing here yet. Extract the sound from a video, or import an audio file.</p>
+      </div>
+    </div>
+
+    <!-- CAPTIONS. Make them, then decide how they look and read. Everything
+         here runs on the device except an AI translation; looks apply at once
+         and never re-transcribe. -->
+    <div class="sheet hidden" id="captionSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Captions</h3>
+        <span class="sheet-sub" id="capHeard"></span>
+      </div>
+      <div class="cap-actions">
+        <button class="snd-add cap-make" id="capMake">Add captions</button>
+        <button class="ghost-btn hidden" id="capRemove">Remove</button>
+      </div>
+      <p class="mus-status cap-status" id="capStatus" role="status" aria-live="polite"></p>
+
+      <div class="aud-tabs" role="tablist" aria-label="Caption settings">
+        <button class="aud-tab active" data-cap="style" role="tab" aria-selected="true">Style</button>
+        <button class="aud-tab" data-cap="text" role="tab" aria-selected="false">Text</button>
+        <button class="aud-tab" data-cap="lang" role="tab" aria-selected="false">Language</button>
+      </div>
+
+      <!-- STYLE: how they look -->
+      <div class="cap-pane" id="capStylePane" role="tabpanel">
+        <div class="cap-cats" id="capCats"></div>
+        <div class="cap-grid" id="capGrid"></div>
+        <div class="cap-field">
+          <label for="capFont">Font</label>
+          <div class="cap-inline">
+            <select id="capFont"></select>
+            <button class="secondary-btn" id="capFontUpload" type="button">Upload a font</button>
+            <input type="file" id="capFontFile" accept=".ttf,.otf,.woff,.woff2,font/*" hidden />
+          </div>
+          <p class="set-note hidden" id="capFontNote"></p>
+        </div>
+        <div class="cap-field">
+          <label>Words at a time</label>
+          <div class="ins-seg cap-seg" id="capWords">
+            <button data-w="0">Style's</button><button data-w="1">1</button><button data-w="2">2</button><button data-w="3">3</button><button data-w="4">4</button><button data-w="6">6</button><button data-w="8">8</button>
+          </div>
+        </div>
+        <div class="cap-field cap-sliders">
+          <label>Size <output id="capSizeOut">100%</output>
+            <input type="range" id="capSize" min="60" max="160" step="5" value="100" />
+          </label>
+          <label>Position <output id="capPosOut">Style's</output>
+            <input type="range" id="capPos" min="10" max="90" step="1" value="72" />
+          </label>
+          <button class="text-btn" id="capResetPlace" type="button">Reset size and position</button>
+        </div>
+      </div>
+
+      <!-- TEXT: what they say -->
+      <div class="cap-pane hidden" id="capTextPane" role="tabpanel">
+        <label class="cap-toggle"><input type="checkbox" id="capKeys" /> <span><b>Highlight keywords</b><small>Colours the word that carries each caption: a number, a name, a strong word</small></span></label>
+        <label class="cap-toggle"><input type="checkbox" id="capSpk" /> <span><b>A colour per speaker</b><small>Tells the voices apart on this device. The first time, it adds a few seconds per clip</small></span></label>
+        <label class="cap-toggle"><input type="checkbox" id="capEmoji" /> <span><b>Emoji</b><small>Adds an emoji where a caption clearly calls for one</small></span></label>
+        <div class="cap-field">
+          <label>Swear words</label>
+          <div class="ins-seg cap-seg" id="capCensor">
+            <button data-c="off">Leave</button><button data-c="hide">Hide</button><button data-c="bleep">Bleep</button>
+          </div>
+          <p class="set-note">Hide shows them as f***. Bleep also covers them with a beep in the sound, in the preview and the export.</p>
+          <textarea id="capSwears" rows="2" placeholder="More words to hide, separated by commas"></textarea>
+        </div>
+        <div class="cap-field">
+          <label for="capVocab">Names and words to spell your way</label>
+          <textarea id="capVocab" rows="3" placeholder="One per line, for example: vClyps, Chiang Mai, PromptPay"></textarea>
+          <p class="set-note">Words in the captions that look or sound like these are written exactly as you typed them.</p>
+        </div>
+      </div>
+
+      <!-- LANGUAGE: what is heard, what is shown -->
+      <div class="cap-pane hidden" id="capLangPane" role="tabpanel">
+        <div class="cap-field">
+          <label for="capLang">Spoken in</label>
+          <select id="capLang"></select>
+          <p class="set-note">100 languages. Detect works it out from the first 30 seconds.</p>
+        </div>
+        <div class="cap-field">
+          <label for="capTr">Show captions in</label>
+          <div class="cap-inline">
+            <select id="capTr"></select>
+            <button class="secondary-btn" id="capTrGo" type="button">Translate</button>
+          </div>
+          <p class="set-note" id="capTrNote">Translated on this device where the browser can; otherwise by the AI Director.</p>
+        </div>
+        <div class="cap-field">
+          <label>Accuracy</label>
+          <div class="ins-seg cap-seg" id="capTier">
+            <button data-t="best">Best</button><button data-t="balanced">Balanced</button><button data-t="fast">Fast</button>
+          </div>
+          <p class="set-note" id="capTierNote"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD MEDIA. Every way in: the device, a link, and the cloud services
+         that are set up (sources.js hides the rest). Whatever comes in is
+         opened on this device, like a file picked from it. -->
+    <div class="sheet hidden" id="addSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3 id="addTitle">Add media</h3>
+      </div>
+      <!-- On a phone: the gallery first (the phone's own photo picker, which
+           is where Google Photos and the gallery app's pictures live), then
+           every other app through Files, then the camera. A computer has one
+           file dialog, so it gets one button. -->
+      <button class="add-device" id="addDevice">
+        <span class="add-device-main" id="addDeviceMain">From this device</span>
+        <span class="add-device-sub" id="addDeviceSub">Videos, photos and audio</span>
+      </button>
+      <div class="add-ways hidden" id="addWays">
+        <button class="add-way" id="addFiles">
+          <span class="add-way-main">Files and other apps</span>
+          <span class="add-way-sub">Files, gallery apps, Drive</span>
+        </button>
+        <button class="add-way" id="addCamera">
+          <span class="add-way-main">Camera</span>
+          <span class="add-way-sub">Record a new video</span>
+        </button>
+      </div>
+      <div class="add-sources hidden" id="addSources">
+        <button class="add-src hidden" data-src="gphotos">Google Photos</button>
+        <button class="add-src hidden" data-src="drive">Google Drive</button>
+        <button class="add-src hidden" data-src="dropbox">Dropbox</button>
+        <button class="add-src hidden" data-src="zoom">Zoom recordings</button>
+        <button class="add-src hidden" data-src="vimeo">Vimeo</button>
+      </div>
+      <div class="add-status">
+        <p class="mus-status" id="addStatus"></p>
+        <button class="text-btn hidden" id="addCancel">Cancel</button>
+      </div>
+      <div class="snd-grid" id="addList"></div>
+      <p class="add-note">Everything you add opens on this device. Google Photos, Zoom and Vimeo pass through vClyps' server on the way and are never stored.</p>
+    </div>
+
+    <!-- The clips the finder chose, best first. Watch plays the raw moment
+         here; Make edits it into a finished short on the timeline. -->
+    <div class="sheet hidden" id="clipsSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Clips</h3>
+        <span class="sheet-sub" id="clipsWhere"></span>
+      </div>
+      <video class="clip-watch hidden" id="clipWatch" playsinline controls preload="metadata"></video>
+      <div class="snd-grid" id="clipList"></div>
+      <p class="snd-none hidden" id="clipsNone"></p>
+    </div>
+  </div>
+
+  <!-- ══════════════ EXPORT OVERLAY ══════════════ -->
+  <div class="export-overlay hidden" id="exportOverlay">
+    <div class="export-card">
+      <h3 id="expTitle">Exporting your video…</h3>
+      <div class="exp-track"><div class="exp-bar" id="expBar"></div></div>
+      <p class="exp-status"><span id="expPct">0%</span> · <span id="expStatus">rendering in real time, keep this tab open</span></p>
+      <button class="secondary-btn" id="expCancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Replaces the browser's own fullscreen toast, which cannot be
+       suppressed while requestFullscreen() is used. See enterFs(). -->
+  <div class="fs-notice notice-card" id="fsNotice" aria-hidden="true" inert>
+    <span class="notice-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></span>
+    <div class="notice-copy" role="status" aria-live="polite" aria-atomic="true">
+      <span class="notice-eyebrow">Preview</span>
+      <strong class="notice-title"></strong>
+      <span class="notice-detail"></span>
+    </div>
+    <button class="notice-close" type="button" aria-label="Dismiss preview notification"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+  </div>
+
+  <!-- Local completion card plus optional device notification. The controls
+       are inert while hidden; notifications.js owns timers and dismissal. -->
+  <div class="done-card notice-card" id="doneCard" aria-hidden="true" inert>
+    <span class="notice-symbol notice-success" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m5 12 4 4L19 6"/></svg></span>
+    <div class="notice-copy">
+      <span class="notice-eyebrow">vClyps <span class="notice-dot"></span> Complete</span>
+      <div role="status" aria-live="polite" aria-atomic="true">
+        <strong class="notice-title"></strong>
+        <span class="notice-detail"></span>
+      </div>
+      <a id="doneDownload" class="notice-action hidden" download>Save video <span aria-hidden="true">↗</span></a>
+    </div>
+    <button class="notice-close" type="button" aria-label="Dismiss completion notification"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+  </div>
+
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <input type="file" id="filePicker" accept="video/*,image/*,audio/*" multiple hidden />
+
+  <!-- defer: fetched in parallel, executed in this exact order once the HTML is
+       parsed. Without it each tag blocks the parser on the one before it, so the
+       landing intro could not start until the last byte of app.js had arrived. -->
+  <!-- version.js first: it is the single source of truth every other file reads -->
+  <script defer src="version.js"></script>
+  <script defer src="platform.js"></script>
+  <script defer src="emoji.js"></script>
+  <script defer src="caption-tools.js"></script>
+  <script defer src="caption-styles.js"></script>
+  <script defer src="captions.js"></script>
+  <!-- retention.js before the three that read it: the Director's briefs, the
+       editor and Vision-1.0 all quote its rules (research/retention/) -->
+  <script defer src="retention.js"></script>
+  <script defer src="knowledge.js"></script>
+  <script defer src="vision.js"></script>
+  <script defer src="intelligence.js"></script>
+  <script defer src="media.js"></script>
+  <script defer src="sfx.js"></script>
+  <script defer src="brain.js"></script>
+  <script defer src="clips.js"></script>
+  <script defer src="sources.js"></script>
+  <script defer src="audio-out.js"></script>
+  <script defer src="notifications.js"></script>
+  <script defer src="render-clock.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="landing-world.js"></script>
+  <script defer src="landing.js"></script>
+  <!-- Atmosphere only, and last on purpose: if it fails, everything above it
+       has already run and the site is merely calmer. -->
+  <script defer src="experience.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "id": "./",
+  "name": "vClyps by Vevris",
+  "short_name": "vClyps",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111210",
+  "theme_color": "#111210",
+  "icons": [{ "src": "logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }]
+}
