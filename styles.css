@@ -611,6 +611,9 @@ body.dark .logo-img { filter: invert(1); }
    itself: a tall phone video would otherwise stretch the preview to its own
    height whenever the editor has room to scroll. */
 #pv, #pi { position: absolute; inset: 0; }
+/* A layout (split screen, screen and face) is drawn here from #pv, which
+   keeps playing underneath at opacity 0. Under b-roll, veil and captions. */
+.layout-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
 
 /* B-roll overlay. Positioned in px by app.js against the picture box (not the
    stage), same as headings — so it lands identically in the window, fullscreen
@@ -1627,6 +1630,9 @@ body.dark .aclip { color: #b7a2f5; }
 body.dark .about-logo { filter: invert(1); }
 .about-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .about-lines strong { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.about-legal { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; font-size: 12.5px; }
+.about-legal a { color: var(--t1); text-decoration: underline; text-underline-offset: 3px; }
+.about-legal a:hover { color: var(--text); }
 .about-version {
   font-size: 11px;
   font-weight: 500;
@@ -1794,6 +1800,37 @@ body.previewFs .stage-zone { position: static; }
    room to the preview; each comes back the moment something is put on it */
 @media (max-width: 1100px) {
   .track.empty { display: none; }
+}
+
+/* On phones and tablets the transport rides on the bottom edge of the
+   picture instead of taking a row of its own under it (the owner,
+   2026-10-21: the row "is taking up substantial space"). The room goes to
+   the timeline. Fullscreen keeps its own layout. */
+@media (max-width: 1100px) {
+  body:not(.previewFs) .preview-wrap { position: relative; }
+  body:not(.previewFs) .transport {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    z-index: 6;
+    gap: 6px;
+    padding: 22px 8px 6px;
+    border-radius: 0 0 13px 13px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+    pointer-events: none;
+    --seek-rest: rgba(255, 255, 255, 0.28);
+  }
+  body:not(.previewFs) .transport > * { pointer-events: auto; }
+  body:not(.previewFs) .transport .play-btn {
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.45);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+  body:not(.previewFs) .transport .icon-btn { width: 30px; height: 30px; color: #fff; }
+  body:not(.previewFs) .transport .tcode { color: #fff; min-width: 34px; font-size: 11px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 }
 
 /* Room for the title on the narrowest phones */
@@ -2351,3 +2388,125 @@ body.dark .uclip { color: #7fb8e0; }
   .cap-grid { grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 6px; }
   .cap-tile-cv { height: 58px; }
 }
+
+/* ===================== TIDY =====================
+   Pauses, filler words and the transcript editor (app.js cutSourceSpans). */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.tidy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.tidy-row:first-of-type { border-top: 0; }
+.tidy-text { min-width: 0; }
+.tidy-text strong { display: block; font-size: 13.5px; color: var(--text); }
+.tidy-text p { margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: var(--t1); }
+.tidy-act { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+#tidySheet select {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+#tidySheet select:focus { outline: none; border-color: var(--acc); }
+#tidySheet button:disabled { opacity: 0.45; cursor: default; }
+.tidy-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--line);
+}
+.tidy-words {
+  max-height: 38vh;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg1);
+  line-height: 1.9;
+  font-size: 14px;
+}
+.tw {
+  display: inline;
+  padding: 1px 2px;
+  margin: 0 1px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.tw:hover { background: var(--bg3); }
+.tw:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.tw.struck { color: var(--t2); text-decoration: line-through; text-decoration-color: var(--acc); text-decoration-thickness: 2px; background: var(--acc-soft); }
+.tidy-transcript .primary-btn { align-self: flex-start; }
+.tidy-transcript .primary-btn:disabled { opacity: 0.45; box-shadow: none; cursor: default; }
+.tidy-note { margin: 8px 0 0; min-height: 1em; font-size: 12px; color: var(--t1); }
+@media (max-width: 480px) {
+  .tidy-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .tidy-act { justify-content: flex-start; }
+}
+
+/* ===================== POST =====================
+   Title, description and hashtags (app.js writePost). One panel that sits
+   in the Post sheet or, while a video renders, in the export card. */
+.post-panel { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.post-ask { display: flex; flex-wrap: wrap; gap: 8px; }
+.post-ask .secondary-btn { flex: 1 1 auto; }
+.post-panel select,
+.post-panel input[type="text"],
+.post-panel textarea {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--rs);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.post-panel select { height: 38px; padding: 0 10px; }
+.post-panel textarea { width: 100%; resize: vertical; line-height: 1.5; }
+.post-panel select:focus, .post-panel input:focus, .post-panel textarea:focus { outline: none; border-color: var(--acc); }
+.post-out { display: flex; flex-direction: column; gap: 10px; }
+.post-field { display: flex; flex-direction: column; gap: 5px; }
+.post-label { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t2); }
+.post-label .text-btn { font-size: 12px; letter-spacing: 0; text-transform: none; }
+.post-out .primary-btn { align-self: flex-start; }
+.post-status { min-height: 1em; font-size: 12px; color: var(--t1); }
+.post-panel button:disabled { opacity: 0.45; cursor: default; }
+.exp-post { margin: 18px 0 14px; padding-top: 16px; border-top: 1px solid var(--line); }
+.exp-post:empty { display: none; }
+.export-card { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.post-files { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.post-files h4 { font-size: 13px; font-weight: 600; color: var(--text); }
+.post-file-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ===================== BRAND =====================
+   Settings: logo, where it goes on videos, card and accent colours. */
+.brand-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 10px; }
+.brand-logo {
+  width: 64px; height: 64px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--line); border-radius: var(--rs);
+  background: repeating-conic-gradient(var(--bg2) 0% 25%, var(--bg1) 0% 50%) 50% / 12px 12px;
+  color: var(--t2); font-size: 11px; text-align: center; overflow: hidden;
+}
+.brand-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.brand-label { font-size: 12.5px; color: var(--t1); }
+.brand-color { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--t1); cursor: pointer; }
+.brand-color input[type="color"] { width: 34px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: var(--rs); background: none; cursor: pointer; }
+#brandMarkSeg { flex-wrap: wrap; max-width: 100%; }
+#brandMarkSeg button { flex: 1 1 auto; white-space: nowrap; }

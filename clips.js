@@ -878,6 +878,7 @@
     say("Finding the best clips…");
     const req = {
       prompt: (opts.prompt || "").trim(),
+      genre: opts.genre || "auto",
       window: win,
       length: { min: len.min, max: len.max },
       count: count,
@@ -893,7 +894,7 @@
     if (E.record) {
       E.record({
         kind: "find", provider: (global.VevrisDiag && global.VevrisDiag.last && global.VevrisDiag.last.provider) || null,
-        prompt: req.prompt, window: win, length: req.length, count: count,
+        prompt: req.prompt, genre: req.genre, window: win, length: req.length, count: count,
         media: { id: item.id, name: item.name, duration: dur }, speechShare: Math.round(share * 100) / 100,
         moments: moments.length, stills: keyframes.length, director: raw, clips: clips
       });

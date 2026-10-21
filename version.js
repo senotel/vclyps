@@ -59,17 +59,19 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.26.0";
-  var RELEASED = "2026-10-10";
-  var NOTES = "The AI Director now edits by what keeps people watching: a hook in the " +
-              "first second, the first payoff early, nothing dead in the middle, the " +
-              "end on the payoff. Built from a study of 74 sources (research/). Every " +
-              "edit also drops a greeting at the start and a sign-off at the end, and " +
-              "closes long silences. Senotel Vision-1.0, an editor that runs on your " +
-              "device, is in the app but switched off while it learns. The riser, " +
-              "sparkle and drum roll sounds are new recordings. Earlier: real " +
-              "recorded sound effects (0.25.0); ready to be an app (0.24.1); rebuilt " +
-              "captions (0.24.0).";
+  var VERSION = "0.27.0";
+  var RELEASED = "2026-10-21";
+  var NOTES = "Tidy: remove pauses, filler words and bad takes, or cut words straight " +
+              "from the transcript. Post: a title, description and hashtags written " +
+              "from what is said, plus captions as .srt and the edit for Premiere or " +
+              "DaVinci. Lower thirds, title cards (also as their own intro or outro " +
+              "clip) and four transitions. Split screen and screen-and-face layouts. " +
+              "Your brand: a logo on every video and your colours. Music now dips " +
+              "under speech, fades in and out and is matched in loudness, and one " +
+              "ceiling stops the mix from clipping. Find clips by kind of recording. " +
+              "A better speech model for the AI Director. A new riser. The play bar " +
+              "sits on the picture on phones. Privacy policy and terms. Earlier: " +
+              "edits built on retention research (0.26.0).";
 
   var parts = VERSION.split(".");
   var major = parseInt(parts[0], 10) || 0;

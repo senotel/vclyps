@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terms of use · vClyps</title>
+  <meta name="description" content="The terms for using vClyps, the video editor by Vevris." />
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap" />
+  <link rel="stylesheet" href="legal.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a href="index.html">vClyps</a>
+      <nav aria-label="Legal">
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html" aria-current="page">Terms</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Terms of use</h1>
+      <p class="meta">Last updated 21 October 2026</p>
+
+      <p class="lead">These are the rules for using vClyps. They are written to be read. By using vClyps you agree to them.</p>
+
+      <h2>1. Who we are</h2>
+      <p>vClyps is a video editor made by Vevris ("we", "us"). These terms cover the vClyps website and the vClyps app in app stores. How we handle data is in the <a href="privacy.html">privacy policy</a>, which is part of these terms.</p>
+
+      <h2>2. Who can use vClyps</h2>
+      <p>You must be 13 or older. If you are under the age at which you can agree to terms on your own where you live, a parent or guardian must agree for you. If you use vClyps for a business, you agree to these terms for that business too.</p>
+
+      <h2>3. Your videos are yours</h2>
+      <ul>
+        <li><strong>You own what you make.</strong> We claim no rights in your footage, your edits or the videos you export.</li>
+        <li><strong>Your footage stays with you.</strong> Editing and exporting happen on your device. See the privacy policy for the few things that are sent, such as the transcript and still frames the AI Director reads.</li>
+        <li><strong>You are responsible for your content.</strong> Only edit and publish material you have the right to use, and do not use vClyps to make anything unlawful, to harass or deceive people, or to pass off another person's likeness or voice as real without their consent.</li>
+      </ul>
+
+      <h2>4. The AI Director</h2>
+      <p>The AI Director suggests and makes edits: cuts, an opening line, captions, music, sounds and cutaways. It can make mistakes. It can mishear a word, misjudge a moment or choose something that does not suit your video. Check your video before you publish it; you decide what goes out.</p>
+      <p>vClyps does not promise any number of views, followers or any other result.</p>
+
+      <h2>5. Music, sounds, GIFs and photos in the library</h2>
+      <ul>
+        <li><strong>Music and sound effects</strong> in vClyps are released under Creative Commons Zero (CC0) by their makers: free to use in any video, commercial ones included, with no credit required.</li>
+        <li><strong>GIFs, photos and video clips</strong> found through Klipy and Pexels are provided by those services under their own licences. Using them in your videos is subject to those licences.</li>
+        <li><strong>Material you add yourself</strong>, such as your own music or audio, is your responsibility. Platforms like TikTok, YouTube and Instagram may mute or remove videos that use music you do not have the rights to.</li>
+      </ul>
+
+      <h2>6. Using vClyps fairly</h2>
+      <p>Do not try to break, overload or get around the limits of vClyps or the services it uses; do not copy or resell the AI Director's access; and do not use vClyps to build a competing product from its outputs. We may limit or stop access for anyone who does.</p>
+
+      <h2>7. Other services</h2>
+      <p>Some features connect to services run by others: Google, Groq and Mistral for the AI Director, and Google Drive, Google Photos, Dropbox, Zoom, Vimeo, Openverse, Freesound, Klipy and Pexels for importing and searching. Those services have their own terms, and we are not responsible for them. A feature that depends on one of them may stop working if that service changes or stops.</p>
+
+      <h2>8. Changes to vClyps</h2>
+      <p>vClyps is still being built. Features will be added, changed and sometimes removed. vClyps is free to use while it is in preview; if paid plans are introduced, their price and what they include will be shown clearly before you pay anything, and nothing will be charged without your agreement.</p>
+
+      <h2>9. No guarantee</h2>
+      <p>vClyps is provided "as is". We work to make it reliable, but we cannot promise it will always be available, free of errors, or right for every purpose. Keep your own copies of anything important; vClyps keeps your project in your browser's storage, which your browser or device may clear.</p>
+
+      <h2>10. Limits on our responsibility</h2>
+      <p>As far as the law allows, Vevris is not responsible for indirect or unexpected losses from using vClyps, such as lost work, lost income or harm to your reputation, and our total responsibility for anything else is limited to the amount you have paid us in the past twelve months. Nothing in these terms takes away rights that the law where you live says cannot be taken away.</p>
+
+      <h2>11. Ending</h2>
+      <p>You can stop using vClyps at any time; uninstalling the app or clearing its data removes what it kept on your device. We may stop offering vClyps, or stop access for someone who breaks these terms.</p>
+
+      <h2>12. Changes to these terms</h2>
+      <p>If we change these terms we will update this page and the date at the top. If a change is significant, the app will tell you. Using vClyps after a change means you accept the new terms.</p>
+
+      <h2>13. Law</h2>
+      <p>These terms are governed by the laws of the country where Vevris is registered, without taking away any protection the law where you live gives you.</p>
+
+      <h2>14. Contact</h2>
+      <p id="contactLine">Contact details are added here before vClyps launches.</p>
+    </main>
+
+    <p class="foot">vClyps by Vevris</p>
+  </div>
+  <script>
+    /* The one place to put the contact address (the same one as privacy.html). */
+    var CONTACT = "";
+    if (CONTACT) {
+      var p = document.getElementById("contactLine");
+      p.textContent = "Questions about these terms: ";
+      var a = document.createElement("a");
+      a.href = "mailto:" + CONTACT;
+      a.textContent = CONTACT;
+      p.appendChild(a);
+    }
+  </script>
+</body>
+</html>

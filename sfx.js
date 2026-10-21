@@ -128,12 +128,20 @@
        · the old drum roll never built (flat level) and ended on a thin
          ~7kHz splash with a hiss tail. The new one is a real snare roll
          (Ludwig snare, 16" K Dark crash, recorded by zemidlo) that
-         crescendos ~28dB into the crash and rings out to silence. */
+         crescendos ~28dB into the crash and rings out to silence.
+     Replaced again 2026-10-21: the owner called the noise uplifter
+     "absolutely horrendous". Noise only gets brighter; the risers in viral
+     edits are TONAL and climb in pitch. Now vekoN's riser_07_140bpm, its
+     last 4s: a synth whose pitch climbs ~3.2kHz → 6.4kHz (flatness ~0.03,
+     so a note, not hiss) at a steady level into the file's dead end.
+     Level from RMS against the old riser's -18.7dB at 0.736. Runner-ups by
+     ear if this one misses too: 789101 (xkeril, tonal pad brightening,
+     5.5-9.4s) and 261415 (Stereo Surgeon, percussive noise, 0.6-3.75s). */
   var CDN = "https://cdn.freesound.org/previews/";
   var RECORDED = {
     boom:        [201571, "201/201571_1535323-hq.mp3", 0, 2.9, 0.7, 0.909, "Julien_Matthey"],
     whoosh:      [486234, "486/486234_7254895-hq.mp3", 0, 0.44, 0.08, 1.364, "BennettFilmTeacher"],
-    riser:       [204758, "204/204758_1897295-hq.mp3", 4.39, 7.38, 0.012, 0.736, "maqsim", 0.5],
+    riser:       [719847, "719/719847_11045610-hq.mp3", 23.4, 27.38, 0.012, 0.38, "vekoN", 0.5],
     subdrop:     [212768, "212/212768_71257-hq.mp3", 0, 3.0, 0.9, 0.532, "qubodup, after pepe2"],
     pop:         [202230, "202/202230_3725006-hq.mp3", 0.15, 0.46, 0.04, 1.659, "deraj"],
     ding:        [611113, "611/611113_1629501-hq.mp3", 0.04, 1.6, 0.3, 0.659, "5ro4"],
@@ -816,7 +824,7 @@
                tags: ["transition", "motion", "swipe", "zoom"],
                about: "Fast whip whoosh. A transition or a zoom.",
                use: "A transition: the cut to a new place, a new topic or a time jump, a punch-in zoom, or a cutaway sweeping in. Never on jump cuts inside one continuous thought." },
-    riser:   { label: "Riser",    hit: 2.99, level: 0.66, build: riser,
+    riser:   { label: "Riser",    hit: 3.98, level: 0.66, build: riser,
                tags: ["build", "tension", "drop"],
                about: "A rising sweep that stops dead. Runs into the punchline.",
                use: "Tension climbing into the payoff or reveal and stopping dead on it. Only where the seconds before it are a build-up or a pause, and pair it with a boom or sub drop landing on the same moment. Once per video." },

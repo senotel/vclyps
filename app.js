@@ -44,7 +44,7 @@
     aspect: "9:16",          // short-form default; see exportSize()
     vertical: false,
     // Find clips (clips.js): the bar's mode, its options, and what it found
-    find: { on: false, len: "auto", from: "", to: "" },
+    find: { on: false, len: "auto", genre: "auto", from: "", to: "" },
     found: null              // {mediaId, prompt, window, length, clips:[{id,start,end,title,hook,why,type,made}]}
   };
   let nextId = 1;
@@ -91,6 +91,16 @@
       acc += d;
     }
     return null;
+  }
+
+  // Where a clip starts on the timeline.
+  function clipStartOf(clip) {
+    let acc = 0;
+    for (const c of S.clips) {
+      if (c === clip) return acc;
+      acc += dispDur(c);
+    }
+    return 0;
   }
 
   function fmt(sec) {
@@ -255,6 +265,12 @@
   $("libAddBtn").addEventListener("click", () => openPicker("library"));
   $("stageAddBtn").addEventListener("click", () => openPicker("editor"));
   $("tbAdd").addEventListener("click", () => openPicker("editor"));
+  $("tbTidy").addEventListener("click", () => openTidy());
+  $("tidyPauses").addEventListener("click", () => runTidy("pauses"));
+  $("tidyFillers").addEventListener("click", () => runTidy("fillers"));
+  $("tidyTakes").addEventListener("click", () => runTidy("takes"));
+  $("tidyShowWords").addEventListener("click", () => runTidy("transcript"));
+  $("tidyCutWords").addEventListener("click", () => cutStruck());
 
   picker.addEventListener("change", () => {
     const files = Array.prototype.slice.call(picker.files || []);
@@ -994,6 +1010,637 @@
     });
     renderTimeline();
     renderInspector();
+  }
+
+  /* ═══════════ TIDY: pauses, filler words, editing by the transcript ═══════
+     Three tools, one engine. Each names stretches of SOURCE time to take out
+     ("this media, from a to b"); cutSourceSpans() removes them from every
+     clip that shows them and closes the gap, the way deleting a word in a
+     transcript editor does. Everything placed on the timeline after a cut
+     (texts, overlays, sound effects, audio clips) moves up with the picture,
+     so nothing drifts off the moment it was put on, and captions are mapped
+     again from the words. All on the device; undo puts it all back. */
+
+  // The timed words of a video: the captions' (Whisper, the best timings)
+  // or, failing that, whatever the Director's transcription left.
+  function timedWords(m) {
+    const ws = (m && m.capWords && m.capWords.length ? m.capWords : (m && m.words)) || [];
+    return ws.filter((w) => w && isFinite(w.start) && isFinite(w.end) && w.end > w.start && !w.hide);
+  }
+
+  /* Whether anything filled a gap (laughter, applause, music): measured
+     the same way the Director's tightening does, so a pause that IS the
+     moment is never taken out. */
+  function gapAudible(m, s, e) {
+    const aud = m && m.analysis && m.analysis.aud;
+    if (!aud || !aud.energy || !aud.energy.length) return false;
+    const hop = aud.hop || 0.05;
+    let sum = 0, n = 0;
+    for (let i = Math.floor(s / hop); i < Math.min(aud.energy.length, Math.ceil(e / hop)); i++) { sum += aud.energy[i]; n++; }
+    return n > 0 && sum / n > 0.2;
+  }
+
+  // Where timeline time t lands after removing [at, at + len].
+  function rippleTime(t, at, len) {
+    if (t <= at) return t;
+    return t >= at + len ? t - len : at;
+  }
+
+  /* spans: [{ mediaId, a, b }] in source seconds. Returns { cuts, seconds }.
+     Pieces shorter than 0.1 s are not kept: a frame or two of picture
+     between two cuts reads as a glitch. */
+  function cutSourceSpans(spans) {
+    const MIN_PIECE = 0.1;
+    const was = JSON.parse(JSON.stringify(S.clips));   // clips are changed in place below
+    const cuts = [];             // timeline [at, len], in order
+    const out = [];
+    let at = 0;
+    S.clips.forEach((c) => {
+      const sp = c.speed || 1;
+      const mine = spans.filter((s) => s.mediaId === c.mediaId && s.b > c.in + 0.01 && s.a < c.out - 0.01)
+        .map((s) => [Math.max(c.in, s.a), Math.min(c.out, s.b)])
+        .sort((x, y) => x[0] - y[0]);
+      // merge overlapping stretches
+      const holes = [];
+      mine.forEach((h) => {
+        const last = holes[holes.length - 1];
+        if (last && h[0] <= last[1] + 0.02) last[1] = Math.max(last[1], h[1]);
+        else holes.push(h.slice());
+      });
+      // `at` is where this clip starts on the timeline BEFORE any cut: the
+      // ripple below applies the cuts last-first, in those coordinates
+      if (!holes.length) { out.push(c); at += dispDur(c); return; }
+      const keep = [];
+      let from = c.in;
+      holes.forEach((h) => { keep.push([from, h[0]]); from = h[1]; });
+      keep.push([from, c.out]);
+      // a sliver between two holes goes too, and its time with it
+      const kept = keep.filter((k) => k[1] - k[0] >= MIN_PIECE);
+      if (!kept.length) {           // the whole clip was removed
+        cuts.push([at, dispDur(c)]);
+        at += dispDur(c);
+        return;
+      }
+      const fadeIn = c.fadeIn, fadeOut = c.fadeOut, kb = c.kb, start = c.in, end = c.out;
+      const pre = (s) => at + (s - start) / sp;     // source time → timeline, before cuts
+      let cursor = start;
+      const pieces = kept.map((k, i) => {
+        if (k[0] > cursor + 1e-6) cuts.push([pre(cursor), (k[0] - cursor) / sp]);
+        const piece = i === 0 ? c : Object.assign({}, c, { id: nextId++ });
+        piece.in = k[0];
+        piece.out = k[1];
+        piece.fadeIn = i === 0 ? fadeIn : 0;
+        piece.fadeOut = i === kept.length - 1 ? fadeOut : 0;
+        cursor = k[1];
+        return piece;
+      });
+      // one zoom per original clip, on its last piece (as retention.js does)
+      if (kb && pieces.length > 1) {
+        pieces.forEach((p, i) => { if (i < pieces.length - 1) delete p.kb; else p.kb = Object.assign({}, kb); });
+      }
+      pieces.forEach((p) => out.push(p));
+      if (end > cursor + 1e-6) cuts.push([pre(cursor), (end - cursor) / sp]);
+      at = pre(end);
+    });
+    if (!out.length) { S.clips = was; return { cuts: 0, seconds: 0, everything: true }; }
+    S.clips = out;
+    // later cuts first, so each one's position is still right when it applies
+    let seconds = 0;
+    cuts.slice().sort((x, y) => y[0] - x[0]).forEach(([cAt, len]) => {
+      seconds += len;
+      S.texts.forEach((x) => {
+        const e = rippleTime(x.start + x.dur, cAt, len);
+        x.start = rippleTime(x.start, cAt, len);
+        x.dur = Math.max(0.2, e - x.start);
+      });
+      S.broll.forEach((x) => {
+        const e = rippleTime(x.start + x.dur, cAt, len);
+        x.start = rippleTime(x.start, cAt, len);
+        x.dur = Math.max(0.2, e - x.start);
+      });
+      S.sfx.forEach((x) => { x.start = rippleTime(x.start, cAt, len); });
+      S.audio.forEach((x) => { x.start = rippleTime(x.start, cAt, len); });
+    });
+    if (S.captions.length) remapCaptions();
+    S.time = clamp(S.time, 0, total());
+    return { cuts: cuts.length, seconds: seconds };
+  }
+
+  /* Silences between words longer than `min` seconds close to a breath:
+     0.2 s after the last word and 0.12 s before the next, about the pause
+     a good speaker leaves (E48 in the research: keep the breath). Only
+     silences: a laugh or applause in the gap is part of the moment. */
+  function pauseSpans(min) {
+    const spans = [];
+    const seen = new Set();
+    S.clips.forEach((c) => {
+      const m = mediaById(c.mediaId);
+      if (!m || m.type !== "video" || seen.has(m.id)) return;
+      seen.add(m.id);
+      const ws = timedWords(m);
+      for (let k = 1; k < ws.length; k++) {
+        const gs = ws[k - 1].end, ge = ws[k].start;
+        if (ge - gs <= min) continue;
+        if (gapAudible(m, gs + 0.1, ge - 0.1)) continue;
+        spans.push({ mediaId: m.id, a: gs + 0.2, b: ge - 0.12 });
+      }
+    });
+    return spans;
+  }
+
+  /* Filler words: the sounds that are only hesitation (um, uh, er, hmm),
+     and a word said twice in a row because the speaker tripped ("I I",
+     "the the"). Words people repeat on purpose ("no no", "very very") are
+     left alone. "Like" and "you know" are NOT taken: too often they are
+     meant, and cutting a meant word breaks the sentence. */
+  const FILLER = /^(u+m+|u+h+m*|e+r+m*|e+h+|a+h+|h+m+|m+h*m+|mm+-?hmm+)$/i;
+  const MEANT_TWICE = /^(no|yes|yeah|very|really|so|bye|ha|go|come|knock|well|now|more|again|okay|ok|wait|stop|run)$/i;
+  function fillerSpans() {
+    const spans = [];
+    const seen = new Set();
+    const norm = (w) => String(w.text || "").toLowerCase().replace(/[^\p{L}\p{N}'-]+/gu, "");
+    S.clips.forEach((c) => {
+      const m = mediaById(c.mediaId);
+      if (!m || m.type !== "video" || seen.has(m.id)) return;
+      seen.add(m.id);
+      const ws = timedWords(m);
+      ws.forEach((w, k) => {
+        const t = norm(w);
+        if (!t) return;
+        const next = ws[k + 1];
+        if (FILLER.test(t)) {
+          const prevEnd = k ? ws[k - 1].end : w.start - 0.05;
+          spans.push({ mediaId: m.id, a: Math.max(prevEnd, w.start - 0.04), b: next ? Math.min(next.start, w.end + 0.04) : w.end + 0.04, filler: t });
+        } else if (next && norm(next) === t && !MEANT_TWICE.test(t) && next.start - w.end < 0.6) {
+          spans.push({ mediaId: m.id, a: w.start - 0.02, b: next.start - 0.02, filler: t + " " + t });
+        }
+      });
+    });
+    return spans;
+  }
+
+  /* Bad takes: a speaker who stops and says the line again. The words are cut
+     into lines at pauses (over 0.45 s) and at full stops; when a line opens
+     with the same three words as the next line, or is all but contained in
+     it, the earlier one was the false start and goes, along with the pause
+     after it. The last take is kept because it is the one the speaker
+     finished. Pure word matching, on the device, no AI call. */
+  function takeLines(ws) {
+    const lines = [];
+    let cur = null;
+    ws.forEach((w) => {
+      const gap = cur ? w.start - cur.end : 0;
+      const ended = cur && /[.!?]["')\]]?$/.test(String(cur.last));
+      if (!cur || gap > 0.45 || ended) { cur = { start: w.start, end: w.end, words: [], last: "" }; lines.push(cur); }
+      cur.words.push(String(w.text || "").toLowerCase().replace(/[^\p{L}\p{N}']+/gu, ""));
+      cur.end = w.end;
+      cur.last = String(w.text || "");
+    });
+    lines.forEach((l) => { l.words = l.words.filter(Boolean); });
+    return lines.filter((l) => l.words.length);
+  }
+  function badTakeSpans() {
+    const spans = [];
+    const seen = new Set();
+    S.clips.forEach((c) => {
+      const m = mediaById(c.mediaId);
+      if (!m || m.type !== "video" || seen.has(m.id)) return;
+      seen.add(m.id);
+      const lines = takeLines(timedWords(m));
+      for (let i = 0; i + 1 < lines.length; i++) {
+        const a = lines[i], b = lines[i + 1];
+        if (b.start - a.end > 4) continue;              // too far apart to be a retake
+        const n = Math.min(3, a.words.length, b.words.length);
+        const sameOpen = n >= 3 && a.words.slice(0, n).join(" ") === b.words.slice(0, n).join(" ");
+        const inB = new Set(b.words);
+        const covered = a.words.length >= 3 && a.words.filter((w) => inB.has(w)).length / a.words.length >= 0.8 &&
+          a.words[0] === b.words[0] && a.words.length < b.words.length + 2;
+        if (sameOpen || covered) spans.push({ mediaId: m.id, a: a.start - 0.05, b: b.start - 0.05, take: a.words.join(" ") });
+      }
+    });
+    return spans;
+  }
+
+  /* Words are needed for all three. If no video on the timeline has any yet,
+     they are transcribed now, the same way captions are (on the device),
+     without turning captions on. */
+  async function ensureTimedWords(say) {
+    const vids = captionSources();
+    if (!vids.length) return false;
+    if (vids.some((m) => timedWords(m).length)) return true;
+    const C = global_VevrisCaptions();
+    if (!C || !C.transcribeCaptions) return false;
+    const o = S.capOpts;
+    for (const m of vids) {
+      try { await C.transcribeCaptions(m, { lang: o.lang, tier: o.tier || C.defaultTier(), speakers: o.speakers }, say); }
+      catch (e) { console.warn("tidy transcription failed", e); }
+    }
+    saveSession();
+    return vids.some((m) => timedWords(m).length);
+  }
+
+  let tidyBusy = false;
+  async function runTidy(kind) {
+    if (tidyBusy) return;
+    if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
+    const say = (msg) => { $("tidyStatus").textContent = msg || ""; };
+    tidyBusy = true;
+    document.querySelectorAll("#tidySheet button").forEach((b) => { b.disabled = true; });
+    try {
+      say("Finding the words…");
+      if (!(await ensureTimedWords(say))) { say("No speech found. These tools work on talking videos."); return; }
+      if (kind === "transcript") { say(""); renderTranscript(); return; }
+      const spans = kind === "pauses" ? pauseSpans(+$("tidyGap").value || 0.6)
+        : kind === "takes" ? badTakeSpans() : fillerSpans();
+      if (!spans.length) {
+        say(kind === "pauses" ? "No pauses that long. Nothing changed."
+          : kind === "takes" ? "No repeated takes found. Nothing changed." : "No filler words found. Nothing changed.");
+        return;
+      }
+      const before = total();
+      const r = cutSourceSpans(spans);
+      if (r.everything) { say("That would take out the whole video, so nothing was changed."); return; }
+      if (!r.cuts) { say("Nothing to take out in what is on the timeline."); return; }
+      commit();
+      recordEdit("remove-" + kind, { spans: spans.length, seconds: Math.round(r.seconds * 10) / 10 });
+      renderTimeline();
+      renderInspector();
+      syncNow();
+      const noun = kind === "pauses" ? ["pause", "pauses"] : kind === "takes" ? ["bad take", "bad takes"] : ["filler word", "filler words"];
+      const msg = spans.length + " " + noun[spans.length === 1 ? 0 : 1] +
+        " removed, " + (before - total()).toFixed(1) + "s shorter. Undo puts them back.";
+      say(msg);
+      toast(msg);
+    } finally {
+      tidyBusy = false;
+      document.querySelectorAll("#tidySheet button").forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  /* EDIT BY THE TRANSCRIPT. Every word on the timeline, in the order it is
+     heard; tap a word to strike it, then cut what is struck. Tapping a word
+     also moves the playhead to it, so you can hear what you are about to
+     take out. */
+  let struck = new Set();   // "mediaId:start" of each struck word
+  function transcriptRows() {
+    const rows = [];
+    let at = 0;
+    S.clips.forEach((c) => {
+      const m = mediaById(c.mediaId);
+      const sp = c.speed || 1;
+      if (m && m.type === "video") {
+        timedWords(m).forEach((w) => {
+          const mid = (w.start + w.end) / 2;
+          if (mid < c.in || mid >= c.out) return;
+          rows.push({ m: m, w: w, t: at + (Math.max(w.start, c.in) - c.in) / sp, key: m.id + ":" + w.start.toFixed(3) });
+        });
+      }
+      at += dispDur(c);
+    });
+    return rows;
+  }
+
+  function renderTranscript() {
+    const box = $("tidyWords");
+    box.innerHTML = "";
+    const rows = transcriptRows();
+    $("tidyTranscript").classList.remove("hidden");
+    if (!rows.length) { box.appendChild(mk("p", "tidy-note", "No words on the timeline yet.")); updateStruck(); return; }
+    rows.forEach((r) => {
+      const b = mk("button", "tw" + (struck.has(r.key) ? " struck" : ""));
+      b.type = "button";
+      b.textContent = String(r.w.text || "").trim();
+      b.setAttribute("aria-pressed", struck.has(r.key) ? "true" : "false");
+      b.addEventListener("click", () => {
+        if (struck.has(r.key)) struck.delete(r.key); else struck.add(r.key);
+        b.classList.toggle("struck", struck.has(r.key));
+        b.setAttribute("aria-pressed", struck.has(r.key) ? "true" : "false");
+        S.time = clamp(r.t, 0, total());
+        syncNow();
+        updateStruck();
+      });
+      box.appendChild(b);
+    });
+    updateStruck();
+  }
+
+  function updateStruck() {
+    const n = transcriptRows().filter((r) => struck.has(r.key)).length;
+    const go = $("tidyCutWords");
+    go.disabled = !n;
+    go.textContent = n ? "Cut " + n + (n === 1 ? " word" : " words") : "Cut struck words";
+  }
+
+  function cutStruck() {
+    const rows = transcriptRows();
+    const spans = [];
+    rows.forEach((r) => {
+      if (!struck.has(r.key)) return;
+      const ws = timedWords(r.m);
+      const k = ws.indexOf(r.w);
+      const next = ws[k + 1];
+      // from the word to the next word, so the silence it leaves goes with it
+      spans.push({ mediaId: r.m.id, a: r.w.start - 0.02, b: next ? next.start - 0.02 : r.w.end + 0.08 });
+    });
+    if (!spans.length) return;
+    const before = total();
+    const r = cutSourceSpans(spans);
+    if (r.everything) { $("tidyStatus").textContent = "That would cut every word, so nothing was changed."; return; }
+    struck = new Set();
+    commit();
+    recordEdit("cut-words", { words: spans.length, seconds: Math.round(r.seconds * 10) / 10 });
+    renderTimeline();
+    renderInspector();
+    syncNow();
+    renderTranscript();
+    const msg = spans.length + (spans.length === 1 ? " word" : " words") + " cut, " + (before - total()).toFixed(1) + "s shorter. Undo puts them back.";
+    $("tidyStatus").textContent = msg;
+    toast(msg);
+  }
+
+  /* ═══════════ POST: title, description, hashtags ═══════════
+     Written from what is said in the edit as it stands now (the captions,
+     else the timed words, else the Director's transcript lines), so a cut
+     line is never quoted. One text-only call (intelligence.js postText). */
+  function editTranscript() {
+    const C = global_VevrisCaptions();
+    if (S.captions.length && C && C.cueText) return S.captions.map((c) => C.cueText(c)).join(" ");
+    const rows = transcriptRows();
+    if (rows.length) return rows.map((r) => String(r.w.text || "").trim()).join(" ");
+    const lines = [];
+    S.clips.forEach((c) => {
+      const m = mediaById(c.mediaId);
+      ((m && m.transcript) || []).forEach((l) => {
+        const mid = (l.s + l.e) / 2;
+        if (mid >= c.in && mid < c.out) lines.push(l.text);
+      });
+    });
+    return lines.join(" ");
+  }
+
+  let postBusy = false;
+  async function writePost() {
+    if (postBusy) return;
+    if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
+    const E = window.IntelligenceEngine;
+    const say = (m) => { $("postStatus").textContent = m || ""; };
+    if (!E || !E.postText || !E.hasGemini()) { say("The AI Director isn't set up here, so it can't write the post text."); return; }
+    postBusy = true;
+    $("postWrite").disabled = true;
+    say("Writing…");
+    try {
+      const out = await E.postText({
+        transcript: editTranscript(),
+        texts: S.texts.map((t) => t.text).filter(Boolean),
+        note: $("postNote").value.trim(),
+        platform: $("postPlatform").value
+      });
+      $("postTitle").value = out.title || "";
+      $("postDesc").value = out.description || "";
+      $("postTags").value = (out.hashtags || []).map((h) => "#" + h).join(" ");
+      $("postOut").classList.remove("hidden");
+      $("postWrite").textContent = "Write again";
+      say("Edit anything you like, then copy it into the app you post from.");
+      recordEdit("post-text", { platform: $("postPlatform").value, tags: (out.hashtags || []).length });
+    } catch (e) {
+      say((e && e.message) || "Couldn't write the post text. Try again in a moment.");
+    } finally {
+      postBusy = false;
+      $("postWrite").disabled = false;
+    }
+  }
+
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+    // older browsers and some app views: a hidden box and the copy command
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return ok;
+  }
+
+  document.querySelectorAll("#postPanel [data-copy]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const ok = await copyText($(b.dataset.copy).value);
+      b.textContent = ok ? "Copied" : "Select and copy";
+      setTimeout(() => { b.textContent = "Copy"; }, 1600);
+    });
+  });
+  $("postCopyAll").addEventListener("click", async () => {
+    const all = [$("postTitle").value, $("postDesc").value, $("postTags").value].map((s) => s.trim()).filter(Boolean).join("\n\n");
+    const ok = await copyText(all);
+    $("postCopyAll").textContent = ok ? "Copied" : "Select and copy";
+    setTimeout(() => { $("postCopyAll").textContent = "Copy all"; }, 1600);
+  });
+  $("postWrite").addEventListener("click", writePost);
+
+  /* ═══════════ FILES FOR OTHER EDITORS ═══════════
+     CAPTIONS (.srt): the captions as shown, or, with none made, the words
+     on the timeline in short lines. Every editor and every platform that
+     takes a subtitle file reads SRT.
+     THE EDIT (.xml): Final Cut Pro 7 XML ("xmeml"), the interchange format
+     Premiere Pro and DaVinci Resolve both import. It carries the cuts (each
+     clip's in and out on its source, where it sits, its speed) and the
+     footage's sound, plus the audio clips. Files are named, not embedded:
+     the editor asks you to point it at the originals ("link media"). Music,
+     sound effects, texts, looks and captions are not in it (captions come
+     as the .srt). Everything is built on the device. */
+  const XML_FPS = 30;
+  const xmlEsc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
+  const fr = (sec) => Math.max(0, Math.round(sec * XML_FPS));
+
+  function srtTime(t) {
+    const ms = Math.max(0, Math.round(t * 1000));
+    const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60;
+    const p = (n, w) => String(n).padStart(w, "0");
+    return p(h, 2) + ":" + p(m, 2) + ":" + p(s, 2) + "," + p(ms % 1000, 3);
+  }
+
+  function captionLines() {
+    const C = global_VevrisCaptions();
+    if (S.captions.length && C && C.cueText) {
+      const tr = S.capOpts.translate;
+      return S.captions.map((c) => ({
+        s: c.start, e: c.end,
+        text: tr && c.tr && c.trLang === tr ? String(c.tr) : C.cueText(c)
+      }));
+    }
+    // no captions made: the timed words, a few to a line, broken at pauses
+    const out = [];
+    let cur = null;
+    transcriptRows().forEach((r) => {
+      const len = (r.w.end - r.w.start);
+      const s = r.t, e = r.t + len;
+      if (!cur || cur.n >= 6 || s - cur.e > 0.6) { cur = { s: s, e: e, text: String(r.w.text).trim(), n: 1 }; out.push(cur); }
+      else { cur.e = e; cur.text += " " + String(r.w.text).trim(); cur.n++; }
+    });
+    return out;
+  }
+
+  function buildSRT() {
+    return captionLines().filter((l) => l.text && l.e > l.s)
+      .map((l, i) => (i + 1) + "\n" + srtTime(l.s) + " --> " + srtTime(l.e) + "\n" + l.text.trim() + "\n")
+      .join("\n");
+  }
+
+  function buildXML() {
+    const size = exportSize();
+    const dims = size.w === size.h ? { w: 1080, h: 1080 } : size.w > size.h ? { w: 1920, h: 1080 } : { w: 1080, h: 1920 };
+    const name = ($("projectName").value || "").trim() || "vClyps edit";
+    const rate = "<rate><timebase>" + XML_FPS + "</timebase><ntsc>FALSE</ntsc></rate>";
+    const files = new Map();
+    let fileSeq = 0, itemSeq = 0;
+    // the first mention of a file describes it; later ones point back to it
+    const fileRef = (m) => {
+      if (files.has(m.id)) return '<file id="' + files.get(m.id) + '"/>';
+      const id = "file-" + (++fileSeq);
+      files.set(m.id, id);
+      const kinds = (m.type === "audio" ? "" : "<video><samplecharacteristics>" + rate + "</samplecharacteristics></video>") +
+        (m.type === "image" ? "" : "<audio><channelcount>2</channelcount></audio>");
+      return '<file id="' + id + '"><name>' + xmlEsc(m.name || id) + "</name><pathurl>file://localhost/" +
+        encodeURIComponent(m.name || id) + "</pathurl>" + rate +
+        // a still has no length of its own; ten minutes covers any use of it
+        "<duration>" + (m.type === "image" ? fr(600) : fr(m.duration || 0)) + "</duration><media>" + kinds + "</media></file>";
+    };
+    const speedFx = (sp) => sp && sp !== 1
+      ? "<filter><effect><name>Time Remap</name><effectid>timeremap</effectid><effectcategory>motion</effectcategory><effecttype>motion</effecttype><mediatype>video</mediatype>" +
+        "<parameter><parameterid>speed</parameterid><name>speed</name><value>" + Math.round(sp * 100) + "</value></parameter></effect></filter>"
+      : "";
+    const item = (m, start, end, inS, outS, sp, track) => {
+      const id = "clipitem-" + (++itemSeq);
+      return '<clipitem id="' + id + '"><name>' + xmlEsc(m.name || id) + "</name><duration>" + fr(m.duration || (outS - inS)) + "</duration>" + rate +
+        "<start>" + start + "</start><end>" + end + "</end><in>" + fr(inS) + "</in><out>" + fr(outS) + "</out>" +
+        fileRef(m) + (track === "video" ? speedFx(sp) : "") + "</clipitem>";
+    };
+    const vItems = [], aItems = [], uItems = [];
+    let at = 0;
+    S.clips.forEach((c) => {
+      const m = mediaById(c.mediaId);
+      const len = dispDur(c);
+      const start = fr(at), end = fr(at + len);
+      at += len;
+      if (!m || end <= start) return;
+      vItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "video"));
+      if (m.type === "video" && !c.muted) aItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "audio"));
+    });
+    S.audio.forEach((a) => {
+      const m = mediaById(a.mediaId);
+      if (!m) return;
+      const len = audioDur(a);
+      uItems.push(item(m, fr(a.start), fr(a.start + len), a.in, a.out, a.speed || 1, "audio"));
+    });
+    const track = (items) => "<track>" + items.join("") + "</track>";
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1"><name>' + xmlEsc(name) + "</name>" +
+      "<duration>" + fr(total()) + "</duration>" + rate +
+      "<media><video><format><samplecharacteristics>" + rate + "<width>" + dims.w + "</width><height>" + dims.h + "</height><pixelaspectratio>square</pixelaspectratio></samplecharacteristics></format>" +
+      track(vItems) + "</video><audio>" + track(aItems) + (uItems.length ? track(uItems) : "") + "</audio></media></sequence></xmeml>\n";
+  }
+
+  function fileBase() {
+    return (($("projectName").value || "").trim() || "vclyps-edit").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").slice(0, 80);
+  }
+  async function saveOut(text, type, ext, okMsg) {
+    const blob = new Blob([text], { type: type });
+    try {
+      const how = await window.VevrisPlatform.save(blob, fileBase() + "." + ext);
+      $("postFileStatus").textContent = how === "cancelled" ? "" : okMsg;
+    } catch (e) {
+      $("postFileStatus").textContent = "Couldn't save the file: " + ((e && e.message) || e);
+    }
+  }
+  $("postSrt").addEventListener("click", () => {
+    const srt = buildSRT();
+    if (!srt.trim()) { $("postFileStatus").textContent = "No words on the timeline yet. Make captions, or use Tidy to find the words, first."; return; }
+    saveOut(srt, "application/x-subrip", "srt", "Captions saved. Import the .srt into your editor or upload it with the video.");
+  });
+  $("postXml").addEventListener("click", () => {
+    saveOut(buildXML(), "application/xml", "xml",
+      "Edit saved. In Premiere Pro or DaVinci Resolve, import the .xml, then point it at your original video files.");
+  });
+
+  /* One panel, two homes: the Post sheet, and the export card while a video
+     renders (the real-time render takes as long as the video, which is time
+     enough to write and copy the words). */
+  function movePostPanel(where) {
+    const panel = $("postPanel");
+    const home = where === "export" ? $("expPostSlot") : $("postSheet");
+    if (panel.parentNode !== home) home.appendChild(panel);
+  }
+  /* Follows the export card wherever it is shown or hidden from (start,
+     finish, cancel, the failure paths), rather than five calls to keep in
+     step. Words written while it rendered are put in front of you again
+     when the card closes, so they are not lost with it. */
+  new MutationObserver(() => {
+    const showing = !$("exportOverlay").classList.contains("hidden");
+    const inCard = $("postPanel").parentNode === $("expPostSlot");
+    if (showing && !inCard) movePostPanel("export");
+    else if (!showing && inCard) {
+      movePostPanel("sheet");
+      if (!$("postOut").classList.contains("hidden")) setTimeout(() => openSheet("postSheet"), 400);
+    }
+  }).observe($("exportOverlay"), { attributes: true, attributeFilter: ["class"] });
+
+  $("tbPost").addEventListener("click", () => {
+    if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
+    movePostPanel("sheet");
+    openSheet("postSheet");
+  });
+
+  function openTidy() {
+    if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
+    struck = new Set();
+    $("tidyStatus").textContent = "";
+    $("tidyTranscript").classList.add("hidden");
+    openSheet("tidySheet");
+  }
+
+  /* A title card as its own clip, before or after the footage: the card is
+     drawn once, at the export's size, by the same drawStyledText, saved as a
+     picture and put on the timeline like any photo (so it is resumed, shown
+     and exported the way photos already are). Before the video, everything
+     on the timeline moves later by the card's length. */
+  async function makeCardClip(t, where) {
+    const size = exportSize();
+    const k = 1080 / Math.min(size.w, size.h);           // drawn at 1080p, sharp at any export size
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(size.w * k); cv.height = Math.round(size.h * k);
+    const ctx = cv.getContext("2d");
+    try { await document.fonts.load("400 40px Anton"); } catch (e) {}
+    drawStyledText(ctx, Object.assign({}, t, { style: "card", start: -60, dur: 1e6 }), { x: 0, y: 0, w: cv.width, h: cv.height }, 0);
+    const blob = await new Promise((r) => cv.toBlob(r, "image/png"));
+    if (!blob) { toast("Couldn't make the card on this device"); return; }
+    const label = String(t.text || "Card").replace(/[\\/:*?"<>|\n]+/g, " ").trim().slice(0, 40) || "Card";
+    const file = new File([blob], "Card - " + label + ".png", { type: "image/png" });
+    if (!addFiles([file], "library")) return;
+    const m = S.media[S.media.length - 1];
+    const len = clamp(t.dur || 2, 0.5, 15);
+    const clip = { id: nextId++, mediaId: m.id, in: 0, out: len, speed: 1, volume: 1, muted: false, filter: "none", fadeIn: 0, fadeOut: 0 };
+    S.texts = S.texts.filter((x) => x !== t);
+    if (where === "start") {
+      S.texts.forEach((x) => { x.start += len; });
+      S.broll.forEach((x) => { x.start += len; });
+      S.sfx.forEach((x) => { x.start += len; });
+      S.audio.forEach((x) => { x.start += len; });
+      S.clips.unshift(clip);
+      S.time = 0;
+    } else {
+      S.clips.push(clip);
+      S.time = Math.max(0, total() - len);
+    }
+    if (S.captions.length) remapCaptions();
+    S.sel = { type: "clip", id: clip.id };
+    commit();
+    recordEdit("card-clip", { where: where, seconds: len });
+    renderTimeline();
+    renderInspector();
+    syncNow();
+    toast(where === "start" ? "The card now opens the video" : "The card now ends the video");
   }
 
   function duplicateSelection() {
@@ -2249,7 +2896,8 @@
     if (audioCtx.state === "suspended" && audioCtx.resume) {
       try { audioCtx.resume(); } catch (e) {}
     }
-    return { ctx: audioCtx, dest: audioDest };
+    // through the master bus, which already reaches the speakers and the file
+    return { ctx: audioCtx, dest: masterBus, speaker: false };
   }
 
   /* THE ONE THING THAT MADE SOUNDS SILENT.
@@ -2856,10 +3504,7 @@
       const g = audioCtx.createGain();
       src.connect(g);
       if (v.speech && speechGain) g.connect(speechGain);   // bleeped with the footage
-      else {
-        g.connect(audioCtx.destination);   // speakers
-        g.connect(audioDest);              // the exported file
-      }
+      else g.connect(masterBus);           // speakers and the exported file
       v.gain = g;
     } catch (e) {
       v.failed = true;
@@ -2952,7 +3597,7 @@
     S.sfx.forEach((s) => {
       if (s.start > from && s.start <= t) {
         e.play(s.name, {
-          ctx: opts.ctx, dest: opts.dest,
+          ctx: opts.ctx, dest: opts.dest, speaker: opts.speaker,
           gain: typeof s.gain === "number" ? s.gain : 1
         });
       }
@@ -3083,6 +3728,26 @@
         (v) => { S.music.gain = v; applyMusicGain(); },
         () => commit(), (v) => Math.round(v * 100) + "%")));
 
+      // Lower under speech: on unless switched off (see mixMusic)
+      const duckRow = mk("div", "filter-chips");
+      [["On", true], ["Off", false]].forEach(([label, on]) => {
+        const b = mk("button", "fchip" + ((S.music.duck !== false) === on ? " active" : ""), label);
+        b.addEventListener("click", () => {
+          S.music.duck = on;
+          commit();
+          duckRow.querySelectorAll(".fchip").forEach((c) => c.classList.remove("active"));
+          b.classList.add("active");
+        });
+        duckRow.appendChild(b);
+      });
+      ins.appendChild(group("Lower under speech", duckRow));
+      ins.appendChild(group("Fade in", slider(0, 5, 0.1, typeof S.music.fadeIn === "number" ? S.music.fadeIn : 0.3,
+        (v) => { S.music.fadeIn = v; applyMusicGain(); },
+        () => commit(), (v) => v.toFixed(1) + "s")));
+      ins.appendChild(group("Fade out", slider(0, 8, 0.1, typeof S.music.fadeOut === "number" ? S.music.fadeOut : 1.5,
+        (v) => { S.music.fadeOut = v; applyMusicGain(); },
+        () => commit(), (v) => v.toFixed(1) + "s")));
+
       const swap = mk("button", "fchip", "Change");
       swap.addEventListener("click", () => {
         renderSoundSheet();
@@ -3172,6 +3837,35 @@
       ins.appendChild(group("Look", filterChips(() => c.filter, (k) => { c.filter = k; })));
 
       if (isVid) {
+        // split screen / screen and face (drawLayout)
+        const lay = layoutOf(c);
+        const lrow = mk("div", "filter-chips");
+        Object.keys(LAYOUTS).forEach((k) => {
+          const on = k === "fill" ? !lay : lay && lay.type === k;
+          const b = mk("button", "fchip" + (on ? " active" : ""), LAYOUTS[k]);
+          b.addEventListener("click", () => {
+            if (k === "fill") delete c.layout;
+            else if (!lay || lay.type !== k) c.layout = k === "split" ? { type: "split", a: 0.27, b: 0.73 } : { type: "screen", fx: 0.85, fy: 0.2, fs: 0.32, sx: 0.5 };
+            commit();
+            renderInspector();
+            syncNow();
+          });
+          lrow.appendChild(b);
+        });
+        ins.appendChild(group("Layout", lrow));
+        const pct = (v) => Math.round(v * 100) + "%";
+        const laySlider = (label, key, min, max) => ins.appendChild(group(label, slider(min, max, 0.01, lay[key],
+          (v) => { lay[key] = v; syncNow(); }, () => commit(), pct)));
+        if (lay && lay.type === "split") {
+          laySlider("First person, across", "a", 0, 1);
+          laySlider("Second person, across", "b", 0, 1);
+        } else if (lay && lay.type === "screen") {
+          laySlider("Face, across", "fx", 0, 1);
+          laySlider("Face, down", "fy", 0, 1);
+          laySlider("Face size", "fs", 0.1, 1);
+          laySlider("Screen, across", "sx", 0, 1);
+        }
+
         ins.appendChild(group("Speed", slider(0.25, 3, 0.05, c.speed,
           (v) => { c.speed = v; renderTimeline(); },
           () => commit(),
@@ -3202,6 +3896,25 @@
           (v) => v.toFixed(1) + "s")));
       }
 
+      // into this clip from the one before it (none for the first clip)
+      if (S.clips.indexOf(c) > 0) {
+        const tr = mk("div", "filter-chips");
+        Object.keys(TRANSITIONS).forEach((k) => {
+          const b = mk("button", "fchip" + ((c.tIn || "none") === k ? " active" : ""), TRANSITIONS[k]);
+          b.addEventListener("click", () => {
+            if (k === "none") delete c.tIn; else c.tIn = k;
+            commit();
+            tr.querySelectorAll(".fchip").forEach((x) => x.classList.remove("active"));
+            b.classList.add("active");
+            // show it: from just before the cut
+            S.time = clamp(clipStartOf(c) - 0.6, 0, total());
+            syncNow();
+          });
+          tr.appendChild(b);
+        });
+        ins.appendChild(group("Transition in", tr));
+      }
+
       ins.appendChild(group("Fade in", slider(0, 1.5, 0.05, c.fadeIn || 0,
         (v) => { c.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s"), 3));
       ins.appendChild(group("Fade out", slider(0, 1.5, 0.05, c.fadeOut || 0,
@@ -3219,12 +3932,57 @@
     const t = textById(S.sel.id);
     if (!t) { ins.classList.add("hidden"); return; }
     ins.appendChild(mk("span", "ins-title", "<em>T</em> Text"));
+    const style = textStyleOf(t);
+
+    // Heading, lower third or title card (drawStyledText)
+    const kinds = mk("div", "filter-chips");
+    [["heading", "Heading"], ["lower", "Lower third"], ["card", "Title card"]].forEach(([k, label]) => {
+      const b = mk("button", "fchip" + (style === k ? " active" : ""), label);
+      b.addEventListener("click", () => {
+        if (k === "heading") delete t.style; else t.style = k;
+        // the brand's colours are where a card or a lower third starts
+        if (k === "card" && !t.bg) t.bg = BRAND.main;
+        if (k === "lower" && !t.accent) t.accent = BRAND.accent;
+        if (k !== "heading" && (!t.color || t.color.toLowerCase() === "#ffffff")) t.color = BRAND.text;
+        commit();
+        renderInspector();
+        syncOverlays();
+      });
+      kinds.appendChild(b);
+    });
+    ins.appendChild(group("Style", kinds));
 
     const ti = document.createElement("input");
     ti.type = "text"; ti.value = t.text; ti.maxLength = 80;
-    ti.addEventListener("input", () => { t.text = ti.value; renderTimeline(); });
+    ti.addEventListener("input", () => { t.text = ti.value; renderTimeline(); syncOverlays(); });
     ti.addEventListener("change", () => commit());
-    ins.appendChild(group("Says", ti));
+    ins.appendChild(group(style === "lower" ? "Name" : "Says", ti));
+
+    if (style !== "heading") {
+      const si = document.createElement("input");
+      si.type = "text"; si.value = t.sub || ""; si.maxLength = 80;
+      si.placeholder = style === "lower" ? "Who they are (optional)" : "A second line (optional)";
+      si.addEventListener("input", () => { t.sub = si.value; syncOverlays(); });
+      si.addEventListener("change", () => commit());
+      ins.appendChild(group("Second line", si));
+    }
+    if (style === "card") {
+      const bi = document.createElement("input");
+      bi.type = "color"; bi.value = t.bg || "#111210";
+      bi.addEventListener("input", () => { t.bg = bi.value; syncOverlays(); });
+      bi.addEventListener("change", () => commit());
+      ins.appendChild(group("Background", bi, 2));
+      const own = mk("div", "filter-chips");
+      const before = mk("button", "fchip", "Put before the video");
+      const after = mk("button", "fchip", "Put after the video");
+      before.title = "Its own clip at the start: adds time instead of covering the footage";
+      after.title = "Its own clip at the end";
+      before.addEventListener("click", () => makeCardClip(t, "start"));
+      after.addEventListener("click", () => makeCardClip(t, "end"));
+      own.appendChild(before);
+      own.appendChild(after);
+      ins.appendChild(group("As its own clip", own));
+    }
 
     ins.appendChild(group("Size", slider(14, 88, 2, t.size,
       (v) => { t.size = v; }, () => commit(), (v) => v + "px"), 2));
@@ -3247,7 +4005,7 @@
       });
       seg.appendChild(b);
     });
-    ins.appendChild(seg);
+    if (style === "heading") ins.appendChild(seg);   // the other styles have their own place
 
     ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur,
       (v) => { t.dur = v; renderTimeline(); }, () => commit(), (v) => v.toFixed(1) + "s")));
@@ -3341,7 +4099,7 @@
     const sb = $("seekBar");
     const pct = clamp(sb.value / 10, 0, 100); // max=1000 → percent
     sb.style.background =
-      "linear-gradient(90deg, var(--acc) 0%, var(--acc) " + pct + "%, var(--bg3) " + pct + "%, var(--bg3) 100%)";
+      "linear-gradient(90deg, var(--acc) 0%, var(--acc) " + pct + "%, var(--seek-rest, var(--bg3)) " + pct + "%, var(--seek-rest, var(--bg3)) 100%)";
   }
   $("seekBar").addEventListener("input", () => {
     seekDragging = true;
@@ -3384,33 +4142,42 @@
       pv.playbackRate = clip.speed;
       pv.volume = clip.volume;
       pv.muted = clip.muted || (EXP.active ? false : S.userMuted);
-      pv.style.filter = FILTERS[clip.filter].css;
+      const fx = transFx(info);
+      const blur = fx.blur ? " blur(" + (fx.blur * pictureBox().h).toFixed(1) + "px)" : "";
+      pv.style.filter = (FILTERS[clip.filter].css === "none" ? "" : FILTERS[clip.filter].css) + blur || "none";
+      let zs = fx.scale;
       if (clip.kb) {
         const p = clamp(offset / Math.max(dispDur(clip), 0.01), 0, 1);
-        pv.style.transform = "scale(" + (clip.kb.s0 + (clip.kb.s1 - clip.kb.s0) * p) + ")";
-      } else {
-        pv.style.transform = "";
+        zs *= clip.kb.s0 + (clip.kb.s1 - clip.kb.s0) * p;
       }
+      pv.style.transform = zs !== 1 || fx.dx
+        ? (fx.dx ? "translateX(" + (fx.dx * 100).toFixed(2) + "%) " : "") + "scale(" + zs + ")"
+        : "";
       if (S.playing && pv.paused) pv.play().catch(() => {});
       if (!S.playing && !pv.paused) pv.pause();
+      drawPreviewLayout(clip);
     } else {
       pv.pause();
       pv.classList.add("hidden");
+      drawPreviewLayout(null);
       pi.classList.remove("hidden");
       if (pi.dataset.mid !== String(m.id)) {
         pi.src = m.url;
         pi.dataset.mid = String(m.id);
       }
-      pi.style.filter = FILTERS[clip.filter].css;
+      const fx = transFx(info);
+      const blur = fx.blur ? " blur(" + (fx.blur * pictureBox().h).toFixed(1) + "px)" : "";
+      pi.style.filter = (FILTERS[clip.filter].css === "none" ? "" : FILTERS[clip.filter].css) + blur || "none";
+      const slide = fx.dx ? "translateX(" + (fx.dx * 100).toFixed(2) + "%) " : "";
       if (clip.kb) {
         const p = clamp(offset / Math.max(dispDur(clip), 0.01), 0, 1);
         const k = clip.kb;
-        const zs = k.s0 + (k.s1 - k.s0) * p;
+        const zs = (k.s0 + (k.s1 - k.s0) * p) * fx.scale;
         const tx = (k.x0 + (k.x1 - k.x0) * p) * 100;
         const ty = (k.y0 + (k.y1 - k.y0) * p) * 100;
-        pi.style.transform = "scale(" + zs + ") translate(" + tx + "%, " + ty + "%)";
+        pi.style.transform = slide + "scale(" + zs + ") translate(" + tx + "%, " + ty + "%)";
       } else {
-        pi.style.transform = "";
+        pi.style.transform = fx.scale !== 1 || fx.dx ? slide + "scale(" + fx.scale + ")" : "";
       }
     }
   }
@@ -3471,6 +4238,240 @@
     return out.length ? out : [""];
   }
 
+  /* ═══════════ LOWER THIRDS AND TITLE CARDS ═══════════
+     Two more ways a text can look, besides the heading. Both are DRAWN, in
+     the preview (on the caption canvas, inside the picture) and in the
+     export (on the export canvas), by this one function, so they cannot
+     differ between the two.
+       lower  a name and a second line in a dark box at the lower left, with a
+              crimson rule; slides in, fades out. For who is speaking.
+       card   the whole frame in one colour with the text centred on it, a
+              second line under it; fades in and out. A title, a chapter, an
+              end card. "Put before / after the video" turns one into its own
+              clip (makeCardClip) so it adds time instead of covering it.
+     Sizes are fractions of the frame, like headings. */
+  const LOWER_FONT = '"Switzer", -apple-system, "Segoe UI", Roboto, sans-serif';
+
+  /* The brand kit (Settings → Your brand), for every project on this device:
+     the colours new title cards and lower thirds start from, and a logo
+     drawn as a watermark in the preview and the export alike. */
+  const BRAND = (() => {
+    const base = { main: "#111210", accent: "#dc143c", text: "#edeae2", logo: "", mark: "off" };
+    try { return Object.assign(base, JSON.parse(localStorage.getItem("vclyps-brand") || "{}")); } catch (e) { return base; }
+  })();
+  let brandImg = null;
+  function brandLogo() {
+    if (!BRAND.logo) return null;
+    if (!brandImg || brandImg.dataset.src !== BRAND.logo.slice(-64)) {
+      brandImg = new Image();
+      brandImg.dataset.src = BRAND.logo.slice(-64);
+      brandImg.onload = () => { try { syncOverlays(); } catch (e) {} };
+      brandImg.src = BRAND.logo;
+    }
+    return brandImg.complete && brandImg.naturalWidth ? brandImg : null;
+  }
+  function saveBrand() {
+    try { localStorage.setItem("vclyps-brand", JSON.stringify(BRAND)); return true; } catch (e) { return false; }
+  }
+
+  // The logo in its corner: 16% of the frame's width (22% on a wide frame's height), a margin of 4%.
+  function drawWatermark(ctx, f) {
+    if (!BRAND.mark || BRAND.mark === "off") return;
+    const img = brandLogo();
+    if (!img) return;
+    const ar = img.naturalWidth / img.naturalHeight;
+    let w = f.w * (f.h >= f.w ? 0.16 : 0.1);
+    let h = w / ar;
+    if (h > f.h * 0.12) { h = f.h * 0.12; w = h * ar; }
+    const m = Math.min(f.w, f.h) * 0.04;
+    const x = BRAND.mark === "tl" ? f.x + m : f.x + f.w - m - w;
+    const y = BRAND.mark === "br" ? f.y + f.h - m - h : f.y + m;
+    ctx.save();
+    ctx.globalAlpha = 0.88;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  }
+  function textStyleOf(t) { return t.style === "lower" || t.style === "card" ? t.style : "heading"; }
+
+  function drawStyledText(ctx, t, f, time) {
+    const style = textStyleOf(t);
+    const local = time - t.start, left = t.start + t.dur - time;
+    const unit = (t.size / HEADING_REF_H) * f.h;
+    ctx.save();
+    ctx.textBaseline = "middle";
+    if (style === "card") {
+      const a = clamp(Math.min(t.start <= 0.05 ? 1 : local / 0.25, left / 0.25), 0, 1);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = t.bg || "#111210";
+      ctx.fillRect(f.x, f.y, f.w, f.h);
+      const size = unit * 1.15;
+      ctx.font = "400 " + size + "px " + HEADING_FONT;
+      ctx.textAlign = "center";
+      ctx.fillStyle = t.color || "#edeae2";
+      const lines = wrapHeading(ctx, t.text, f.w * 0.84);
+      const subSize = size * 0.36;
+      const blockH = lines.length * size * HEADING_LINE + (t.sub ? subSize * 2.2 : 0);
+      let y = f.y + f.h * 0.48 - blockH / 2 + (size * HEADING_LINE) / 2;
+      lines.forEach((l) => { ctx.fillText(l, f.x + f.w / 2, y); y += size * HEADING_LINE; });
+      if (t.sub) {
+        ctx.font = "500 " + subSize + "px " + LOWER_FONT;
+        ctx.globalAlpha = a * 0.72;
+        ctx.fillText(t.sub, f.x + f.w / 2, y - size * HEADING_LINE / 2 + subSize * 1.6, f.w * 0.84);
+      }
+    } else {
+      // lower third
+      const ease = (p) => 1 - Math.pow(1 - clamp(p, 0, 1), 3);
+      const inP = ease(local / 0.35);
+      const a = clamp(Math.min(local / 0.2, left / 0.25), 0, 1);
+      const name = unit * 0.62, sub = name * 0.66, pad = name * 0.5;
+      ctx.font = "600 " + name + "px " + LOWER_FONT;
+      const maxW = f.w * 0.8;
+      const nameW = Math.min(maxW, ctx.measureText(t.text).width);
+      ctx.font = "500 " + sub + "px " + LOWER_FONT;
+      const subW = t.sub ? Math.min(maxW, ctx.measureText(t.sub).width) : 0;
+      const rule = Math.max(3, f.w * 0.01);
+      const boxW = Math.max(nameW, subW) + pad * 2 + rule;
+      const boxH = pad * 2 + name + (t.sub ? sub * 1.35 : 0);
+      const x = f.x + f.w * 0.06 - (1 - inP) * boxW * 0.25;
+      const y = f.y + f.h * 0.78 - boxH;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "rgba(17, 18, 16, 0.86)";
+      ctx.fillRect(x, y, boxW, boxH);
+      ctx.fillStyle = t.accent || "#dc143c";
+      ctx.fillRect(x, y, rule, boxH);
+      ctx.textAlign = "left";
+      ctx.fillStyle = t.color || "#edeae2";
+      ctx.font = "600 " + name + "px " + LOWER_FONT;
+      ctx.fillText(t.text, x + rule + pad, y + pad + name / 2, maxW);
+      if (t.sub) {
+        ctx.font = "500 " + sub + "px " + LOWER_FONT;
+        ctx.globalAlpha = a * 0.75;
+        ctx.fillText(t.sub, x + rule + pad, y + pad + name + sub * 0.85, maxW);
+      }
+    }
+    ctx.restore();
+  }
+
+  /* ═══════════ TRANSITIONS ═══════════
+     A transition belongs to the clip it leads INTO (clip.tIn) and plays
+     across the cut: the outgoing clip's last TRANS_HALF seconds and the
+     incoming clip's first. One video element plays one clip at a time, so
+     these are the transitions that work on a single picture, which are also
+     the ones short-form edits use most:
+       fade   dip to black          flash  dip to white
+       zoom   punch in across the cut, with a touch of blur
+       whip   a fast slide sideways with motion blur
+     transFx() says, for the frame at the playhead, what to do; the preview
+     (CSS) and the export (canvas) both apply exactly that. */
+  const TRANS_HALF = 0.18;
+  const TRANSITIONS = { none: "None", fade: "Fade", flash: "Flash", zoom: "Zoom", whip: "Whip" };
+
+  function transFx(info) {
+    const fx = { scale: 1, dx: 0, blur: 0, veil: 0, veilColor: "#000" };
+    if (!info) return fx;
+    const c = info.clip, i = S.clips.indexOf(c);
+    const next = S.clips[i + 1];
+    const d = dispDur(c), o = info.offset;
+    let kind = null, s = 0, dir = 1;
+    if (i > 0 && c.tIn && c.tIn !== "none" && o < TRANS_HALF) { kind = c.tIn; s = 1 - o / TRANS_HALF; dir = 1; }
+    else if (next && next.tIn && next.tIn !== "none" && d - o < TRANS_HALF) { kind = next.tIn; s = 1 - (d - o) / TRANS_HALF; dir = -1; }
+    if (!kind || s <= 0) return fx;
+    const e = s * s;   // gentle away from the cut, strongest on it
+    if (kind === "fade") { fx.veil = s; }
+    else if (kind === "flash") { fx.veil = s; fx.veilColor = "#fff"; }
+    else if (kind === "zoom") { fx.scale = 1 + 0.28 * e; fx.blur = 0.006 * e; }
+    else if (kind === "whip") { fx.dx = (dir > 0 ? 0.38 : -0.38) * e; fx.blur = 0.012 * e; fx.scale = 1 + 0.06 * e; }
+    return fx;
+  }
+
+  /* ═══════════ LAYOUTS: split screen, screen and face ═══════════
+     For wide footage in a tall video, two ways to use the frame besides
+     cropping to one spot (the default, "Fill"), both cut from the SAME
+     clip, so they need nothing but the one video:
+       split   two people in one wide shot, one above the other (side by
+               side when the video itself is wide). layout.a and layout.b say
+               where each person is across the source, 0 to 1.
+       screen  a webcam corner and the screen or game: the face on top,
+               the screen below. layout.fx/fy are where the face is in the
+               source, layout.fs how much of the source's height it takes;
+               layout.sx where to centre the screen.
+     drawLayout() paints it, for the export canvas and for the preview's
+     layout canvas alike, so what you see is what the file has. */
+  const LAYOUTS = { fill: "Fill", split: "Split screen", screen: "Screen and face" };
+  function layoutOf(c) {
+    return c && c.layout && (c.layout.type === "split" || c.layout.type === "screen") ? c.layout : null;
+  }
+
+  // The source cropped to COVER rect r, centred as near (cx, cy) as the edges allow.
+  function coverDraw(ctx, el, vw, vh, r, cx, cy) {
+    const sc = Math.max(r.w / vw, r.h / vh);
+    const dw = vw * sc, dh = vh * sc;
+    const dx = clamp(r.w / 2 - cx * dw, r.w - dw, 0);
+    const dy = clamp(r.h / 2 - cy * dh, r.h - dh, 0);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    ctx.drawImage(el, r.x + dx, r.y + dy, dw, dh);
+    ctx.restore();
+  }
+
+  function drawLayout(ctx, el, vw, vh, L, f) {
+    const tall = f.h >= f.w;
+    const line = Math.max(2, Math.round(Math.min(f.w, f.h) * 0.004));
+    ctx.fillStyle = "#000";
+    ctx.fillRect(f.x, f.y, f.w, f.h);
+    if (L.type === "split") {
+      const a = tall ? { x: f.x, y: f.y, w: f.w, h: f.h / 2 } : { x: f.x, y: f.y, w: f.w / 2, h: f.h };
+      const b = tall ? { x: f.x, y: f.y + f.h / 2, w: f.w, h: f.h / 2 } : { x: f.x + f.w / 2, y: f.y, w: f.w / 2, h: f.h };
+      coverDraw(ctx, el, vw, vh, a, L.a != null ? L.a : 0.27, 0.45);
+      coverDraw(ctx, el, vw, vh, b, L.b != null ? L.b : 0.73, 0.45);
+      ctx.fillStyle = "#111210";
+      if (tall) ctx.fillRect(f.x, f.y + f.h / 2 - line / 2, f.w, line);
+      else ctx.fillRect(f.x + f.w / 2 - line / 2, f.y, line, f.h);
+      return;
+    }
+    // screen and face
+    const face = tall ? { x: f.x, y: f.y, w: f.w, h: f.h * 0.36 } : { x: f.x, y: f.y, w: f.w * 0.32, h: f.h };
+    const screen = tall ? { x: f.x, y: f.y + face.h, w: f.w, h: f.h - face.h } : { x: f.x + face.w, y: f.y, w: f.w - face.w, h: f.h };
+    // the face region of the source, at the face band's own shape
+    let sh = clamp(L.fs != null ? L.fs : 0.32, 0.08, 1) * vh;
+    let sw = sh * (face.w / face.h);
+    if (sw > vw) { sw = vw; sh = sw * (face.h / face.w); }
+    const sx = clamp((L.fx != null ? L.fx : 0.85) * vw - sw / 2, 0, vw - sw);
+    const sy = clamp((L.fy != null ? L.fy : 0.2) * vh - sh / 2, 0, vh - sh);
+    try { ctx.drawImage(el, sx, sy, sw, sh, face.x, face.y, face.w, face.h); } catch (e) {}
+    coverDraw(ctx, el, vw, vh, screen, L.sx != null ? L.sx : 0.5, 0.5);
+    ctx.fillStyle = "#111210";
+    if (tall) ctx.fillRect(f.x, f.y + face.h - line / 2, f.w, line);
+    else ctx.fillRect(f.x + face.w - line / 2, f.y, line, f.h);
+  }
+
+  // The preview's layout canvas: the composite, in the export's shape, in the stage.
+  function drawPreviewLayout(clip) {
+    const cv = $("layoutCanvas");
+    const L = layoutOf(clip);
+    const showing = !!L && !pv.classList.contains("hidden") && pv.videoWidth > 0;
+    cv.classList.toggle("hidden", !showing);
+    pv.style.opacity = showing ? "0" : "";
+    if (!showing) return;
+    const stage = $("stage");
+    const sw = stage.clientWidth || 0, sh = stage.clientHeight || 0;
+    if (!sw || !sh) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const pw = Math.round(sw * dpr), ph = Math.round(sh * dpr);
+    if (cv.width !== pw) cv.width = pw;
+    if (cv.height !== ph) cv.height = ph;
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, pw, ph);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const box = pictureBox();
+    ctx.filter = FILTERS[clip.filter].css;
+    drawLayout(ctx, pv, pv.videoWidth, pv.videoHeight, L, box);
+    ctx.filter = "none";
+  }
+
   /* Where the picture actually is inside the stage. The <video>/<img> stretches
      to the full stage box but the image letterboxes within it (object-fit:
      contain), and in fullscreen the stage becomes the whole screen — so this
@@ -3479,6 +4480,15 @@
   function pictureBox() {
     const stage = $("stage");
     const sw = stage.clientWidth || 0, sh = stage.clientHeight || 0;
+    /* A clip with a layout is shown in the shape of the export (the layout
+       canvas), so texts and captions are placed against that, as in the file. */
+    const now = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+    if (now && layoutOf(now.clip) && sw && sh) {
+      const size = exportSize();
+      const k = Math.min(sw / size.w, sh / size.h);
+      const w = size.w * k, h = size.h * k;
+      return { x: (sw - w) / 2, y: (sh - h) / 2, w: w, h: h };
+    }
     const showingImg = !pi.classList.contains("hidden");
     const vw = showingImg ? pi.naturalWidth : pv.videoWidth;
     const vh = showingImg ? pi.naturalHeight : pv.videoHeight;
@@ -3507,6 +4517,7 @@
       // when word-timed captions are on, they own the caption layer —
       // don't also render the AI's sentence-captions (would double up)
       if (karaoke && t.cap) return;
+      if (textStyleOf(t) !== "heading") return;   // drawn with the captions (drawPreviewCaptions)
       if (S.time >= t.start && S.time <= t.start + t.dur) {
         const L = headingLayout(t, box.w, box.h);
         const d = mk("div", "overlay-text");
@@ -3521,7 +4532,12 @@
         layer.appendChild(d);
       }
     });
-    $("fadeVeil").style.opacity = fadeAlpha(clipAt(Math.min(S.time, Math.max(total() - 0.001, 0))));
+    const now = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+    const fa = fadeAlpha(now), tv = transFx(now);
+    // a flash dips to white; everything else, fades included, to black
+    const white = tv.veil > fa && tv.veilColor === "#fff";
+    $("fadeVeil").style.background = white ? "#fff" : "#000";
+    $("fadeVeil").style.opacity = Math.max(fa, tv.veil);
     drawPreviewCaptions();
   }
 
@@ -3541,6 +4557,15 @@
     const ctx = cv.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
+    // lower thirds and title cards, inside the picture, under the captions; then the logo
+    const styled = S.texts.filter((t) => textStyleOf(t) !== "heading" && S.time >= t.start && S.time <= t.start + t.dur);
+    const marked = S.clips.length && BRAND.mark && BRAND.mark !== "off" && BRAND.logo;
+    if (styled.length || marked) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const box = pictureBox();
+      styled.forEach((t) => drawStyledText(ctx, t, box, S.time));
+      if (marked) drawWatermark(ctx, box);
+    }
     const C = global_VevrisCaptions();
     if (C && S.captions && S.captions.length) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -3623,6 +4648,7 @@
     }
     syncMedia();
     syncMusic();
+    mixMusic();
     syncAudioClips();
     applyBleep();
     syncOverlays();
@@ -4016,7 +5042,7 @@
     localStorage.setItem("vclyps-speech", speechOn() ? "0" : "1");
     refreshSpeechChip();
     toast(speechOn()
-      ? "Speech understanding on. A small model downloads the first time it's used"
+      ? "Speech understanding on. The speech model (about 100 MB) downloads the first time it's used, and captions use it too"
       : "Speech understanding off");
   });
   refreshSpeechChip();
@@ -4227,6 +5253,7 @@
     $("findRow").classList.toggle("hidden", !on);
     if (!finding) $("semiGenerate").textContent = on ? "Find" : "Edit";
     $("findLen").value = S.find.len || "auto";
+    $("findGenre").value = S.find.genre || "auto";
     $("findFrom").value = S.find.from || "";
     $("findTo").value = S.find.to || "";
     refreshFindSrc();
@@ -4255,6 +5282,7 @@
   });
   $("clipsChip").addEventListener("click", () => { renderClips(); openSheet("clipsSheet"); });
   $("findLen").addEventListener("change", () => { S.find.len = $("findLen").value; saveSession(); });
+  $("findGenre").addEventListener("change", () => { S.find.genre = $("findGenre").value; saveSession(); });
   ["findFrom", "findTo"].forEach((id) => {
     $(id).addEventListener("input", () => {
       $(id).classList.remove("bad");
@@ -4302,6 +5330,7 @@
       const res = await VevrisClips.find(item, {
         prompt: $("semiPrompt").value.trim(),
         length: S.find.len,
+        genre: S.find.genre || "auto",
         from: from, to: to,
         job: jb, say: say,
         cache: { get: idbGet, put: idbPut }
@@ -4606,15 +5635,22 @@
       const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const src = ctx.createMediaElementSource(pv);
       const dest = ctx.createMediaStreamDestination();
+      const bus = buildMasterBus(ctx, dest);
       /* The footage's sound goes through one gain, the "speech" stage, so a
          swear word can be silenced and bleeped in both places at once. */
       const speech = ctx.createGain();
       src.connect(speech);
-      speech.connect(ctx.destination); // to speakers (preview)
-      speech.connect(dest);            // tapped for the export file
+      speech.connect(bus);             // speakers and the export file, through the ceiling
+      /* The music listens to the speech stage to know when to step back
+         (see mixMusic). An analyser is a tap: nothing it hears changes. */
+      const listen = ctx.createAnalyser();
+      listen.fftSize = 1024;
+      speech.connect(listen);
       audioCtx = ctx;
       audioDest = dest;
+      masterBus = bus;
       speechGain = speech;
+      speechListen = listen;
     } catch (e) {
       audioGraphFailed = true;
       throw e;
@@ -4629,6 +5665,39 @@
      alike. Built separately so a failure here can never take the footage's
      sound down with it. */
   let speechGain = null, beepGain = null, bleepOn = false;
+  let masterBus = null, speechListen = null;
+
+  /* ── the master bus ───────────────────────────────────────────────────────
+     Everything the edit makes a sound with (the footage, the music, audio
+     clips, sound effects, the bleep) meets here, then goes through ONE
+     ceiling to the speakers and to the export. Before this each source went
+     out on its own, so a riser tail, a boom and a loud line could sum past
+     full scale and clip in the file (measured: airhorn + boom peaked 1.55).
+     The ceiling is a fast, hard compressor at -1.5 dB: below it nothing
+     changes, above it the peak is held. Web Audio's compressor adds its own
+     make-up gain (measured 1.1034 with these settings, 2026-10-21), so a
+     trim after it puts quiet material back exactly where it was. */
+  const CEILING_MAKEUP = 1.1034;
+  function buildMasterBus(ctx, dest) {
+    const bus = ctx.createGain();
+    let out = bus;
+    try {
+      const lim = ctx.createDynamicsCompressor();
+      lim.threshold.value = -1.5;
+      lim.knee.value = 0;
+      lim.ratio.value = 20;
+      lim.attack.value = 0.002;
+      lim.release.value = 0.15;
+      const trim = ctx.createGain();
+      trim.gain.value = 1 / CEILING_MAKEUP;
+      bus.connect(lim);
+      lim.connect(trim);
+      out = trim;
+    } catch (e) { out = bus; }   // no compressor: still one bus, just no ceiling
+    out.connect(ctx.destination);  // speakers (preview)
+    out.connect(dest);             // the export file
+    return bus;
+  }
   let bleepCache = { cues: null, key: "", spans: [] };
   function buildBleep() {
     if (beepGain || !audioCtx || !audioDest) return;
@@ -4639,8 +5708,7 @@
       const g = audioCtx.createGain();
       g.gain.value = 0;
       osc.connect(g);
-      g.connect(audioCtx.destination);
-      g.connect(audioDest);
+      g.connect(masterBus);
       osc.start();
       beepGain = g;
     } catch (e) { beepGain = null; }
@@ -4705,8 +5773,7 @@
       const src = audioCtx.createMediaElementSource(musicEl);
       musicGain = audioCtx.createGain();
       src.connect(musicGain);
-      musicGain.connect(audioCtx.destination);   // speakers
-      musicGain.connect(audioDest);              // the exported file
+      musicGain.connect(masterBus);              // speakers and the exported file
       musicRouted = true;
       applyMusicGain();
     } catch (e) {
@@ -4721,14 +5788,129 @@
      an element's volume still applies after it has been tapped. */
   function applyMusicGain() {
     if (!musicEl) return;
-    const g = S.music ? clamp(typeof S.music.gain === "number" ? S.music.gain : 0.35, 0, 1) : 0;
+    const g = clamp(musicBase(), 0, 1);
     if (musicRouted && musicGain) {
       musicEl.muted = false;
       musicEl.volume = 1;
-      musicGain.gain.value = S.userMuted ? 0 : g;
+      musicGain.gain.value = S.userMuted ? 0 : g * musicFade(S.time) * duck;
     } else {
       musicEl.volume = g;
       musicEl.muted = !!S.userMuted;
+    }
+  }
+
+  /* ── the music's level, every frame ─────────────────────────────────────
+     The bed's level is the volume chosen × a loudness match × its fades ×
+     the duck. Set from the frame loop, so the preview and the export (which
+     plays the same timeline) get the same mix.
+
+     LOUDNESS MATCH: tracks arrive at any level, and the Director picks them
+     unheard, so each is measured once (measureMusic) and brought to the same
+     loudness before the volume slider applies. `norm` is kept on S.music.
+
+     FADES: in over fadeIn seconds from the start of the edit, out over
+     fadeOut seconds into its end, so the bed never starts or stops with a
+     cut. Defaults 0.3 s and 1.5 s; both are in the music's settings.
+
+     DUCKING: the music listens to the footage's own sound (the speech stage,
+     through an analyser, which changes nothing it hears). While someone is
+     talking it steps down to DUCK_TO, quickly (80 ms), and comes back up
+     slowly (450 ms) once they have been quiet for DUCK_HOLD, so it does not
+     pump between words. It works on any footage with nothing to analyse in
+     advance, and the export hears exactly what the preview does. */
+  const DUCK_TO = 0.4;        // about -8 dB under speech
+  const DUCK_ON = 0.012;      // speech-stage RMS that counts as talking (about -38 dBFS)
+  const DUCK_HOLD = 0.35;     // seconds of quiet before the music comes back
+  /* The loudness every track is matched to (gated RMS, about -14 dBFS): where
+     an ordinary finished track already sits, so a typical bed sounds as it
+     always did and only the too-quiet and too-loud ones move. */
+  const MUSIC_TARGET = 0.2;
+  let duck = 1, duckHeld = 0, mixLast = 0, listenBuf = null;
+
+  function musicBase() {
+    if (!S.music) return 0;
+    const g = clamp(typeof S.music.gain === "number" ? S.music.gain : 0.35, 0, 1);
+    const norm = typeof S.music.norm === "number" ? S.music.norm : 1;
+    return g * norm;
+  }
+
+  function musicFade(t) {
+    if (!S.music) return 1;
+    const fi = typeof S.music.fadeIn === "number" ? S.music.fadeIn : 0.3;
+    const fo = typeof S.music.fadeOut === "number" ? S.music.fadeOut : 1.5;
+    const end = total();
+    let k = 1;
+    if (fi > 0 && t < fi) k *= clamp(t / fi, 0, 1);
+    if (fo > 0 && t > end - fo) k *= clamp((end - t) / fo, 0, 1);
+    return k;
+  }
+
+  function speechLevel() {
+    if (!speechListen) return 0;
+    if (!listenBuf) listenBuf = new Float32Array(speechListen.fftSize);
+    try { speechListen.getFloatTimeDomainData(listenBuf); } catch (e) { return 0; }
+    let s = 0;
+    for (let i = 0; i < listenBuf.length; i++) s += listenBuf[i] * listenBuf[i];
+    return Math.sqrt(s / listenBuf.length);
+  }
+
+  function mixMusic() {
+    if (!musicRouted || !musicGain || !audioCtx || !S.music) return;
+    const now = performance.now();
+    const dt = mixLast ? Math.min(0.25, (now - mixLast) / 1000) : 0;
+    mixLast = now;
+    const ducking = S.music.duck !== false;
+    const live = S.playing || EXP.active;
+    if (ducking && live && speechLevel() > DUCK_ON) duckHeld = DUCK_HOLD;
+    else duckHeld = Math.max(0, duckHeld - dt);
+    const want = ducking && duckHeld > 0 ? DUCK_TO : 1;
+    const tau = want < duck ? 0.08 : 0.45;
+    duck += (want - duck) * (dt ? 1 - Math.exp(-dt / tau) : 0);
+    const level = S.userMuted && !EXP.active ? 0 : clamp(musicBase(), 0, 1) * musicFade(S.time) * duck;
+    try { musicGain.gain.setTargetAtTime(level, audioCtx.currentTime, 0.015); }
+    catch (e) { musicGain.gain.value = level; }
+    if (window.VevrisDiag) window.VevrisDiag.mix = { level: level, duck: duck, norm: S.music.norm };
+  }
+
+  /* Measured once per track: the whole file decoded at a low rate (mono
+     16 kHz is plenty to judge loudness and keeps a 3-minute track near
+     11 MB), RMS over 400 ms blocks, blocks more than 20 dB under the loudest
+     ignored so a quiet intro does not count as the track's level, and the
+     result turned into a factor towards MUSIC_TARGET, capped at 4x so a near
+     silent file is not blown up. */
+  const musicNorms = new Map();   // url → factor, so undo/redo never re-measures
+  async function measureMusic() {
+    const m = S.music;
+    if (!m || !m.url || typeof m.norm === "number") return;
+    if (musicNorms.has(m.url)) { m.norm = musicNorms.get(m.url); applyMusicGain(); return; }
+    musicNorms.set(m.url, 1);     // one measurement at a time per track
+    try {
+      const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!Ctx) return;
+      const bytes = await (await fetch(m.url)).arrayBuffer();
+      const ctx = new Ctx(1, 1, 16000);
+      const buf = await new Promise((res, rej) => {
+        const p = ctx.decodeAudioData(bytes, res, rej);
+        if (p && p.then) p.then(res, rej);
+      });
+      const n = Math.round(buf.sampleRate * 0.4);
+      const blocks = [];
+      for (let o = 0; o + n <= buf.length; o += n) {
+        let s = 0, chs = buf.numberOfChannels;
+        for (let c = 0; c < chs; c++) {
+          const d = buf.getChannelData(c);
+          for (let i = o; i < o + n; i++) s += d[i] * d[i];
+        }
+        blocks.push(Math.sqrt(s / (n * chs)));
+      }
+      const top = Math.max(1e-6, ...blocks);
+      const kept = blocks.filter((b) => b > top * 0.1);
+      const rms = Math.sqrt(kept.reduce((a, b) => a + b * b, 0) / Math.max(1, kept.length));
+      const norm = rms > 1e-4 ? clamp(MUSIC_TARGET / rms, 0.25, 4) : 1;
+      musicNorms.set(m.url, norm);
+      if (S.music && S.music.url === m.url) { S.music.norm = norm; applyMusicGain(); saveSession(); }
+    } catch (e) {
+      musicNorms.delete(m.url);   // a failed fetch can be tried again next time
     }
   }
 
@@ -4748,6 +5930,7 @@
       try { musicEl.load(); } catch (e) {}
     }
     applyMusicGain();
+    measureMusic();
   }
 
   /* Kept locked to the playhead the same way the video is: sampled every
@@ -5100,14 +6283,21 @@
           const mcx = (m && m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
           dx = clamp(W / 2 - mcx * dw, W - dw, 0);
         }
-        ctx.filter = FILTERS[info.clip.filter].css;
+        const L = isVid ? layoutOf(info.clip) : null;
+        // the same transition the preview shows (transFx), in frame units
+        const fx = transFx(info);
+        const look = FILTERS[info.clip.filter].css;
+        ctx.filter = fx.blur ? (look === "none" ? "" : look + " ") + "blur(" + (fx.blur * H).toFixed(1) + "px)" : look;
         const k = info.clip.kb;
         try {
-          if (k) {
+          if (L) {
+            ctx.filter = look;
+            drawLayout(ctx, elm, vw, vh, L, { x: 0, y: 0, w: W, h: H });
+          } else if (k || fx.scale !== 1 || fx.dx) {
             const p = clamp(info.offset / Math.max(dispDur(info.clip), 0.01), 0, 1);
-            const zs = k.s0 + (k.s1 - k.s0) * p;
-            const tx = (k.x0 + (k.x1 - k.x0) * p) * dw;
-            const ty = (k.y0 + (k.y1 - k.y0) * p) * dh;
+            const zs = (k ? k.s0 + (k.s1 - k.s0) * p : 1) * fx.scale;
+            const tx = (k ? (k.x0 + (k.x1 - k.x0) * p) * dw : 0) + fx.dx * W;
+            const ty = k ? (k.y0 + (k.y1 - k.y0) * p) * dh : 0;
             ctx.save();
             ctx.translate(W / 2 + tx, H / 2 + ty);
             ctx.scale(zs, zs);
@@ -5153,15 +6343,23 @@
       }
     }
 
-    const fa = fadeAlpha(info);
-    if (fa > 0) {
-      ctx.fillStyle = "rgba(0,0,0," + fa + ")";
+    const fa = fadeAlpha(info), tv = transFx(info);
+    const veil = Math.max(fa, tv.veil);
+    if (veil > 0) {
+      ctx.fillStyle = tv.veil > fa && tv.veilColor === "#fff" ? "rgba(255,255,255," + veil + ")" : "rgba(0,0,0," + veil + ")";
       ctx.fillRect(0, 0, W, H);
     }
 
     const karaoke = S.captions && S.captions.length > 0;
+    // lower thirds and cards first, under the headings, as the preview layers them
+    S.texts.forEach((t) => {
+      if (textStyleOf(t) !== "heading" && S.time >= t.start && S.time <= t.start + t.dur) {
+        drawStyledText(ctx, t, { x: 0, y: 0, w: W, h: H }, S.time);
+      }
+    });
     S.texts.forEach((t) => {
       if (karaoke && t.cap) return; // karaoke owns captions — no doubling on export
+      if (textStyleOf(t) !== "heading") return;
       if (S.time >= t.start && S.time <= t.start + t.dur) {
         // same headingLayout() the preview uses, so the two cannot disagree
         const L = headingLayout(t, W, H);
@@ -5181,6 +6379,8 @@
         ctx.textBaseline = "alphabetic";  // captions.js draws next — leave it as found
       }
     });
+
+    drawWatermark(ctx, { x: 0, y: 0, w: W, h: H });
 
     // Word-timed captions last, so they sit above every other overlay.
     if (S.captions && S.captions.length && global_VevrisCaptions()) {
@@ -5473,6 +6673,56 @@
     });
   });
 
+  /* ── Brand (Settings → Your brand) ─────────────────────────────────────
+     The logo is shrunk to 512 px on its longest side and kept as a PNG data
+     address in this browser's storage, so it survives reloads and is used by
+     every project without being uploaded anywhere. */
+  function wireBrand() {
+    const paint = () => {
+      const has = !!BRAND.logo;
+      $("brandLogoImg").classList.toggle("hidden", !has);
+      $("brandLogoNone").classList.toggle("hidden", has);
+      $("brandLogoClear").classList.toggle("hidden", !has);
+      if (has) $("brandLogoImg").src = BRAND.logo;
+      document.querySelectorAll("#brandMarkSeg button").forEach((b) => b.classList.toggle("active", b.dataset.m === (BRAND.mark || "off")));
+      $("brandMain").value = BRAND.main;
+      $("brandAccent").value = BRAND.accent;
+      $("brandText").value = BRAND.text;
+    };
+    $("brandLogoPick").addEventListener("click", () => $("brandLogoFile").click());
+    $("brandLogoFile").addEventListener("change", async () => {
+      const f = $("brandLogoFile").files && $("brandLogoFile").files[0];
+      $("brandLogoFile").value = "";
+      if (!f) return;
+      try {
+        const url = URL.createObjectURL(f);
+        const img = new Image();
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+        const k = Math.min(1, 512 / Math.max(img.naturalWidth || 512, img.naturalHeight || 512));
+        const cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round((img.naturalWidth || 512) * k));
+        cv.height = Math.max(1, Math.round((img.naturalHeight || 512) * k));
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        BRAND.logo = cv.toDataURL("image/png");
+        if (!BRAND.mark || BRAND.mark === "off") BRAND.mark = "tr";
+        if (!saveBrand()) { BRAND.logo = ""; toast("That logo is too big to keep on this device. Try a smaller file"); }
+        else toast("Logo saved. It goes on every video you export");
+      } catch (e) { toast("That file couldn't be opened as a picture"); }
+      paint();
+      syncOverlays();
+    });
+    $("brandLogoClear").addEventListener("click", () => { BRAND.logo = ""; saveBrand(); paint(); syncOverlays(); });
+    document.querySelectorAll("#brandMarkSeg button").forEach((b) => {
+      b.addEventListener("click", () => { BRAND.mark = b.dataset.m; saveBrand(); paint(); syncOverlays(); });
+    });
+    [["brandMain", "main"], ["brandAccent", "accent"], ["brandText", "text"]].forEach(([id, key]) => {
+      $(id).addEventListener("change", () => { BRAND[key] = $(id).value; saveBrand(); });
+    });
+    paint();
+  }
+  wireBrand();
+
   function refreshSettings() {
     const V = window.VevrisVersion;
     // Version only. The build number still travels with every diagnostics dump
@@ -5644,7 +6894,7 @@
     S.format = "auto";
     S.mode = snap.mode || "entertainment";
     S.vertical = !!snap.vertical;
-    if (snap.find && typeof snap.find === "object") S.find = Object.assign({ on: false, len: "auto", from: "", to: "" }, snap.find);
+    if (snap.find && typeof snap.find === "object") S.find = Object.assign({ on: false, len: "auto", genre: "auto", from: "", to: "" }, snap.find);
     // found clips only mean something while their recording is still here
     S.found = snap.found && have[snap.found.mediaId] ? snap.found : null;
     nextId = Math.max(snap.nextId || 1, ...S.media.map((m) => m.id + 1));

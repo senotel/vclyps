@@ -546,12 +546,27 @@
      and settles the answer onto sentence boundaries. */
   const CLIP_TYPES = ["story", "insight", "tip", "funny", "emotional", "reaction", "hot take", "action"];
 
+  /* What a good clip is depends on what was recorded. The creator says what
+     kind of recording it is (Find clips → Kind); "auto" keeps the general
+     rules above, which were written for entertainment. Each line says what
+     to look for FIRST in that kind, and what to skip. */
+  const CLIP_GENRES = {
+    podcast: "KIND: a podcast or interview. Look first for a guest's strongest opinion or confession, a story told start to finish, a disagreement between the hosts, a surprising number or fact, and a question that gets a revealing answer. Keep both sides of an exchange when the reply is the payoff. Skip ad reads, intros of the guest, and 'as I said earlier' moments.",
+    gaming: "KIND: gaming. Look first for clutch plays, wins and losses at the last second, big fails, rage or hype reactions, funny glitches and chat-worthy moments. The MOMENTS (shouting, laughter, bursts of action) matter as much as the words; a clip should include the build-up seconds before the play and end on the reaction. Skip menus, loading, and quiet grinding.",
+    education: "KIND: teaching or explaining. Look first for one complete idea a viewer can learn in under a minute: a clear 'here is how' or 'here is why', a common mistake and its fix, a surprising fact with its explanation, a before-and-after. The clip must include the answer, not only the question. Skip recaps, 'in this video we will', and anything that needs a diagram not on screen.",
+    sports: "KIND: sports. Look first for scores, saves, near-misses, comebacks, records and the crowd's or commentator's biggest reactions. Start a few seconds before the play so it can be followed, end on the reaction or replay. Skip warm-ups, stoppages and analysis without the play.",
+    vlog: "KIND: a vlog or day in the life. Look first for a reveal (a place, a purchase, a result), a funny or awkward moment, a strong first reaction, a tip from experience, and an honest emotional beat. Prefer moments where something happens on screen as it is talked about. Skip travel filler, 'hey guys', and walking with no story.",
+    comedy: "KIND: comedy. Look first for complete bits: setup and punchline together, callbacks that land, crowd work, and the biggest laughs. A clip should END just after the laugh peaks. Never cut a bit before its punchline or start it after its setup.",
+    business: "KIND: business, money or career. Look first for a specific lesson with a number in it, a mistake that cost something, a contrarian opinion, a step-by-step that fits in a minute, and a story with a result. Concrete beats general. Skip pitches for the speaker's own products, disclaimers and housekeeping."
+  };
+
   function clipBrief(req) {
     const L = [];
     const w = req.window, len = req.length;
     L.push("You are the vClyps AI DIRECTOR, finding the best short clips inside one long recording. Each clip you choose is turned into a finished short afterwards (hook, captions, b-roll, music), so choose MOMENTS worth finishing, not edits.");
     L.push(BRANDING_RULE);
     L.push("WHAT MAKES A CLIP: it stands alone (someone scrolling with no context understands it within three seconds) · it opens on something arresting: a bold claim, a question, a number, a confession, the setup of a joke, a reaction · it pays that opening off before it ends · it ends on a finished thought, never mid-sentence. Look for complete stories, strong opinions, surprising facts, practical tips, funny exchanges, emotional peaks and big reactions. Never choose intros, greetings, sponsor reads, housekeeping, or anything that only makes sense with earlier context.");
+    if (CLIP_GENRES[req.genre]) L.push(CLIP_GENRES[req.genre]);
     L.push("MOMENTS were measured on the creator's device: laughter, applause, cheering, shouting, gasps, crying, music, lively delivery (the speaker louder, higher or faster than their own norm), big smiles, surprised faces, scene changes and bursts of action. They mark where something HAPPENED. Use them to find peaks, then build the clip around what was said: a funny clip should END just after the laugh, not before it.");
     if (req.keyframes && req.keyframes.length) {
       L.push("There is little speech in this recording, so stills from its strongest moments are attached. Judge what happens on screen: action, a reveal, a reaction, something visually striking.");
@@ -699,6 +714,71 @@
       }
     }
     throw directorError("Couldn't translate the captions. " + tried.join(" · "));
+  }
+
+  /* Words to post the video with: a title, a description and hashtags,
+     written from what is SAID in the finished edit (the captions' words on
+     the timeline, in order) plus the creator's own note if they gave one.
+     Same chain as a translation: Gemini, then the two backups. Text only;
+     no picture or sound is sent. Returns { title, description, hashtags }.
+     The rules: say what the video IS in plain words people search for, put
+     the hook first, a few specific hashtags rather than a wall of generic
+     ones, no clickbait the video does not pay off, no invented claims. */
+  async function postText(opts) {
+    if (navigator.onLine === false) throw directorError("You are offline. Reconnect to write a title and hashtags.");
+    opts = opts || {};
+    const said = String(opts.transcript || "").replace(/\s+/g, " ").trim().slice(0, 6000);
+    const platform = opts.platform || "any";
+    const limits = {
+      tiktok: "TikTok: title is the caption's first line; description up to 300 characters; 3-5 hashtags.",
+      youtube: "YouTube Shorts: title up to 70 characters (it is what search matches); description 1-3 short sentences; 3 hashtags.",
+      instagram: "Instagram Reels: no separate title, so make the title the caption's opening line; description up to 300 characters; 3-5 hashtags.",
+      any: "Works on TikTok, YouTube Shorts and Instagram Reels: title up to 70 characters; description up to 300 characters; 3-5 hashtags."
+    };
+    const prompt = "vclyps post text. Write the words a creator posts with this short video. " +
+      (limits[platform] || limits.any) + " " +
+      "Title: the hook first, in plain words someone would search for; specific, not vague; no clickbait the video does not deliver; no ALL CAPS; at most one emoji or none. " +
+      "Description: what the viewer gets, in the creator's own voice, from what is actually said; end with one natural question or prompt to comment only if it fits. " +
+      "Hashtags: specific to the topic and the audience first, one broad one at most; no #fyp, #foryou, #viral or #trending; lowercase; no spaces inside a tag. " +
+      "Never invent facts, numbers, names or promises that are not in what is said. Write in the same language as the speech. " +
+      "Return ONLY JSON: {\"title\": string, \"description\": string, \"hashtags\": [strings without #]}." +
+      (opts.note ? "\nCREATOR'S NOTE: " + String(opts.note).slice(0, 400) : "") +
+      "\nWHAT IS SAID IN THE VIDEO:\n" + (said || "(no speech; a visual video)") +
+      (opts.texts && opts.texts.length ? "\nON-SCREEN TEXT: " + opts.texts.slice(0, 6).join(" | ").slice(0, 400) : "");
+    const pick = (obj) => {
+      if (!obj || typeof obj !== "object") return null;
+      const title = String(obj.title || "").replace(/\s+/g, " ").trim().slice(0, 100);
+      const description = String(obj.description || "").trim().slice(0, 600);
+      const tags = (Array.isArray(obj.hashtags) ? obj.hashtags : [])
+        .map((t) => String(t || "").toLowerCase().replace(/^#+/, "").replace(/[^\p{L}\p{N}_]+/gu, ""))
+        .filter((t) => t && t.length <= 40 && !/^(fyp|foryou|foryoupage|viral|trending|xyzbca)$/.test(t));
+      const hashtags = Array.from(new Set(tags)).slice(0, 6);
+      return title || description || hashtags.length ? { title: title, description: description, hashtags: hashtags } : null;
+    };
+    const tried = [];
+    if (GeminiProvider.available()) {
+      try {
+        const out = pick(await callWithRetry([{ text: prompt }], 2048));
+        if (out) return out;
+        tried.push("Gemini: nothing usable");
+      } catch (e) { tried.push("Gemini: " + ((e && e.message) || e)); }
+    }
+    for (const [path, models] of [["/mistral", MISTRAL_MODELS], ["/groq", GROQ_MODELS]]) {
+      if (!PROXY_URL) break;
+      for (const model of models) {
+        try {
+          const out = pick(await callChat(prompt, 1024, path, model));
+          if (out) return out;
+          tried.push(path.slice(1) + ": nothing usable");
+          break;
+        } catch (e) {
+          const msg = (e && e.message) || String(e);
+          tried.push(path.slice(1) + ": " + msg);
+          if (!MODEL_GONE.test(msg)) break;
+        }
+      }
+    }
+    throw directorError("Couldn't write the post text. " + tried.join(" · "));
   }
 
   function footageParts(req, includeFrames) {
@@ -1189,6 +1269,7 @@
     plan: plan,
     findClips: findClips,
     translateLines: translateLines,
+    postText: postText,
     record: record,
     datasetCount: datasetCount,
     exportDataset: exportDataset,

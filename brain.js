@@ -306,7 +306,7 @@
     } else {
       D.whisper = asrCached
         ? "off — enable 🎙 Speech to use it"
-        : "off — turn on 🎙 Speech to transcribe (one-time ~40 MB model download)";
+        : "off — turn on 🎙 Speech to transcribe (one-time ~100 MB model download)";
     }
     say("Scoring the best moments…");
   }

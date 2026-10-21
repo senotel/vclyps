@@ -183,10 +183,12 @@
     return false;
   }
 
+  /* Is a speech model the Director would use already on the device? Then
+     Speech can switch itself on without anyone waiting for a download. */
   async function modelReady() {
     if (asr) return true;
     if (!global.caches) return flagged();
-    return cached("whisper-tiny.en");
+    return (await cached(TIERS.fast.id)) || (await cached(TIERS.balanced.id)) || (await cached(TIERS.best.id));
   }
 
   function loadASR(say) {
@@ -334,14 +336,41 @@
     capWorker().postMessage({ cmd: "warm", tier: t });
   }
 
-  /* The Director's transcript (brain.js, behind the Speech chip): the small
-     English model it has always used, so switching Speech on never starts
-     the big caption download. Where a clip already has captions, their
-     better words are used instead. */
+  /* The Director's transcript (brain.js, behind the Speech chip).
+     Since 0.27.0 it is the captions' own Whisper, run once for both: the
+     multilingual base model ("Fast", about 100 MB) unless a better caption
+     model is already on the device, in which case that one. It used to be
+     whisper-tiny.en, which misheard enough to throw off the hooks, cuts,
+     captions and cutaway searches built on its words, and could only hear
+     English. Switching Speech on still never starts the BIG caption
+     download. Where a clip already has captions, their words are used. If
+     the caption worker cannot run here, the old small model still does. */
+  async function directorTier() {
+    var order = ["best", "balanced"];
+    for (var i = 0; i < order.length; i++) {
+      var t = order[i];
+      if (effectiveTier(t) === t && (await cached(TIERS[t].id))) return t;
+    }
+    return "fast";
+  }
+
   async function transcribeWords(item, say) {
     if (item.capWords && item.capWords.length) return item.capWords;
     if (item.words !== undefined) return item.words;
     say = say || function () {};
+    if (global.Worker) {
+      try {
+        var r = await transcribeCaptions(item, { tier: await directorTier() }, say);
+        return r.words;
+      } catch (e) {
+        try { console.warn("caption Whisper unavailable for the Director, using the small model", e); } catch (e2) {}
+        item.words = undefined;
+      }
+    }
+    return transcribeWordsSmall(item, say);
+  }
+
+  async function transcribeWordsSmall(item, say) {
     var model = await loadASR(say);
     say("Timing words in “" + (item.name || "clip") + "”…");
     var mono = await decode16k(item.url);

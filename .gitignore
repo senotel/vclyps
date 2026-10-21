@@ -1,0 +1,19 @@
+# Local tooling — never belongs in the repo.
+# .claude holds Claude Code's tool-permission history. Nothing in the app reads
+# it, and dragging the whole project folder into GitHub would otherwise sweep it
+# up along with everything else.
+.claude/
+
+# OS clutter that appears on its own
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Scratch / working files
+*.log
+*.tmp
+node_modules/
+
+# NOTE: HANDOFF.md is deliberately NOT ignored — it is the only memory between
+# chats and belongs in the repo. It does describe the architecture and worker
+# setup, so ignore it here if the repo is ever made public and that matters.

@@ -209,6 +209,12 @@
         </div>
       </section>
 
+      <footer class="lp-foot">
+        <span>vClyps by Vevris</span>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+      </footer>
+
       <!-- Same + gateway and accessible label; always available. -->
       <div class="lp-dock" id="lpDock">
         <div class="lp-cta-magnet" id="lpMagnet">
@@ -233,6 +239,37 @@
         <div class="ins-seg" id="themeSeg">
           <button data-t="light">Light</button>
           <button data-t="dark" class="active">Dark</button>
+        </div>
+      </div>
+
+      <!-- BRAND. Kept on this device and used by every project: the logo as a
+           watermark, the colours as the defaults for title cards and lower
+           thirds (app.js BRAND). -->
+      <div class="set-group">
+        <label>Your brand
+          <span class="set-note">Your logo goes on every video you export, and your colours become the starting colours for title cards and lower thirds. Kept on this device.</span>
+        </label>
+        <div class="brand-row">
+          <div class="brand-logo" id="brandLogoBox"><img id="brandLogoImg" alt="Your logo" class="hidden" /><span id="brandLogoNone">No logo</span></div>
+          <div class="set-row">
+            <button class="secondary-btn" id="brandLogoPick">Choose a logo</button>
+            <button class="ghost-btn hidden" id="brandLogoClear">Remove</button>
+          </div>
+          <input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+        </div>
+        <div class="brand-row">
+          <span class="brand-label">Logo on videos</span>
+          <div class="ins-seg" id="brandMarkSeg">
+            <button data-m="off" class="active">Off</button>
+            <button data-m="tl">Top left</button>
+            <button data-m="tr">Top right</button>
+            <button data-m="br">Bottom right</button>
+          </div>
+        </div>
+        <div class="brand-row">
+          <label class="brand-color"><input type="color" id="brandMain" value="#111210" /> <span>Card colour</span></label>
+          <label class="brand-color"><input type="color" id="brandAccent" value="#dc143c" /> <span>Accent</span></label>
+          <label class="brand-color"><input type="color" id="brandText" value="#edeae2" /> <span>Text</span></label>
         </div>
       </div>
 
@@ -286,6 +323,7 @@
           </div>
         </div>
         <p class="about-version" id="aboutVersion">vClyps</p>
+        <p class="about-legal"><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of use</a></p>
       </div>
     </div>
   </section>
@@ -383,6 +421,19 @@
           <option value="xl">90s to 3 min</option>
         </select>
       </label>
+      <label class="find-field">
+        <span>Kind</span>
+        <select id="findGenre">
+          <option value="auto">Auto</option>
+          <option value="podcast">Podcast or interview</option>
+          <option value="gaming">Gaming</option>
+          <option value="education">Teaching</option>
+          <option value="sports">Sports</option>
+          <option value="vlog">Vlog</option>
+          <option value="comedy">Comedy</option>
+          <option value="business">Business</option>
+        </select>
+      </label>
       <span class="find-range">
         <label class="find-field">
           <span>From</span>
@@ -430,6 +481,14 @@
       <button class="tool" id="tbCaptions">
         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="6" y1="14" x2="10" y2="14"></line><line x1="13" y1="14" x2="18" y2="14"></line></svg>
         <span>Captions</span>
+      </button>
+      <button class="tool" id="tbTidy" title="Remove pauses and filler words, or cut words from the transcript">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="8" y2="12"></line><line x1="16" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="14" y2="18"></line><line x1="10" y1="10" x2="14" y2="14"></line><line x1="14" y1="10" x2="10" y2="14"></line></svg>
+        <span>Tidy</span>
+      </button>
+      <button class="tool" id="tbPost" title="A title, a description and hashtags to post the video with">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="4" x2="7" y2="20"></line><line x1="17" y1="4" x2="15" y2="20"></line><line x1="4" y1="9" x2="20" y2="9"></line><line x1="3" y1="15" x2="19" y2="15"></line></svg>
+        <span>Post</span>
       </button>
       <button class="tool" id="tbFilter">
         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20"></path></svg>
@@ -488,6 +547,8 @@
       <video id="pv" playsinline></video>
       <audio id="musicEl" crossorigin="anonymous" preload="auto" hidden></audio>
       <img id="pi" class="hidden" alt="" />
+      <!-- split screen and screen-and-face layouts, drawn from #pv (drawPreviewLayout) -->
+      <canvas class="layout-canvas hidden" id="layoutCanvas"></canvas>
       <!-- B-roll sits OVER the footage rather than replacing it, so the speaker
            keeps talking underneath. Always muted — two audio sources fighting is
            never what you want. -->
@@ -586,6 +647,112 @@
         <div class="snd-grid" id="mineGrid"></div>
         <p class="snd-none hidden" id="mineNone">Nothing here yet. Extract the sound from a video, or import an audio file.</p>
       </div>
+    </div>
+
+    <!-- POST. A title, a description and hashtags to post the video with,
+         written by the AI Director from what is said (text only). The panel
+         itself lives here and moves into the export card while a video
+         renders, so the words are ready when the file is. -->
+    <div class="sheet hidden" id="postSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Ready to post</h3>
+      </div>
+      <div class="post-panel" id="postPanel">
+        <div class="post-ask">
+          <label class="visually-hidden" for="postPlatform">Where you will post</label>
+          <select id="postPlatform">
+            <option value="any">Any platform</option>
+            <option value="tiktok">TikTok</option>
+            <option value="youtube">YouTube Shorts</option>
+            <option value="instagram">Instagram Reels</option>
+          </select>
+          <button class="secondary-btn" id="postWrite">Write title and hashtags</button>
+        </div>
+        <label class="visually-hidden" for="postNote">Anything to mention</label>
+        <input type="text" id="postNote" maxlength="200" placeholder="Anything to mention? (optional)" autocomplete="off" />
+        <div class="post-out hidden" id="postOut">
+          <div class="post-field">
+            <div class="post-label"><span>Title</span><button class="text-btn" data-copy="postTitle">Copy</button></div>
+            <textarea id="postTitle" rows="2" aria-label="Title"></textarea>
+          </div>
+          <div class="post-field">
+            <div class="post-label"><span>Description</span><button class="text-btn" data-copy="postDesc">Copy</button></div>
+            <textarea id="postDesc" rows="4" aria-label="Description"></textarea>
+          </div>
+          <div class="post-field">
+            <div class="post-label"><span>Hashtags</span><button class="text-btn" data-copy="postTags">Copy</button></div>
+            <textarea id="postTags" rows="2" aria-label="Hashtags"></textarea>
+          </div>
+          <button class="primary-btn" id="postCopyAll">Copy all</button>
+        </div>
+        <p class="post-status" id="postStatus" aria-live="polite"></p>
+      </div>
+      <div class="post-files">
+        <h4>Files for other editors</h4>
+        <div class="post-file-row">
+          <button class="secondary-btn" id="postSrt">Captions (.srt)</button>
+          <button class="secondary-btn" id="postXml">Edit for Premiere or DaVinci (.xml)</button>
+        </div>
+        <p class="post-status" id="postFileStatus" aria-live="polite">The edit file holds the cuts and their sound; music, sound effects, texts and looks stay in vClyps.</p>
+      </div>
+    </div>
+
+    <!-- TIDY. Pauses, filler words, and cutting words straight from the
+         transcript. One engine in app.js (cutSourceSpans); all on the
+         device, all undoable. -->
+    <div class="sheet hidden" id="tidySheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Tidy up</h3>
+      </div>
+      <div class="tidy-row">
+        <div class="tidy-text">
+          <strong>Remove pauses</strong>
+          <p>Silences between words close to a breath. A laugh or applause in the gap stays.</p>
+        </div>
+        <div class="tidy-act">
+          <label class="visually-hidden" for="tidyGap">Pauses longer than</label>
+          <select id="tidyGap">
+            <option value="0.4">Over 0.4s</option>
+            <option value="0.6" selected>Over 0.6s</option>
+            <option value="1">Over 1s</option>
+          </select>
+          <button class="secondary-btn" id="tidyPauses">Remove</button>
+        </div>
+      </div>
+      <div class="tidy-row">
+        <div class="tidy-text">
+          <strong>Remove filler words</strong>
+          <p>"Um", "uh", "erm" and words said twice by mistake, like "I I".</p>
+        </div>
+        <div class="tidy-act">
+          <button class="secondary-btn" id="tidyFillers">Remove</button>
+        </div>
+      </div>
+      <div class="tidy-row">
+        <div class="tidy-text">
+          <strong>Remove bad takes</strong>
+          <p>When a line is started again, the false start goes and the take that was finished stays.</p>
+        </div>
+        <div class="tidy-act">
+          <button class="secondary-btn" id="tidyTakes">Remove</button>
+        </div>
+      </div>
+      <div class="tidy-row">
+        <div class="tidy-text">
+          <strong>Edit by the transcript</strong>
+          <p>Tap words to strike them, then cut them out of the video.</p>
+        </div>
+        <div class="tidy-act">
+          <button class="secondary-btn" id="tidyShowWords">Show words</button>
+        </div>
+      </div>
+      <div class="tidy-transcript hidden" id="tidyTranscript">
+        <div class="tidy-words" id="tidyWords"></div>
+        <button class="primary-btn" id="tidyCutWords" disabled>Cut struck words</button>
+      </div>
+      <p class="tidy-note" id="tidyStatus" aria-live="polite"></p>
     </div>
 
     <!-- CAPTIONS. Make them, then decide how they look and read. Everything
@@ -745,6 +912,8 @@
       <h3 id="expTitle">Exporting your video…</h3>
       <div class="exp-track"><div class="exp-bar" id="expBar"></div></div>
       <p class="exp-status"><span id="expPct">0%</span> · <span id="expStatus">rendering in real time, keep this tab open</span></p>
+      <!-- the post panel is moved in here while a video renders (app.js movePostPanel) -->
+      <div class="exp-post" id="expPostSlot"></div>
       <button class="secondary-btn" id="expCancel">Cancel</button>
     </div>
   </div>
