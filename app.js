@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   VEVRIS — app engine
+   SENOTEL — app engine
    Real features: upload, library, manual timeline editing
    (trim / split / reorder / text / filters / speed / volume),
    AI edit engine (prompt → real timeline), playback engine,
@@ -51,7 +51,7 @@
   const IMG_DUR = 3;
   let finding = null;        // a running Find clips job, so the button can stop it
 
-  function global_VevrisCaptions() { return window.VevrisCaptions || null; }
+  function global_SenotelCaptions() { return window.SenotelCaptions || null; }
 
   const FILTERS = {
     none:      { label: "Original",  css: "none" },
@@ -464,12 +464,12 @@
     openSheet("addSheet");
     refreshAddSources();
     // the pop-up sources load now, so a press can open them straight away
-    if (window.VevrisSources) VevrisSources.warm();
+    if (window.SenotelSources) SenotelSources.warm();
   }
 
   function refreshAddSources() {
-    if (!window.VevrisSources) return;
-    VevrisSources.available().then((av) => {
+    if (!window.SenotelSources) return;
+    SenotelSources.available().then((av) => {
       let any = false;
       document.querySelectorAll(".add-src").forEach((b) => {
         const on = !!av[b.dataset.src];
@@ -545,7 +545,7 @@
       }
       return files;
     } catch (e) {
-      const stopped = window.VevrisSources && e instanceof VevrisSources.Cancelled;
+      const stopped = window.SenotelSources && e instanceof SenotelSources.Cancelled;
       status.textContent = stopped ? "" : ((e && e.message) || "That didn't work. Try again.");
       return null;
     } finally {
@@ -564,12 +564,12 @@
   document.querySelectorAll(".add-src").forEach((b) => {
     b.addEventListener("click", () => {
       const src = b.dataset.src;
-      if (!window.VevrisSources || importing) return;
+      if (!window.SenotelSources || importing) return;
       document.querySelectorAll(".add-src").forEach((x) => x.classList.toggle("on", x === b));
       $("addList").innerHTML = "";
       if (src === "gphotos") openGooglePhotos();
-      else if (src === "drive") importWith((o) => VevrisSources.fromDrive(o), "Opening Google Drive…");
-      else if (src === "dropbox") importWith((o) => VevrisSources.fromDropbox(o), "Opening Dropbox…");
+      else if (src === "drive") importWith((o) => SenotelSources.fromDrive(o), "Opening Google Drive…");
+      else if (src === "dropbox") importWith((o) => SenotelSources.fromDropbox(o), "Opening Dropbox…");
       else if (src === "zoom" || src === "vimeo") browseCloud(src);
     });
   });
@@ -578,20 +578,20 @@
      (a browser allows one pop-up per tap). Once signed in, one tap does it. */
   const PHOTOS_WAIT = "Choose in Google Photos, then come back here…";
   function openGooglePhotos() {
-    if (VevrisSources.photos.signedIn()) {
-      importWith((o) => VevrisSources.fromGooglePhotos(o), PHOTOS_WAIT);
+    if (SenotelSources.photos.signedIn()) {
+      importWith((o) => SenotelSources.fromGooglePhotos(o), PHOTOS_WAIT);
       return;
     }
     const status = $("addStatus");
     status.textContent = "Waiting for you to sign in with Google…";
-    VevrisSources.photos.signIn().then(() => {
+    SenotelSources.photos.signIn().then(() => {
       status.textContent = "";
       $("addList").appendChild(cloudRow("Google Photos", "Signed in. Choose your videos and photos", "", "Open", () => {
         $("addList").innerHTML = "";
-        importWith((o) => VevrisSources.fromGooglePhotos(o), PHOTOS_WAIT);
+        importWith((o) => SenotelSources.fromGooglePhotos(o), PHOTOS_WAIT);
       }));
     }).catch((e) => {
-      status.textContent = e instanceof VevrisSources.Cancelled ? "" : ((e && e.message) || "Sign-in didn't work. Try again.");
+      status.textContent = e instanceof SenotelSources.Cancelled ? "" : ((e && e.message) || "Sign-in didn't work. Try again.");
     });
   }
 
@@ -603,7 +603,7 @@
     importing = ctl;
     setImporting(true);
     status.textContent = "Waiting for you to sign in to " + (src === "zoom" ? "Zoom" : "Vimeo") + "…";
-    VevrisSources.connect(src, { signal: ctl.signal })
+    SenotelSources.connect(src, { signal: ctl.signal })
       .then(() => {
         importing = null;
         setImporting(false);
@@ -613,7 +613,7 @@
       .catch((e) => {
         importing = null;
         setImporting(false);
-        status.textContent = e instanceof VevrisSources.Cancelled ? "" : ((e && e.message) || "Sign-in didn't work. Try again.");
+        status.textContent = e instanceof SenotelSources.Cancelled ? "" : ((e && e.message) || "Sign-in didn't work. Try again.");
       });
   }
 
@@ -651,19 +651,19 @@
   function listZoom(monthsBack) {
     const status = $("addStatus"), list = $("addList");
     status.textContent = monthsBack ? "Looking further back…" : "Finding your recordings…";
-    return VevrisSources.zoom.list(monthsBack).then((d) => {
+    return SenotelSources.zoom.list(monthsBack).then((d) => {
       status.textContent = "";
       const meetings = d.meetings || [];
       if (!meetings.length && !list.children.length) {
         status.textContent = monthsBack ? "No cloud recordings in that month either." : "No cloud recordings in the last 30 days.";
       }
       meetings.forEach((m) => {
-        const f = VevrisSources.zoom.pick(m.files);
+        const f = SenotelSources.zoom.pick(m.files);
         if (!f) return;
         const what = f.type === "M4A" ? "audio only" : "video";
         list.appendChild(cloudRow(m.topic, niceDay(m.start) + " · " + what + (f.size ? " · " + mbText(f.size) + " MB" : ""),
           m.duration ? m.duration + " min" : "", "Add",
-          () => importWith((o) => VevrisSources.zoom.file(m, f, o), "Starting the download from Zoom…")));
+          () => importWith((o) => SenotelSources.zoom.file(m, f, o), "Starting the download from Zoom…")));
       });
       list.appendChild(moreButton("Earlier recordings", () => listZoom(monthsBack + 1)));
     }).catch((e) => { status.textContent = (e && e.message) || "Couldn't list your Zoom recordings."; });
@@ -672,7 +672,7 @@
   function listVimeo(page) {
     const status = $("addStatus"), list = $("addList");
     status.textContent = page > 1 ? "Loading more…" : "Finding your videos…";
-    return VevrisSources.vimeo.list(page).then((d) => {
+    return SenotelSources.vimeo.list(page).then((d) => {
       status.textContent = "";
       const videos = d.videos || [];
       if (!videos.length && page === 1) status.textContent = "There are no videos on this Vimeo account yet.";
@@ -682,7 +682,7 @@
           niceDay(v.created) + (can ? (v.file.height ? " · " + v.file.height + "p" : "") + (v.file.size ? " · " + mbText(v.file.size) + " MB" : "")
             : " · Vimeo allows downloads on Standard plans and up"),
           v.duration ? fmtLen(v.duration) : "", can ? "Add" : "Locked",
-          can ? () => importWith((o) => VevrisSources.vimeo.file(v, o), "Starting the download from Vimeo…") : null));
+          can ? () => importWith((o) => SenotelSources.vimeo.file(v, o), "Starting the download from Vimeo…") : null));
       });
       if (d.next) list.appendChild(moreButton("More videos", () => listVimeo(page + 1)));
     }).catch((e) => { status.textContent = (e && e.message) || "Couldn't list your Vimeo videos."; });
@@ -759,9 +759,9 @@
 
   /* background footage understanding (brain.js) — starts the moment a file lands */
   function queueAnalysis(item) {
-    if (!window.VevrisBrain || item.type === "audio") return;   // nothing to watch in a sound
+    if (!window.SenotelBrain || item.type === "audio") return;   // nothing to watch in a sound
     item._an = "working";
-    VevrisBrain.analyze(item).then(() => {
+    SenotelBrain.analyze(item).then(() => {
       item._an = "done";
       renderStrips();
     }).catch(() => { item._an = "done"; });
@@ -1228,7 +1228,7 @@
     const vids = captionSources();
     if (!vids.length) return false;
     if (vids.some((m) => timedWords(m).length)) return true;
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     if (!C || !C.transcribeCaptions) return false;
     const o = S.capOpts;
     for (const m of vids) {
@@ -1363,7 +1363,7 @@
      else the timed words, else the Director's transcript lines), so a cut
      line is never quoted. One text-only call (intelligence.js postText). */
   function editTranscript() {
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     if (S.captions.length && C && C.cueText) return S.captions.map((c) => C.cueText(c)).join(" ");
     const rows = transcriptRows();
     if (rows.length) return rows.map((r) => String(r.w.text || "").trim()).join(" ");
@@ -1463,7 +1463,7 @@
   }
 
   function captionLines() {
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     if (S.captions.length && C && C.cueText) {
       const tr = S.capOpts.translate;
       return S.captions.map((c) => ({
@@ -1548,7 +1548,7 @@
   async function saveOut(text, type, ext, okMsg) {
     const blob = new Blob([text], { type: type });
     try {
-      const how = await window.VevrisPlatform.save(blob, fileBase() + "." + ext);
+      const how = await window.SenotelPlatform.save(blob, fileBase() + "." + ext);
       $("postFileStatus").textContent = how === "cancelled" ? "" : okMsg;
     } catch (e) {
       $("postFileStatus").textContent = "Couldn't save the file: " + ((e && e.message) || e);
@@ -1971,16 +1971,16 @@
 
   const soundFiles = new WeakMap();
   async function downloadSound(m, btn, note) {
-    if (!window.VevrisAudioOut) { toast("Download isn't available. Reload the page and try again"); return; }
+    if (!window.SenotelAudioOut) { toast("Download isn't available. Reload the page and try again"); return; }
     btn.disabled = true;
     btn.textContent = "Preparing…";
     try {
       /* kept, so a second tap saves at once: a share sheet must open within
          seconds of the tap, and preparing a long sound can take longer */
-      const out = soundFiles.get(m) || await VevrisAudioOut.soundFile(m);
+      const out = soundFiles.get(m) || await SenotelAudioOut.soundFile(m);
       soundFiles.set(m, out);
       // a download in a browser, the share sheet inside an app (platform.js)
-      if (await VevrisPlatform.save(out.blob, out.name) === "cancelled") throw new Error("Not saved.");
+      if (await SenotelPlatform.save(out.blob, out.name) === "cancelled") throw new Error("Not saved.");
       note.textContent = out.name + ", " + mbText(out.blob.size) + " MB" +
         (out.how === "decoded" ? ". Saved as WAV: full quality, a bigger file" : "");
       btn.textContent = "Download again";
@@ -2056,7 +2056,7 @@
     };
   }
 
-  const CapT = () => window.VevrisCaptionTools || null;
+  const CapT = () => window.SenotelCaptionTools || null;
   const langName = (c) => { const T = CapT(); return (T && T.LANG_NAME[c]) || c || ""; };
   const capSheetOpen = () => !$("captionSheet").classList.contains("hidden");
 
@@ -2077,7 +2077,7 @@
   }
 
   function capStyle() {
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     return C ? C.styleOf(S.capOpts.style) : null;
   }
   function capWordsAtATime() {
@@ -2110,7 +2110,7 @@
      Runs again when the word list or "words at a time" changes, or the edit
      changes underneath the captions. Never transcribes. */
   function remapCaptions() {
-    const C = global_VevrisCaptions(), T = CapT();
+    const C = global_SenotelCaptions(), T = CapT();
     if (!C) return false;
     let at = 0;
     const mapped = [];
@@ -2132,7 +2132,7 @@
   // A caption that did not change keeps its translation: no paying twice.
   function carryTranslations(from, to) {
     if (!from || !from.length) return;
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     const key = (c) => c.start.toFixed(2) + "|" + C.cueText(c);
     const was = {};
     from.forEach((c) => { if (c.tr) was[key(c)] = c; });
@@ -2144,7 +2144,7 @@
 
   async function buildCaptions(opts) {
     opts = opts || {};
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     if (!C) { if (!opts.silent) toast("captions.js did not load"); return false; }
     if (!S.clips.length) { if (!opts.silent) capSay("Add footage to the timeline first"); return false; }
     if (capBusy) return false;
@@ -2191,7 +2191,7 @@
   }
 
   async function applyTranslation() {
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     const target = S.capOpts.translate;
     if (!target || target === S.capLang || !S.captions.length) {
       commit(); syncOverlays(); renderCaptionSheet();
@@ -2235,7 +2235,7 @@
   const tileVisible = new Set();
 
   function drawTile(cv, t) {
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     const st = C && C.styleOf(cv.dataset.style);
     if (!st) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -2262,7 +2262,7 @@
   }
 
   function buildTiles() {
-    const SL = window.VevrisCaptionStyles;
+    const SL = window.SenotelCaptionStyles;
     if (!SL || tilesBuilt) return;
     tilesBuilt = true;
     const cats = $("capCats"), grid = $("capGrid");
@@ -2340,7 +2340,7 @@
   }
 
   function renderCaptionSheet() {
-    const C = global_VevrisCaptions(), T = CapT(), o = S.capOpts;
+    const C = global_SenotelCaptions(), T = CapT(), o = S.capOpts;
     if (!C) return;
     if (T) T.loadFontCss();
     buildTiles();
@@ -2388,7 +2388,7 @@
     $("capStatus").textContent = "";
     renderCaptionSheet();
     // the model loads while a style is chosen, if it is already on the device
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     if (C && C.warm && captionSources().length) C.warm(S.capOpts.tier || C.defaultTier());
   }
 
@@ -2870,7 +2870,7 @@
   const sfxById = (id) => S.sfx.find((s) => s.id === id) || null;
   const OVERLAY_DUR = 3;
 
-  function sfxEngine() { return window.VevrisSFX || null; }
+  function sfxEngine() { return window.SenotelSFX || null; }
   function sfxAvailable() { const e = sfxEngine(); return !!(e && e.available()); }
   function sfxDur(name) {
     const e = sfxEngine();
@@ -3508,7 +3508,7 @@
       v.gain = g;
     } catch (e) {
       v.failed = true;
-      if (window.VevrisDiag) window.VevrisDiag.last.audioClips = "not routed into the export: " + ((e && e.message) || e);
+      if (window.SenotelDiag) window.SenotelDiag.last.audioClips = "not routed into the export: " + ((e && e.message) || e);
     }
   }
 
@@ -4072,7 +4072,7 @@
 
   /* Shared accessible notice: close, swipe, keyboard and attention-aware timer. */
   function fsNotice(title, detail) {
-    if (window.VevrisNotices) VevrisNotices.show("fsNotice", title, detail, 5000);
+    if (window.SenotelNotices) SenotelNotices.show("fsNotice", title, detail, 5000);
   }
   function toggleFs() { if (inFs()) exitFs(); else enterFs(); }
 
@@ -4566,7 +4566,7 @@
       styled.forEach((t) => drawStyledText(ctx, t, box, S.time));
       if (marked) drawWatermark(ctx, box);
     }
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     if (C && S.captions && S.captions.length) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // inside the picture, not the whole stage: the export frame IS the picture
@@ -4659,7 +4659,7 @@
 
   function loop(ts) {
     // Exactly one owner advances playback: worker while exporting, rAF otherwise.
-    if (!EXP.active || !window.VevrisRenderClock || !VevrisRenderClock.running) frameTick(ts);
+    if (!EXP.active || !window.SenotelRenderClock || !SenotelRenderClock.running) frameTick(ts);
     requestAnimationFrame(loop);
   }
 
@@ -4787,10 +4787,10 @@
      moments for placeSounds(): a cutaway the search never found takes its
      sound with it, which is why sounds are placed after this and not before. */
   async function addBroll(list, say) {
-    const D = (window.VevrisDiag && window.VevrisDiag.last) || {};
+    const D = (window.SenotelDiag && window.SenotelDiag.last) || {};
     const entrances = [];
     if (!list || !list.length) { D.broll = "none requested by the Director"; return entrances; }
-    if (!window.VevrisBroll || !VevrisBroll.available()) { D.broll = "not configured"; return entrances; }
+    if (!window.SenotelBroll || !SenotelBroll.available()) { D.broll = "not configured"; return entrances; }
 
     let added = 0;
     const total0 = total();
@@ -4803,7 +4803,7 @@
       if (latest < 0.2 || start > latest) continue;
       if (say) say("Finding b-roll: " + want.query + "…");
       let file = null;
-      try { file = await VevrisBroll.find(want.query, want.kind, want.say); } catch (e) {}
+      try { file = await SenotelBroll.find(want.query, want.kind, want.say); } catch (e) {}
       if (!file) continue;
 
       const media = {
@@ -4929,7 +4929,7 @@
        landed. Once the model is on the device this costs nothing and captions
        appear on their own; before that, the Captions button is the opt-in. */
     let ready = false;
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     // the CAPTION model (caption-worker.js), not the Director's small one
     if (C && C.tierReady) { try { ready = await C.tierReady(C.defaultTier()); } catch (e) {} }
     if (!ready) {
@@ -4950,17 +4950,17 @@
      never touched: the Director's sounds make room for it, and its music is
      never swapped out. */
 
-  function diagLast() { return (window.VevrisDiag && window.VevrisDiag.last) || {}; }
+  function diagLast() { return (window.SenotelDiag && window.SenotelDiag.last) || {}; }
 
   function placeDirectorSounds(moments, entrances) {
     const D = diagLast();
     const want = (moments || []).concat(entrances || []);
     if (!want.length) { D.sfx = "none chosen"; return 0; }
-    if (!sfxAvailable() || !window.VevrisBrain || !VevrisBrain.placeSounds) {
+    if (!sfxAvailable() || !window.SenotelBrain || !SenotelBrain.placeSounds) {
       D.sfx = "unavailable in this browser";
       return 0;
     }
-    const placed = VevrisBrain.placeSounds({ want: want, clips: S.clips, media: S.media, keep: S.sfx });
+    const placed = SenotelBrain.placeSounds({ want: want, clips: S.clips, media: S.media, keep: S.sfx });
     const dropped = want.length - placed.length;
     if (!placed.length) { D.sfx = "none placed, " + dropped + " left out by the editing rules"; return 0; }
     placed.forEach((p) => {
@@ -4992,7 +4992,7 @@
     if (S.music) { D.music = "kept your choice"; return true; }
     if (!want) { D.music = "none chosen"; return true; }
     if (!want.use) { D.music = "none" + (want.why ? " (" + want.why + ")" : ""); return true; }
-    const B = window.VevrisBrain;
+    const B = window.SenotelBrain;
     const plan = B && B.musicPlan ? B.musicPlan(want, { clips: S.clips, media: S.media }) : null;
     if (!plan) { D.music = "none chosen"; return true; }
     if (say) say("Choosing music…");
@@ -5055,7 +5055,7 @@
     if (!window.IntelligenceEngine) return;
     IntelligenceEngine.record({
       kind: "user-edit", action: action, details: details || null,
-      provider: (window.VevrisDiag && window.VevrisDiag.last && window.VevrisDiag.last.provider) || null
+      provider: (window.SenotelDiag && window.SenotelDiag.last && window.SenotelDiag.last.provider) || null
     });
   }
 
@@ -5067,10 +5067,10 @@
 
   function renderAiStatus(summary) {
     const el = $("aiStatus");
-    const D = (window.VevrisDiag && window.VevrisDiag.last) || {};
+    const D = (window.SenotelDiag && window.SenotelDiag.last) || {};
     // every diagnostic dump carries the build, so a pasted console log is
     // enough to know exactly what the user was running
-    if (window.VevrisVersion) D.build = window.VevrisVersion.label;
+    if (window.SenotelVersion) D.build = window.SenotelVersion.label;
     const bits = [];
     const NAMES = { gemini: "Gemini", mistral: "Mistral", groq: "Groq", "vision-1": "Vision-1.0" };
     if (NAMES[D.provider]) {
@@ -5112,7 +5112,7 @@
        current code means the browser is running an older file — uploaded late,
        not yet published, or cached. Without this you cannot tell a real bug
        from stale code, and you debug something that isn't running. */
-    if (window.VevrisVersion) bits.push("v" + window.VevrisVersion.version);
+    if (window.SenotelVersion) bits.push("v" + window.SenotelVersion.version);
     if (D.brainError) bits.push('<span class="warn">Error: ' + escHtml(D.brainError) + "</span>");
     el.innerHTML = bits.join(" &nbsp;·&nbsp; ");
     el.classList.remove("hidden");
@@ -5136,10 +5136,10 @@
     if (generating) return;
     if (finding) { toast("Clips are still being found. Stop that first, or wait for it to finish."); return; }
     warmAudio();   // while this click still counts as a gesture: see warmAudio()
-    if (window.VevrisNotices) VevrisNotices.dismiss("doneCard");
+    if (window.SenotelNotices) SenotelNotices.dismiss("doneCard");
     generating = true;
     stayAwake("generate");
-    if (window.VevrisDiag) window.VevrisDiag.last = {};
+    if (window.SenotelDiag) window.SenotelDiag.last = {};
     const prompt = opts.prompt || "";
     const media = opts.media || S.media;
     pause();
@@ -5165,19 +5165,19 @@
     let g = null;
     let directorFailure = null;
     try {
-      if (window.VevrisBrain) {
+      if (window.SenotelBrain) {
         if (window.IntelligenceEngine && IntelligenceEngine.checkAccess) await IntelligenceEngine.checkAccess();
-        await VevrisBrain.prepare(media, { speech: speechOn(), status: progress });
+        await SenotelBrain.prepare(media, { speech: speechOn(), status: progress });
         let range = null;
         if (opts.range) {
           progress("Looking at the clip…");
           const item = mediaById(opts.range.mediaId);
           let keyframes = [];
-          try { keyframes = await VevrisClips.rangeKeyframes(item, opts.range.start, opts.range.end, 6); } catch (e) {}
+          try { keyframes = await SenotelClips.rangeKeyframes(item, opts.range.start, opts.range.end, 6); } catch (e) {}
           range = { mediaId: opts.range.mediaId, start: opts.range.start, end: opts.range.end, keyframes: keyframes };
         }
         progress("Directing the edit…");
-        g = await VevrisBrain.plan({
+        g = await SenotelBrain.plan({
           prompt: prompt, media: media, seed: S.seed++, format: S.format === "auto" ? null : S.format,
           range: range, target: opts.target || null,
           /* A track the creator picked by hand is theirs: the Director is told
@@ -5188,7 +5188,7 @@
     } catch (e) {
       g = null;
       directorFailure = e;
-      if (window.VevrisDiag) window.VevrisDiag.last.brainError = (e && e.message) || String(e);
+      if (window.SenotelDiag) window.SenotelDiag.last.brainError = (e && e.message) || String(e);
     }
     try {
       if (directorFailure) throw directorFailure;
@@ -5262,9 +5262,9 @@
 
   function refreshFindSrc() {
     const el = $("findSrc");
-    if (!el || !window.VevrisClips) return;
+    if (!el || !window.SenotelClips) return;
     const src = findSource();
-    el.textContent = src ? "In " + src.name + (src.duration ? ", " + VevrisClips.fmt(src.duration) : "") : "Add a video to search";
+    el.textContent = src ? "In " + src.name + (src.duration ? ", " + SenotelClips.fmt(src.duration) : "") : "Add a video to search";
   }
 
   function renderClipsChip() {
@@ -5297,16 +5297,16 @@
     if (generating) { toast("Let your edit finish first."); return; }
     const item = findSource();
     if (!item) { toast("Add a video first. Find clips works on one recording at a time"); return; }
-    const from = VevrisClips.parseTime($("findFrom").value);
-    const to = VevrisClips.parseTime($("findTo").value);
+    const from = SenotelClips.parseTime($("findFrom").value);
+    const to = SenotelClips.parseTime($("findTo").value);
     if (Number.isNaN(from)) { $("findFrom").classList.add("bad"); toast("Start time should look like 12:30"); return; }
     if (Number.isNaN(to)) { $("findTo").classList.add("bad"); toast("End time should look like 45:00"); return; }
     if (from != null && to != null && to <= from) { $("findTo").classList.add("bad"); toast("The end has to come after the start"); return; }
 
-    if (window.VevrisDiag) window.VevrisDiag.last = {};
-    if (window.VevrisNotices) VevrisNotices.dismiss("doneCard");
+    if (window.SenotelDiag) window.SenotelDiag.last = {};
+    if (window.SenotelNotices) SenotelNotices.dismiss("doneCard");
     pause();
-    const jb = VevrisClips.job();
+    const jb = SenotelClips.job();
     finding = jb;
     stayAwake("find");
     const btn = $("semiGenerate");
@@ -5327,7 +5327,7 @@
     jb.onCancel(() => clearInterval(ticker));
     say(said);
     try {
-      const res = await VevrisClips.find(item, {
+      const res = await SenotelClips.find(item, {
         prompt: $("semiPrompt").value.trim(),
         length: S.find.len,
         genre: S.find.genre || "auto",
@@ -5339,7 +5339,7 @@
       renderClipsChip();
       saveSession();
       const n = res.clips.length;
-      const D = (window.VevrisDiag && window.VevrisDiag.last) || {};
+      const D = (window.SenotelDiag && window.SenotelDiag.last) || {};
       line.innerHTML = n
         ? "<b>" + n + " clip" + (n === 1 ? "" : "s") + " found in " + escHtml(item.name) + "</b>" +
           (D.provider && D.provider !== "gemini" ? " &nbsp;·&nbsp; Director: " + escHtml(D.provider) : "") +
@@ -5351,7 +5351,7 @@
         openSheet("clipsSheet");
       }
     } catch (e) {
-      if (e instanceof VevrisClips.Cancelled) {
+      if (e instanceof SenotelClips.Cancelled) {
         line.innerHTML = "<b>Stopped.</b> Nothing was changed.";
       } else {
         const message = "Couldn't find clips. " + ((e && e.message) || "Please try again.");
@@ -5371,7 +5371,7 @@
   function clipLabel(c) {
     const len = Math.round(c.end - c.start);
     const kind = c.type ? c.type.charAt(0).toUpperCase() + c.type.slice(1) : "";
-    return VevrisClips.fmt(c.start) + " to " + VevrisClips.fmt(c.end) + " · " + len + "s" + (kind ? " · " + kind : "");
+    return SenotelClips.fmt(c.start) + " to " + SenotelClips.fmt(c.end) + " · " + len + "s" + (kind ? " · " + kind : "");
   }
 
   function renderClips() {
@@ -5498,12 +5498,12 @@
      No synthetic audio, wake-lock hacks, or server uploads are used. */
 
   function backgroundExportReady() {
-    return window.VevrisRenderClock && VevrisRenderClock.running &&
+    return window.SenotelRenderClock && SenotelRenderClock.running &&
       EXP.track && typeof EXP.track.requestFrame === "function";
   }
 
   function stopRenderClock() {
-    if (window.VevrisRenderClock) VevrisRenderClock.stop();
+    if (window.SenotelRenderClock) SenotelRenderClock.stop();
     EXP.clockTs = 0;
     lastTs = performance.now();
   }
@@ -5598,7 +5598,7 @@
   }
 
   function notifyDone(title, body, kind) {
-    if (window.VevrisNotices) VevrisNotices.complete(title, body, kind);
+    if (window.SenotelNotices) SenotelNotices.complete(title, body, kind);
     else toast(title, 6000);
   }
 
@@ -5715,7 +5715,7 @@
   }
 
   function bleepSpansNow() {
-    const C = global_VevrisCaptions();
+    const C = global_SenotelCaptions();
     const key = S.capLang + "|" + (S.capOpts.swears || []).join(",");
     if (bleepCache.cues === S.captions && bleepCache.key === key) return bleepCache.spans;
     const isBad = capMatcher(S.capLang);
@@ -5778,7 +5778,7 @@
       applyMusicGain();
     } catch (e) {
       musicRouteFailed = true;
-      if (window.VevrisDiag) window.VevrisDiag.last.music = "not routed into the export: " + ((e && e.message) || e);
+      if (window.SenotelDiag) window.SenotelDiag.last.music = "not routed into the export: " + ((e && e.message) || e);
     }
   }
 
@@ -5869,7 +5869,7 @@
     const level = S.userMuted && !EXP.active ? 0 : clamp(musicBase(), 0, 1) * musicFade(S.time) * duck;
     try { musicGain.gain.setTargetAtTime(level, audioCtx.currentTime, 0.015); }
     catch (e) { musicGain.gain.value = level; }
-    if (window.VevrisDiag) window.VevrisDiag.mix = { level: level, duck: duck, norm: S.music.norm };
+    if (window.SenotelDiag) window.SenotelDiag.mix = { level: level, duck: duck, norm: S.music.norm };
   }
 
   /* Measured once per track: the whole file decoded at a low rate (mono
@@ -6064,7 +6064,7 @@
      drawn, or the opening captions export in the fallback font. Four
      seconds at most: a slow font must not hold the whole export hostage. */
   function captionFontReady() {
-    const T = CapT(), C = global_VevrisCaptions(), st = capStyle();
+    const T = CapT(), C = global_SenotelCaptions(), st = capStyle();
     if (!T || !C || !st || !S.captions.length) return Promise.resolve();
     const fam = S.capOpts.font || st.font;
     return Promise.race([T.ensureFont(fam, C.weightFor(fam, st.weight || 700)), new Promise((r) => setTimeout(r, 4000))]);
@@ -6091,7 +6091,7 @@
     // the first and corrupt both files.
     if (EXP.active || EXP.starting) return;
     const run = ++EXP.run;
-    if (window.VevrisNotices) VevrisNotices.dismiss("doneCard");
+    if (window.SenotelNotices) SenotelNotices.dismiss("doneCard");
     EXP.starting = true;
     EXP.cancelled = false;
     EXP.suspended = false;
@@ -6167,7 +6167,7 @@
       tracks.forEach((t) => stream.addTrack(t.clone()));
       audioOk = tracks.length > 0;
     } catch (e) { /* export continues silent if the audio graph is unavailable */ }
-    if (window.VevrisDiag) window.VevrisDiag.last.exportAudio = audioOk ? "captured" : "no audio track";
+    if (window.SenotelDiag) window.SenotelDiag.last.exportAudio = audioOk ? "captured" : "no audio track";
 
     try {
       EXP.rec = new MediaRecorder(stream, {
@@ -6196,8 +6196,8 @@
       abortExport((ev && ev.error && (ev.error.message || ev.error.name)) || "the recorder failed");
     };
 
-    if (window.VevrisRenderClock) {
-      await VevrisRenderClock.start(exportTick, () => {
+    if (window.SenotelRenderClock) {
+      await SenotelRenderClock.start(exportTick, () => {
         if (document.hidden) suspendExport();
       });
     }
@@ -6383,8 +6383,8 @@
     drawWatermark(ctx, { x: 0, y: 0, w: W, h: H });
 
     // Word-timed captions last, so they sit above every other overlay.
-    if (S.captions && S.captions.length && global_VevrisCaptions()) {
-      global_VevrisCaptions().drawCaptions(ctx, S.captions, S.time, capDrawOpts(null));
+    if (S.captions && S.captions.length && global_SenotelCaptions()) {
+      global_SenotelCaptions().drawCaptions(ctx, S.captions, S.time, capDrawOpts(null));
     }
 
     const pct = total() ? Math.min(100, Math.round((S.time / total()) * 100)) : 0;
@@ -6429,11 +6429,11 @@
      the app's own save, or the share sheet ("Save to Files", Photos). */
   [$("doneDownload"), $("lastExportDownload")].forEach((link) => {
     link.addEventListener("click", (e) => {
-      if (VevrisPlatform.linksDownload() || !latestExport) return;
+      if (SenotelPlatform.linksDownload() || !latestExport) return;
       e.preventDefault();
       // the click made by the app itself at the end of an export has no tap behind it
       if (!e.isTrusted) return;
-      VevrisPlatform.save(latestExport.blob, latestExport.name).catch((err) => toast((err && err.message) || "Couldn't save the video. Try again"));
+      SenotelPlatform.save(latestExport.blob, latestExport.name).catch((err) => toast((err && err.message) || "Couldn't save the video. Try again"));
     });
   });
 
@@ -6527,7 +6527,7 @@
      could. Say so rather than implying otherwise.
 
      Change the passphrase here. */
-  const ADMIN_PASS = "vevris";
+  const ADMIN_PASS = "senotel";
   let adminOpen = false;
 
   (function wireAdmin() {
@@ -6724,7 +6724,7 @@
   wireBrand();
 
   function refreshSettings() {
-    const V = window.VevrisVersion;
+    const V = window.SenotelVersion;
     // Version only. The build number still travels with every diagnostics dump
     // and prints to the console on load, so support can still identify an exact
     // build — it just doesn't clutter the panel.
@@ -6779,8 +6779,8 @@
   idbGet("last-export").then((saved) => {
     if (saved && saved.blob && !latestExportUrl) {
       offerExport(saved.blob, saved.name);
-      if (new URLSearchParams(location.search).get("result") === "ready" && window.VevrisNotices) {
-        VevrisNotices.show("doneCard", "Your saved video", saved.name + " is ready to save.", 12000);
+      if (new URLSearchParams(location.search).get("result") === "ready" && window.SenotelNotices) {
+        SenotelNotices.show("doneCard", "Your saved video", saved.name + " is ready to save.", 12000);
       }
     }
   }).catch(() => {});
@@ -6792,7 +6792,7 @@
     // not to evict us — this protects the session-resume copies as well as the
     // speech model.
     if (!storedBytes) {
-      const C = global_VevrisCaptions();
+      const C = global_SenotelCaptions();
       if (C && C.keepStorage) C.keepStorage();
     }
     storedBytes += file.size;
@@ -6813,7 +6813,7 @@
         v: 1,
         // which build wrote this — lets a future version migrate or discard a
         // snapshot it can no longer read, instead of restoring it wrongly
-        by: window.VevrisVersion ? window.VevrisVersion.stamp() : null,
+        by: window.SenotelVersion ? window.SenotelVersion.stamp() : null,
         name: $("projectName").value,
         format: S.format, mode: S.mode, vertical: S.vertical, nextId: nextId,
         media: S.media.map((m) => ({ id: m.id, name: m.name, type: m.type, duration: m.duration, w: m.w, h: m.h,

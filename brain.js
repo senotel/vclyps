@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   VEVRIS BRAIN — footage understanding + editorial planner
+   SENOTEL BRAIN — footage understanding + editorial planner
    Runs 100% in the browser. For every source file it:
      · watches the frames  (motion, sharpness, light, color, scene cuts)
      · listens to the audio (energy, beats/BPM, speech detection)
@@ -7,7 +7,7 @@
    Then plans a real edit from vague — or empty — prompts:
    highlight picking, story arc, beat-synced cut lengths,
    speech-safe cutting, Ken Burns on photos, fades.
-   Exposes window.VevrisBrain. AI failures leave the timeline intact.
+   Exposes window.SenotelBrain. AI failures leave the timeline intact.
    ═══════════════════════════════════════════════════════════ */
 
 (function () {
@@ -268,7 +268,7 @@
   async function prepare(mediaList, opts) {
     opts = opts || {};
     const say = opts.status || function () {};
-    const D = window.VevrisDiag ? window.VevrisDiag.last : {};
+    const D = window.SenotelDiag ? window.SenotelDiag.last : {};
     const todo = mediaList.filter((m) => !m.analysis);
     let i = 0;
     for (const m of todo) {
@@ -287,8 +287,8 @@
        user has then chosen to pay the download); with it off and nothing cached
        we plan from vision and audio alone, which is immediate. */
     let asrCached = false;
-    if (window.VevrisCaptions && window.VevrisCaptions.modelReady) {
-      try { asrCached = await window.VevrisCaptions.modelReady(); } catch (e) {}
+    if (window.SenotelCaptions && window.SenotelCaptions.modelReady) {
+      try { asrCached = await window.SenotelCaptions.modelReady(); } catch (e) {}
     }
     const wantSpeech = opts.speech ||
       (asrCached && window.IntelligenceEngine && window.IntelligenceEngine.hasGemini());
@@ -322,8 +322,8 @@
      model in memory twice. captions.js owns the loader; this delegates to it and
      only falls back if that file failed to load. */
   async function loadASR(say) {
-    if (window.VevrisCaptions && window.VevrisCaptions.loadASR) {
-      return window.VevrisCaptions.loadASR(say || function () {});
+    if (window.SenotelCaptions && window.SenotelCaptions.loadASR) {
+      return window.SenotelCaptions.loadASR(say || function () {});
     }
     if (asr) return asr;
     if (!asrLoading) {
@@ -383,8 +383,8 @@
   async function transcribe(item, say) {
     if (item.transcript !== undefined) return item.transcript;
 
-    if (window.VevrisCaptions && window.VevrisCaptions.transcribeWords) {
-      const words = await window.VevrisCaptions.transcribeWords(item, say || function () {});
+    if (window.SenotelCaptions && window.SenotelCaptions.transcribeWords) {
+      const words = await window.SenotelCaptions.transcribeWords(item, say || function () {});
       item.transcript = groupWords(words);
       return item.transcript;
     }
@@ -697,7 +697,7 @@
   }
 
   /* ═══════════ INTELLIGENCE LAYER GLUE ═══════════
-     VevrisBrain stays the orchestrator: it builds a structured request,
+     SenotelBrain stays the orchestrator: it builds a structured request,
      asks the IntelligenceEngine (Vision-1.0 → Gemini), validates and
      executes whatever comes back — or falls back to its own planner. */
 
@@ -741,7 +741,7 @@
      voices with a `use` line: that line is what the Director is taught, and a
      sound it has not been taught is a sound it will use wrongly. */
   function soundLibrary() {
-    const X = window.VevrisSFX;
+    const X = window.SenotelSFX;
     if (!X || !X.available || !X.available() || !X.list) return [];
     return X.list().filter((s) => s && s.use).map((s) => ({
       name: s.name,
@@ -789,7 +789,7 @@
         const mine = r && r.mediaId === m.id;
         const inside = (c) => !mine || (c.e > r.start + 0.05 && c.s < r.end - 0.05);
         const kept = (m.transcript || []).filter(inside);
-        const RX = window.VevrisRetention;
+        const RX = window.SenotelRetention;
         return {
           id: m.id, name: m.name, type: m.type, duration: m.duration || 3,
           transcript: kept.map((c) => ({
@@ -836,7 +836,7 @@
        greeting; end on the last word, not a sign-off; close dead air to a
        breath; reframe jump cuts. Every edge stays on a sentence boundary,
        and the Director's indices (_i) ride along on any split. */
-    const RX = window.VevrisRetention;
+    const RX = window.SenotelRetention;
     const tightened = RX ? RX.tighten(clips, media) : null;
     const reframed = RX ? RX.zoomCuts(clips) : 0;
     const sfx = soundMoments(ai, clips);
@@ -852,7 +852,7 @@
     clips[0].fadeIn = (fmt === "short" || hasHook) ? 0 : 0.4;
     clips[clips.length - 1].fadeOut = 0.5;
     // Hook / on-screen texts only — captions are now the karaoke system
-    // (VevrisCaptions), built word-timed after the edit. No sentence-captions.
+    // (SenotelCaptions), built word-timed after the edit. No sentence-captions.
     const texts = [];
     (ai.texts || []).forEach((t) => texts.push(t));
 
@@ -873,15 +873,15 @@
       if (t.sfx) sfx.push({ name: t.sfx, at: Math.max(0, +t.start || 0), why: "text appears" });
       delete t.sfx;
     });
-    if (window.VevrisDiag) {
-      window.VevrisDiag.last.hook = texts.length ? texts[0].text : "none produced";
+    if (window.SenotelDiag) {
+      window.SenotelDiag.last.hook = texts.length ? texts[0].text : "none produced";
       /* Did it actually cold-open? Comparing where clip 1 starts in the SOURCE
          against the earliest clip tells you instantly whether the opener was
          lifted from later in the recording or whether it just ran the video
          from the top — which is the difference the owner was seeing. */
       const firstIn = clips[0] ? clips[0].in : 0;
       const earliest = clips.reduce((a, c) => Math.min(a, c.in), Infinity);
-      window.VevrisDiag.last.opener = firstIn > earliest + 1
+      window.SenotelDiag.last.opener = firstIn > earliest + 1
         ? "cold open from " + firstIn.toFixed(1) + "s"
         : "chronological (from " + firstIn.toFixed(1) + "s)";
     }
@@ -907,7 +907,7 @@
       if (t.lead || t.tail) did.push("dead air trimmed");
       if (checked.est) did.push("speech from " + checked.est.firstSpeech.toFixed(1) + "s");
       tidy = did.length ? " · " + did.join(", ") : "";
-      if (window.VevrisDiag) window.VevrisDiag.last.retention = checked.passed + "/" + checked.total + " checks" +
+      if (window.SenotelDiag) window.SenotelDiag.last.retention = checked.passed + "/" + checked.total + " checks" +
         (checked.est ? " · proxy " + checked.est.score + " (uncalibrated)" : "");
     }
     const summary = "Director: " + (ai.providerLabel || "AI") +
@@ -1038,7 +1038,7 @@
       return host ? startAt.get(host) + (s - host.in) / (host.speed || 1) : null;
     };
     const kept = (mid) => (w) => clips.some((c) => holds(c, mid, w.s));
-    const D = window.VevrisDiag && window.VevrisDiag.last;
+    const D = window.SenotelDiag && window.SenotelDiag.last;
 
     const placed = [];
     let dropped = 0;
@@ -1286,7 +1286,7 @@
      Sounds placed by hand come in as `keep`. They are never moved; the
      Director's sounds make room for them. */
   function placeSounds(opts) {
-    const X = window.VevrisSFX;
+    const X = window.SenotelSFX;
     const clips = (opts && opts.clips) || [], media = (opts && opts.media) || [];
     const len = clips.reduce((s, c) => s + (c.out - c.in) / (c.speed || 1), 0);
     const out = [];
@@ -1684,7 +1684,7 @@
 
   /* ═══════════ EXPORT ═══════════ */
 
-  window.VevrisBrain = {
+  window.SenotelBrain = {
     analyze,
     prepare,
     transcribe,

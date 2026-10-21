@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    vClyps — audio out
    Saves the sound of something in Your audio as a file of its own, for
-   the Download button there. Exposes window.VevrisAudioOut.
+   the Download button there. Exposes window.SenotelAudioOut.
 
    · An audio file is handed back exactly as it came in.
    · A video's sound is COPIED out, not re-encoded. Phones and cameras
@@ -252,7 +252,7 @@
     return { blob: await wavOf(src), name: base + ".wav", how: "decoded" };
   }
 
-  global.VevrisAudioOut = {
+  global.SenotelAudioOut = {
     soundFile: soundFile,
     // exported for the tests
     _m4aOf: m4aOf,

@@ -16,7 +16,7 @@
                    exists, otherwise the AI Director
      · fonts       30 caption fonts (free Google Fonts), and fonts you
                    upload, kept on this device
-   Exposes window.VevrisCaptionTools.
+   Exposes window.SenotelCaptionTools.
    ═══════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -523,5 +523,5 @@
     _lev: lev,
     _keywordScore: keywordScore
   };
-  global.VevrisCaptionTools = api;
+  global.SenotelCaptionTools = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -250,5 +250,5 @@
       dispose:function(){disposed=true;stop();canvas.removeEventListener("webglcontextlost",contextLost);canvas.removeEventListener("webglcontextrestored",contextRestored);image.onload=null;gl.deleteBuffer(buffer);gl.deleteTexture(texture);gl.deleteProgram(program);}
     };
   }
-  global.VevrisLandingWorld={create:create};
+  global.SenotelLandingWorld={create:create};
 })(window);

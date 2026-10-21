@@ -1,6 +1,6 @@
 /* ================================================================
    vClyps Intelligence Layer — AI Director v2 (story-driven)
-   VevrisBrain (orchestrator/editor) -> IntelligenceEngine -> provider
+   SenotelBrain (orchestrator/editor) -> IntelligenceEngine -> provider
 
    Providers, in routing priority order:
      1. VisionProvider - our future proprietary model (stub today)
@@ -40,12 +40,12 @@
   const MODEL = "gemini-3.8-flash";
 
   // Shared diagnostics — every stage reports here so failures are VISIBLE.
-  const DIAG = (window.VevrisDiag = window.VevrisDiag || { last: {} });
+  const DIAG = (window.SenotelDiag = window.SenotelDiag || { last: {} });
   // Secure key proxy (Cloudflare Worker — see worker.js for the one-time,
   // free deploy). The owner's API key lives ONLY on the proxy server and
   // can never be read from this app.
   //
-  // Live on the Vevris Cloudflare account, verified end-to-end 2026-08-10.
+  // Live on the Senotel Cloudflare account, verified end-to-end 2026-08-10.
   // (The retired Vantra address, vclyps-director.official-vantra.workers.dev,
   // is NOT ours any more and must never be restored here: this app POSTs
   // users' transcripts and keyframe images to whatever is named below, so a
@@ -107,8 +107,8 @@
   const VisionProvider = {
     id: "vision-1",
     label: "Vision-1.0",
-    available: () => !!(window.VevrisVision && window.VevrisRetention && window.VevrisVision.enabled()),
-    plan: async (req) => window.VevrisVision.plan(req)
+    available: () => !!(window.SenotelVision && window.SenotelRetention && window.SenotelVision.enabled()),
+    plan: async (req) => window.SenotelVision.plan(req)
   };
 
   const GeminiProvider = {
@@ -299,7 +299,7 @@
      bands live in retention.js so the Director, the editor and Vision-1.0
      quote one source. These are its words for the briefs. IDs (E43, P06…)
      are the evidence ledger's; they are for us, not for the model. */
-  const R = () => window.VevrisRetention || null;
+  const R = () => window.SenotelRetention || null;
 
   // RQ1. A specific, credible promise that opens one gap the video closes.
   const HOOK_RULES = [
@@ -999,10 +999,10 @@
 
   /* ───────── Validation: the Director proposes, the editor verifies ───────── */
 
-  const BRANDING_RULE = "NO EDITOR BRANDING: never add Gemini, Google, Veo, Groq, Mistral, vClyps or Vevris logos, watermarks, sparkle marks, signatures, credits, 'powered by' text, branded intros/outros or promotional CTAs. You are the invisible editor, not the subject. This applies to hooks, titles, captions and b-roll searches. Preserve genuine speech and source content; a real discussion of an AI product is not an editor credit. Do not invent attribution. Do not request stock clips for provider logos.";
+  const BRANDING_RULE = "NO EDITOR BRANDING: never add Gemini, Google, Veo, Groq, Mistral, vClyps or Senotel logos, watermarks, sparkle marks, signatures, credits, 'powered by' text, branded intros/outros or promotional CTAs. You are the invisible editor, not the subject. This applies to hooks, titles, captions and b-roll searches. Preserve genuine speech and source content; a real discussion of an AI product is not an editor credit. Do not invent attribution. Do not request stock clips for provider logos.";
 
   function brandingGuard(req) {
-    const providers = /\b(?:gemini|google|veo|groq|mistral|vclyps|vevris|openai|chatgpt)\b/ig;
+    const providers = /\b(?:gemini|google|veo|groq|mistral|vclyps|vevris|senotel|openai|chatgpt)\b/ig;
     const source = (req.media || []).flatMap((m) => (m.transcript || []).map((t) => t.text || "")).join(" ").toLowerCase();
     const topic = source + " " + String(req.prompt || "").toLowerCase();
     return (value, caption) => {
@@ -1241,8 +1241,8 @@
       const arr = JSON.parse(localStorage.getItem(DS_KEY) || "[]");
       // stamped from version.js — training data has to say which build produced
       // it, or a later model cannot tell good examples from ones made by a bug
-      const stamp = window.VevrisVersion
-        ? window.VevrisVersion.stamp()
+      const stamp = window.SenotelVersion
+        ? window.SenotelVersion.stamp()
         : { app: "vClyps", version: "unknown", build: 0 };
       arr.push(Object.assign({ t: new Date().toISOString() }, stamp, entry));
       while (arr.length > 300) arr.shift();
@@ -1257,7 +1257,7 @@
   function exportDataset() {
     const blob = new Blob([localStorage.getItem(DS_KEY) || "[]"], { type: "application/json" });
     // a download in a browser, the share sheet inside an app (platform.js)
-    return window.VevrisPlatform.save(blob, "vclyps-training-data.json");
+    return window.SenotelPlatform.save(blob, "vclyps-training-data.json");
   }
 
   function clearDataset() {
@@ -1282,9 +1282,9 @@
   // Fold the distilled editing-knowledge corpus into the training dataset
   // (once per corpus version). Collection only — behavior unchanged.
   try {
-    if (window.VEVRIS_KNOWLEDGE && !localStorage.getItem("vclyps-knowledge-v" + window.VEVRIS_KNOWLEDGE.version)) {
-      record({ kind: "knowledge", corpus: window.VEVRIS_KNOWLEDGE });
-      localStorage.setItem("vclyps-knowledge-v" + window.VEVRIS_KNOWLEDGE.version, "1");
+    if (window.SENOTEL_KNOWLEDGE && !localStorage.getItem("vclyps-knowledge-v" + window.SENOTEL_KNOWLEDGE.version)) {
+      record({ kind: "knowledge", corpus: window.SENOTEL_KNOWLEDGE });
+      localStorage.setItem("vclyps-knowledge-v" + window.SENOTEL_KNOWLEDGE.version, "1");
     }
   } catch (e) {}
 })();

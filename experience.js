@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — atmosphere
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    Two small touches that nothing else owns: film grain over the whole page,
    and a "+" that leans toward the pointer. Everything else this file used to

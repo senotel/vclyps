@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — sound effects
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    ── RECORDINGS FIRST (0.25.0) ─────────────────────────────────────────────
    Twenty short-form sound effects, each a REAL RECORDING released as CC0
@@ -59,10 +59,10 @@
    and a dip before the cut.
 
    ── USING IT ───────────────────────────────────────────────────────────────
-     VevrisSFX.prepare();                 // fetch and decode the recordings (once)
-     VevrisSFX.ready(["boom"]);           // a Promise, for the export to wait on
-     VevrisSFX.play("boom");
-     VevrisSFX.play("whoosh", { ctx: audioCtx, dest: audioDest, when: t, gain: 0.8 });
+     SenotelSFX.prepare();                 // fetch and decode the recordings (once)
+     SenotelSFX.ready(["boom"]);           // a Promise, for the export to wait on
+     SenotelSFX.play("boom");
+     SenotelSFX.play("whoosh", { ctx: audioCtx, dest: audioDest, when: t, gain: 0.8 });
 
    `dest` is the one that matters for the editor. app.js already builds
    ensureAudioGraph(): the preview element feeds ctx.destination (speakers) AND
@@ -86,7 +86,7 @@
    fast compressor across a 38Hz sub distorts it rather than controlling it,
    and arithmetic we can predict beats a black box nobody here can hear.
 
-   Exposes window.VevrisSFX.
+   Exposes window.SenotelSFX.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -188,7 +188,7 @@
   function context() {
     var C = Ctor();
     if (!C) {
-      if (!warned) { warned = true; try { console.warn("VevrisSFX: no Web Audio in this browser"); } catch (e) {} }
+      if (!warned) { warned = true; try { console.warn("SenotelSFX: no Web Audio in this browser"); } catch (e) {} }
       return null;
     }
     if (!shared) { try { shared = new C(); } catch (e) { return null; } }
@@ -1008,7 +1008,7 @@
       })
       .catch(function (e) {
         delete pending[name];   // a later prepare() may try again
-        try { console.warn("VevrisSFX: could not load " + name + " (" + (e && e.message) + ")" + (SOUNDS[name].build ? "; the built-in version plays instead" : "")); } catch (e2) {}
+        try { console.warn("SenotelSFX: could not load " + name + " (" + (e && e.message) + ")" + (SOUNDS[name].build ? "; the built-in version plays instead" : "")); } catch (e2) {}
         return false;
       });
     return pending[name];
@@ -1067,7 +1067,7 @@
       /* Nodes cannot be connected across contexts, and the throw would take
          down whatever called us — an export, most likely. Skip and say so. */
       if (d.context !== ctx) {
-        try { console.warn("VevrisSFX: destination belongs to another AudioContext — skipped"); } catch (e) {}
+        try { console.warn("SenotelSFX: destination belongs to another AudioContext — skipped"); } catch (e) {}
         continue;
       }
       try { node.connect(d); wired++; } catch (e) {}
@@ -1086,7 +1086,7 @@
   function play(name, opts) {
     opts = opts || {};
     var spec = SOUNDS[name];
-    if (!spec) { try { console.warn("VevrisSFX: no sound named " + name); } catch (e) {} return null; }
+    if (!spec) { try { console.warn("SenotelSFX: no sound named " + name); } catch (e) {} return null; }
 
     var ctx = opts.ctx || context();
     if (!ctx) return null;
@@ -1161,7 +1161,7 @@
 
       return voice;
     } catch (e) {
-      try { console.warn("VevrisSFX: " + name + " failed to play", e); } catch (e2) {}
+      try { console.warn("SenotelSFX: " + name + " failed to play", e); } catch (e2) {}
       return null;
     }
   }
@@ -1200,7 +1200,7 @@
     return out;
   }
 
-  global.VevrisSFX = {
+  global.SenotelSFX = {
     names: NAMES.slice(),
     list: list,
     info: info,

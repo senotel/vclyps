@@ -21,7 +21,7 @@
 
    Everything measured is cached per file, so asking again with a new
    topic or length costs one Director call and no re-processing.
-   Exposes window.VevrisClips.
+   Exposes window.SenotelClips.
    ═══════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -260,7 +260,7 @@
       a = null;   // a decoder fault: the browser's own path may still manage
     }
     jb.check();
-    const D = global.VevrisDiag && global.VevrisDiag.last;
+    const D = global.SenotelDiag && global.SenotelDiag.last;
     if (D) D.audioRead = a ? "streamed from the MP4" : "decoded whole";
     return a || wholeAudio(blob, item.duration);
   }
@@ -378,7 +378,7 @@
         if (m.type === "download") { dl = m.mb; tell(); }
         else if (m.type === "loaded") {
           dl = null;
-          const D = global.VevrisDiag && global.VevrisDiag.last;
+          const D = global.SenotelDiag && global.SenotelDiag.last;
           if (D) D.speechOn = m.engine === "gpu" ? "graphics chip" : "processor";
           ready();
           tell();
@@ -513,7 +513,7 @@
     big.width = portrait ? 288 : 512; big.height = portrait ? 512 : 288;
     const bx = big.getContext("2d");
     const face = await faceModel();
-    const B = global.VevrisBrain;
+    const B = global.SenotelBrain;
     const out = [];
     let prev = null;
     try {
@@ -809,7 +809,7 @@
         return null;   // pictures are a bonus; words and sound still find clips
       })
     ]);
-    const B = global.VevrisBrain;
+    const B = global.SenotelBrain;
     const units = B && B.groupWords ? B.groupWords(heard.words) : [];
     const out = {
       v: CACHE_V, name: item.name, size: size,
@@ -839,7 +839,7 @@
     opts = opts || {};
     const jb = opts.job || noJob;
     const say = opts.say || function () {};
-    const E = global.IntelligenceEngine, B = global.VevrisBrain;
+    const E = global.IntelligenceEngine, B = global.SenotelBrain;
     if (!E || !E.findClips) throw new Error("The AI Director isn't loaded. Reload the app and try again.");
     if (E.checkAccess) await E.checkAccess();
 
@@ -893,7 +893,7 @@
       .map((c, i) => Object.assign(c, { id: i + 1, mediaId: item.id }));
     if (E.record) {
       E.record({
-        kind: "find", provider: (global.VevrisDiag && global.VevrisDiag.last && global.VevrisDiag.last.provider) || null,
+        kind: "find", provider: (global.SenotelDiag && global.SenotelDiag.last && global.SenotelDiag.last.provider) || null,
         prompt: req.prompt, genre: req.genre, window: win, length: req.length, count: count,
         media: { id: item.id, name: item.name, duration: dur }, speechShare: Math.round(share * 100) / 100,
         moments: moments.length, stills: keyframes.length, director: raw, clips: clips
@@ -902,7 +902,7 @@
     return { clips: clips, window: win, length: opts.length || "auto", prompt: req.prompt, mediaId: item.id, at: new Date().toISOString(), signals: data.signals };
   }
 
-  global.VevrisClips = {
+  global.SenotelClips = {
     LENGTHS: LENGTHS,
     find: find,
     job: job,

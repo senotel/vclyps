@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — emoji intelligence
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    Captions carry emojis the way a good editor uses them: rarely, and only when
    the emoji says something the words did not. That needs more than a
@@ -29,7 +29,7 @@
    three words on screen is rarely enough to disambiguate, but the sentence
    around them usually is.
 
-   Exposes window.VevrisEmoji. Pure data + scoring; no network, no build step.
+   Exposes window.SenotelEmoji. Pure data + scoring; no network, no build step.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -735,7 +735,7 @@
 
   /* ═══════════ EXPORTS ═══════════ */
 
-  global.VevrisEmoji = {
+  global.SenotelEmoji = {
     // CORPUS version — the shape of the emoji data, nothing to do with the app
     // version. That lives only in version.js. Bump this when entries change in
     // a way stored data would need to know about.

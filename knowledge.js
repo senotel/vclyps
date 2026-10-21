@@ -15,7 +15,7 @@
    quote that file, not this one.
    ================================================================ */
 
-window.VEVRIS_KNOWLEDGE = {
+window.SENOTEL_KNOWLEDGE = {
   // CORPUS version, not the app version (that is version.js alone). Bumping
   // this re-folds the corpus into the training dataset under a new key.
   version: 4,

@@ -25,7 +25,7 @@
    browser code, not secrets: Google's key is locked to vClyps' own sites
    and Dropbox's to its domains. A source whose value is empty is simply
    not offered. Zoom and Vimeo are set up on the worker instead.
-   Exposes window.VevrisSources.
+   Exposes window.SenotelSources.
    ═══════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -495,7 +495,7 @@
      do (Google refuses sign-in there outright), so inside one they are not
      offered at all rather than offered and broken. See platform.js. */
   function available() {
-    const P = global.VevrisPlatform;
+    const P = global.SenotelPlatform;
     if (P && !P.signInsWork()) return Promise.resolve({ drive: false, dropbox: false, gphotos: false, zoom: false, vimeo: false });
     return checkServer().then((srv) => ({
       drive: driveReady(), dropbox: dropboxReady(),
@@ -506,14 +506,14 @@
 
   // Called as the Add sheet opens, so the pop-up sources are ready for the click.
   function warm() {
-    if (global.VevrisPlatform && !global.VevrisPlatform.signInsWork()) return;
+    if (global.SenotelPlatform && !global.SenotelPlatform.signInsWork()) return;
     warmPhotos().catch(() => {});
     warmDrive().catch(() => {});
     warmDropbox().catch(() => {});
     checkServer();
   }
 
-  global.VevrisSources = {
+  global.SenotelSources = {
     available: available,
     warm: warm,
     fromDrive: fromDrive,

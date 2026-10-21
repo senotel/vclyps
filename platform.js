@@ -16,17 +16,17 @@
                           need one are only offered where they can finish
 
    NATIVE: an app shell built around these files may define
-   window.VevrisNative before they load. Each member is optional:
+   window.SenotelNative before they load. Each member is optional:
      save(blob, name)  → Promise; saves or shares the file natively
      signIns           → true when the shell opens sign-in windows itself
    Without it, everything below falls back to what the web view can do.
-   Exposes window.VevrisPlatform.
+   Exposes window.SenotelPlatform.
    ═══════════════════════════════════════════════════════════ */
 
 (function (global) {
   "use strict";
 
-  function native() { return global.VevrisNative || null; }
+  function native() { return global.SenotelNative || null; }
 
   /* An app's own view of a web page, as opposed to a browser. Android marks
      its WebView with "wv"; an iPhone app view leaves "Safari" out of the
@@ -99,7 +99,7 @@
   const linksDownload = () => !native() && !embedded();
   const signInsWork = () => { const n = native(); return n ? n.signIns === true : !embedded(); };
 
-  global.VevrisPlatform = {
+  global.SenotelPlatform = {
     where: where,
     embedded: () => embedded(),
     installed: installed,

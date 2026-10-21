@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — retention.js
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    What keeps people watching, turned into code that the Director's briefs,
    the editor (brain.js) and Senotel Vision-1.0 (vision.js) all share, so the
@@ -575,6 +575,6 @@
     detectGenre: detectGenre, tighten: tighten, zoomCuts: zoomCuts, timelineOf: timelineOf, lineValue: lineValue,
     estimate: estimate, check: check, templatesText: templatesText, bandsText: bandsText
   };
-  global.VevrisRetention = api;
+  global.SenotelRetention = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

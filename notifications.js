@@ -171,7 +171,7 @@
       b.setAttribute("aria-pressed", String(selected));
     });
     if (!window.isSecureContext) status("Device notifications need HTTPS or localhost.");
-    else if (!("Notification" in window)) status(window.VevrisPlatform && VevrisPlatform.where() === "app"
+    else if (!("Notification" in window)) status(window.SenotelPlatform && SenotelPlatform.where() === "app"
       ? "Device notifications aren't available in this view."
       : "Device notifications are unavailable here. On iPhone or iPad, add vClyps to your Home Screen and open it there.");
     else if (Notification.permission === "denied") status("Notifications are blocked. Allow them in your browser's site settings, then turn this on.");
@@ -206,5 +206,5 @@
   controller("fsNotice"); controller("doneCard");
   paint();
   if (read() && permitted()) void registration();
-  window.VevrisNotices = { show, complete, dismiss(id) { const notice = controller(id); if (notice) notice.dismiss(); } };
+  window.SenotelNotices = { show, complete, dismiss(id) { const notice = controller(id); if (notice) notice.dismiss(); } };
 })();

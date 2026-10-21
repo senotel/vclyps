@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — b-roll: GIFs, photos and stock video
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    Finds a clip or image for a phrase and hands back something the editor can
    drop straight onto the timeline. Two sources, one shape:
@@ -27,7 +27,7 @@
    offers mp4 and webm next to the gif, and pickFormat() always prefers those —
    the same asset then rides the normal video path and exports properly.
 
-   Exposes window.VevrisBroll.
+   Exposes window.SenotelBroll.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -274,8 +274,8 @@
       const hits = await search(query, kind, 12);
       const good = rank(hits, query, say);
       if (!good.length) {
-        if (global.VevrisDiag) {
-          global.VevrisDiag.last.broll = 'nothing relevant for "' + query + '" — skipped';
+        if (global.SenotelDiag) {
+          global.SenotelDiag.last.broll = 'nothing relevant for "' + query + '" — skipped';
         }
         return null;                            // no b-roll beats wrong b-roll
       }
@@ -283,12 +283,12 @@
         try { return await toLocalFile(hit); } catch (e) { /* try the next one */ }
       }
     } catch (e) {
-      if (global.VevrisDiag) global.VevrisDiag.last.broll = (e && e.message) || String(e);
+      if (global.SenotelDiag) global.SenotelDiag.last.broll = (e && e.message) || String(e);
     }
     return null;
   }
 
-  global.VevrisBroll = {
+  global.SenotelBroll = {
     available: available,
     relevant: relevant,
     relevance: relevance,

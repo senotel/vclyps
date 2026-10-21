@@ -27,7 +27,7 @@
      anim                        how it moves (see captions.js ANIMS)
      pop                         size of the spoken word
      tilt                        degrees the caption leans
-   Exposes window.VevrisCaptionStyles.
+   Exposes window.SenotelCaptionStyles.
    ═══════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -194,7 +194,7 @@
   var CATEGORIES = [];
   LIST.forEach(function (s) { if (CATEGORIES.indexOf(s.cat) < 0) CATEGORIES.push(s.cat); });
 
-  global.VevrisCaptionStyles = {
+  global.SenotelCaptionStyles = {
     LIST: LIST,
     BY_ID: BY_ID,
     CATEGORIES: CATEGORIES,

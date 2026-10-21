@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — version
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    THE SINGLE SOURCE OF TRUTH. Nothing anywhere else in the app may hardcode a
    version; everything reads it from here. Diagnostics, the
@@ -59,9 +59,9 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.27.0";
+  var VERSION = "0.27.1";
   var RELEASED = "2026-10-21";
-  var NOTES = "Tidy: remove pauses, filler words and bad takes, or cut words straight " +
+  var NOTES = "vClyps is now by Senotel. 0.27.0: Tidy: remove pauses, filler words and bad takes, or cut words straight " +
               "from the transcript. Post: a title, description and hashtags written " +
               "from what is said, plus captions as .srt and the edit for Premiere or " +
               "DaVinci. Lower thirds, title cards (also as their own intro or outro " +
@@ -76,7 +76,7 @@
   var parts = VERSION.split(".");
   var major = parseInt(parts[0], 10) || 0;
 
-  global.VevrisVersion = {
+  global.SenotelVersion = {
     version: VERSION,
     released: RELEASED,
     notes: NOTES,
@@ -100,5 +100,5 @@
   };
 
   // So debugging never starts with "which version is this?"
-  try { console.log("%c" + global.VevrisVersion.label, "font-weight:700"); } catch (e) {}
+  try { console.log("%c" + global.SenotelVersion.label, "font-weight:700"); } catch (e) {}
 })(window);

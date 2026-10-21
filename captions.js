@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — word-timed animated captions
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    Short-form captions: a few words on screen at a time, moving with the
    voice. Burned into the picture at export, so they survive every platform
@@ -28,8 +28,8 @@
 (function (global) {
   "use strict";
 
-  function Tools() { return global.VevrisCaptionTools || null; }
-  function Styles() { return global.VevrisCaptionStyles || null; }
+  function Tools() { return global.SenotelCaptionTools || null; }
+  function Styles() { return global.SenotelCaptionStyles || null; }
 
   /* ═══════════ STYLE ═══════════ */
 
@@ -284,7 +284,7 @@
 
   /* One media item's words, cached on the item: {words, lang}. Asked again
      only when the language, the accuracy or speakers change. Words come back
-     in SOURCE time, cleaned (see VevrisCaptionTools.words) and, if asked,
+     in SOURCE time, cleaned (see SenotelCaptionTools.words) and, if asked,
      with a speaker number each. */
   async function transcribeCaptions(item, opts, say) {
     opts = opts || {};
@@ -420,7 +420,7 @@
     if (T) T.markKeywords(out, opts.lang);
     /* Emojis are chosen only once the whole timeline exists, because the
        neighbouring cues are what disambiguate a three-word line. */
-    if (global.VevrisEmoji && opts.emoji !== false) global.VevrisEmoji.attachToCues(out, opts.emojiCfg);
+    if (global.SenotelEmoji && opts.emoji !== false) global.SenotelEmoji.attachToCues(out, opts.emojiCfg);
     return out;
   }
 
@@ -835,7 +835,7 @@
 
   /* ═══════════ EXPORTS ═══════════ */
 
-  global.VevrisCaptions = {
+  global.SenotelCaptions = {
     get STYLES() { var S = Styles(); return S ? S.BY_ID : { punch: PUNCH }; },
     DEFAULTS: DEFAULTS,
     TIERS: TIERS,

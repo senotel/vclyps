@@ -31,8 +31,8 @@
   var world = null, wordBlocks = [], curtain = null;
 
   function startWorld() {
-    if (world || reduced || !window.VevrisLandingWorld) return;
-    world = window.VevrisLandingWorld.create(document.getElementById("lpWorld"), function (ready) {
+    if (world || reduced || !window.SenotelLandingWorld) return;
+    world = window.SenotelLandingWorld.create(document.getElementById("lpWorld"), function (ready) {
       root.classList.toggle("lp-webgl-ready", ready);
     });
   }

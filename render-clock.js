@@ -33,5 +33,5 @@
       });
     }
   };
-  window.VevrisRenderClock = api;
+  window.SenotelRenderClock = api;
 })();

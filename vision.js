@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    vClyps — vision.js · Senotel Vision-1.0
-   The editing app by Vevris.
+   The editing app by Senotel.
 
    An editor that runs on the device: no server, no key, no cost per edit, and
    nothing leaves the phone. It takes the same request the AI Director gets
@@ -37,14 +37,14 @@
    is in research/vision/RESULTS.md; until it matches, it runs only when
    switched on for testing (localStorage "vclyps-vision" = "on").
 
-   Exposes window.VevrisVision, and module.exports for Node.
+   Exposes window.SenotelVision, and module.exports for Node.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 (function (global) {
   "use strict";
 
   const VERSION = "1.0.1";
-  const R = () => global.VevrisRetention;
+  const R = () => global.SenotelRetention;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const r2 = (x) => Math.round(x * 100) / 100;
 
@@ -595,6 +595,6 @@
   const api = { version: VERSION, plan: plan, enabled: enabled, WEIGHTS: WEIGHTS, KEEP_PRIOR: KEEP_PRIOR, HOOK_EXTRA: HOOK_EXTRA, LENGTH_PRIOR: LENGTH_PRIOR,
     _units: units, _read: read, _hookCandidates: hookCandidates, _payoffFor: payoffFor, _contextFor: contextFor, _body: body,
     _clipsFor: clipsFor, _hookText: hookText, _cutaways: cutaways, _keepP: keepP, _content: content, _jaccard: jaccard };
-  global.VevrisVision = api;
+  global.SenotelVision = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
