@@ -63,12 +63,6 @@
       <button class="icon-btn" id="libraryBtn" title="Your library" aria-label="Library">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
       </button>
-      <button class="icon-btn editor-only" id="undoBtn" data-min="2" title="Undo (Ctrl+Z)" aria-label="Undo">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
-      </button>
-      <button class="icon-btn editor-only" id="redoBtn" data-min="2" title="Redo (Ctrl+Y)" aria-label="Redo">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"></polyline><path d="M4 20v-7a4 4 0 0 1 4-4h12"></path></svg>
-      </button>
       <button class="primary-btn hidden" id="exportBtn" aria-label="Export">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         <span class="exp-word">Export</span>
@@ -259,6 +253,21 @@
         <a class="secondary-btn hidden" id="lastExportDownload" download>Save latest video</a>
       </div>
 
+      <div class="set-group">
+        <label>Delete by dragging to the bin
+          <span class="set-note">Drag a text, sticker or overlay to the bottom of the picture and a bin appears. Let go over it to delete.</span>
+        </label>
+        <div class="ins-seg" id="binSeg">
+          <button data-b="0">Off</button>
+          <button data-b="1" class="active">On</button>
+        </div>
+        <label class="set-sub">Ask before deleting</label>
+        <div class="ins-seg" id="binAskSeg">
+          <button data-a="0">Off</button>
+          <button data-a="1" class="active">On</button>
+        </div>
+      </div>
+
       <!-- Starting over. Deliberately a two-tap control: it throws away the
            footage, the edit and the saved session in one go, and there is no
            undo for it — the history goes with everything else. -->
@@ -444,7 +453,9 @@
 
     <div class="inspector hidden" id="inspector"></div>
 
-    <div class="toolbar" id="toolbar">
+    <!-- The original tool buttons, kept (hidden) so everything that already
+         listens to them keeps working; the action bar below calls them. -->
+    <div class="toolbar hidden" id="toolbar">
       <button class="tool" id="tbAdd">
         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         <span>Add</span>
@@ -543,6 +554,10 @@
         </div>
       </div>
     </div>
+
+    <!-- CapCut's bottom bar: the main tools, a group's tools, or the selected
+         thing's tools (renderActionBar). Where the thumb rests. -->
+    <nav class="action-bar" id="actionBar" aria-label="Editing tools"></nav>
   </section>
 
   <!-- ══════════════ SHARED PREVIEW (moves between screens) ══════════════ -->
@@ -567,6 +582,10 @@
       <div class="overlay-layer" id="overlayLayer"></div>
       <div class="fade-veil" id="fadeVeil"></div>
       <canvas class="cap-canvas" id="capCanvas"></canvas>
+      <!-- drag something here to delete it, as on Instagram (binDrag) -->
+      <div class="trash-bin hidden" id="trashBin" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+      </div>
       <!-- recording a voiceover: the count-in, then the time and Stop -->
       <div class="voice-rec hidden" id="voiceRec" role="status" aria-live="polite">
         <span class="voice-count" id="voiceCount">3</span>
@@ -580,21 +599,32 @@
         <p>Add your footage to get started</p>
       </div>
     </div>
+    <!-- The play row under the picture, as CapCut lays it out: where you are
+         on the left, play in the middle under the thumb, undo, redo and
+         fullscreen on the right. The seek bar shows only in fullscreen, where
+         there is no timeline to scrub. -->
     <div class="transport">
-      <button class="icon-btn play-btn" id="playBtn" aria-label="Play or pause">
-        <svg id="playIco" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
-        <svg id="pauseIco" class="hidden" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1"></rect><rect x="14" y="3" width="5" height="18" rx="1"></rect></svg>
-      </button>
-      <span class="tcode" id="tCur">00:00</span>
+      <span class="tr-time"><span class="tcode" id="tCur">00:00</span><span class="tsep">/</span><span class="tcode" id="tTot">00:00</span></span>
       <input type="range" class="seek" id="seekBar" min="0" max="1000" value="0" aria-label="Seek" />
-      <span class="tcode" id="tTot">00:00</span>
-      <button class="icon-btn" id="muteBtn" aria-label="Mute">
-        <svg id="mOn" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-        <svg id="mOff" class="hidden" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+      <button class="icon-btn play-btn" id="playBtn" aria-label="Play or pause">
+        <svg id="playIco" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+        <svg id="pauseIco" class="hidden" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1"></rect><rect x="14" y="3" width="5" height="18" rx="1"></rect></svg>
       </button>
-      <button class="icon-btn" id="fsBtn" data-min="2" aria-label="Fullscreen">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-      </button>
+      <span class="tr-right">
+        <button class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+        </button>
+        <button class="icon-btn" id="redoBtn" title="Redo (Ctrl+Y)" aria-label="Redo">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"></polyline><path d="M4 20v-7a4 4 0 0 1 4-4h12"></path></svg>
+        </button>
+        <button class="icon-btn" id="muteBtn" aria-label="Mute">
+          <svg id="mOn" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          <svg id="mOff" class="hidden" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+        </button>
+        <button class="icon-btn" id="fsBtn" aria-label="Fullscreen">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+        </button>
+      </span>
     </div>
   </div>
 
@@ -1023,6 +1053,19 @@
       <a id="doneDownload" class="notice-action hidden" download>Save video <span aria-hidden="true">↗</span></a>
     </div>
     <button class="notice-close" type="button" aria-label="Dismiss completion notification"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+  </div>
+
+  <!-- "Delete this?" after something is dropped in the bin -->
+  <div class="confirm-wrap hidden" id="binConfirm" role="dialog" aria-modal="true" aria-labelledby="binQ">
+    <div class="confirm-box">
+      <p class="confirm-q" id="binQ">Delete this text?</p>
+      <p class="confirm-sub">Undo brings it back.</p>
+      <div class="confirm-actions">
+        <button class="secondary-btn" id="binCancel" type="button">Cancel</button>
+        <button class="primary-btn danger-solid" id="binDelete" type="button">Delete</button>
+      </div>
+      <button class="text-btn confirm-never" id="binNever" type="button">Delete, and don't ask me again</button>
+    </div>
   </div>
 
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>

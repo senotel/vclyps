@@ -59,9 +59,14 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.32.0";
+  var VERSION = "0.33.0";
   var RELEASED = "2026-10-22";
-  var NOTES = "57 transitions that really mix two clips (slides, pushes, wipes, zooms, spins, " +
+  var NOTES = "The editor works like CapCut: one bar of tools at the bottom, where your thumb is; " +
+              "tap something and the bar shows its tools; tap a tool and only its options slide up, " +
+              "with a check mark. Play, undo and redo sit in a row under the picture. A button on " +
+              "every cut opens transitions. Drag a text, sticker or overlay to the bin under the " +
+              "picture to delete it (it asks first, unless you tell it not to; both can be switched " +
+              "off in Settings). 0.32.0: 57 transitions that really mix two clips (slides, pushes, wipes, zooms, spins, " +
               "glitches, 3D flips), each with its own length and a moving preview. Clip animations " +
               "in, out and on a loop. Video effects on their own lane: shake, VHS, old film, glitch, " +
               "light leaks, snow and 33 in all. Stickers: emoji and drawn shapes. Record a voiceover. " +

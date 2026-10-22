@@ -1138,6 +1138,7 @@
       weight: 700
     };
     S.texts.push(t);
+    pendingTool = "edit";   // a new text opens on its words, as CapCut opens the keyboard
     S.sel = { type: "text", id: t.id };
     commit();
     renderTimeline();
@@ -1812,14 +1813,6 @@
 
   function duplicateSelection() {
     if (!S.sel || S.sel.type === "all") { toast("Select something on the timeline to copy"); return; }
-    if (S.sel.type === "effect") {
-      const e = effectById(S.sel.id);
-      if (!e) { ins.classList.add("hidden"); return; }
-      effectPanel(ins, e);
-      ins.appendChild(closeBtn);
-      return;
-    }
-
     if (S.sel.type === "broll") {
       const b = brollById(S.sel.id);
       if (!b) return;
@@ -2881,6 +2874,34 @@
       x += w;
     });
 
+    /* CapCut's cut button: a small square on every cut between two clips.
+       Tap it for the transitions into the clip after it; it is filled in when
+       that cut already has one. */
+    {
+      let at = 0;
+      S.clips.forEach((c, i) => {
+        if (i > 0) {
+          const b = mk("button", "cut-btn" + (c.tIn && c.tIn !== "none" ? " on" : ""));
+          b.type = "button";
+          b.title = c.tIn && window.SenotelFX ? SenotelFX.nameOf(c.tIn) : "Add a transition";
+          b.setAttribute("aria-label", b.title);
+          b.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>';
+          b.style.left = at + "px";
+          b.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+          b.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            pendingTool = "trans";
+            S.sel = { type: "clip", id: c.id };
+            lastSelKey = "";   // open the panel even if this clip was already selected
+            renderTimeline();
+            renderInspector();
+          });
+          vt.appendChild(b);
+        }
+        at += Math.max(dispDur(c) * S.pps, 26);
+      });
+    }
+
     /* The + at the end of the main track. CapCut puts one here and it is the
        only "add" control that tells you WHERE the thing will land, which is
        why the toolbar button alone was never quite enough. */
@@ -3175,7 +3196,7 @@
     let down = false, x0 = 0, s0 = 0, moved = false;
     let touch = false;
     sc.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".clip, .tclip, .oclip, .aclip, .uclip, .mclip, .clip-add, .lane-add, .handle, .ruler")) return;
+      if (e.target.closest(".clip, .tclip, .oclip, .aclip, .uclip, .mclip, .clip-add, .lane-add, .cut-btn, .handle, .ruler")) return;
       down = true; moved = false; x0 = e.clientX; s0 = sc.scrollLeft;
       touch = e.pointerType === "touch";
     });
@@ -4253,524 +4274,481 @@
     return wrap;
   }
 
-  /* On a phone the settings open under the timeline, so a tap on a clip never
-     shoves the clip itself off the screen. The editor scrolls just far enough
-     to show that they have opened, leaving the timeline in view. */
-  const phoneLayout = window.matchMedia("(max-width: 760px)");
-  function revealInspector() {
-    const ins = $("inspector"), page = $("screen-editor");
-    if (!phoneLayout.matches || ins.classList.contains("hidden")) return;
-    const r = ins.getBoundingClientRect(), view = page.getBoundingClientRect();
-    const need = r.top + Math.min(r.height, 120) - view.bottom;
-    if (need > 0) page.scrollBy({ top: need, behavior: "smooth" });
+  /* ═══════════ TOOLS: CapCut's bottom bar and its panels ═══════════
+     One row of tools at the bottom of the screen, where a thumb reaches
+     (most phone use is one-handed, thumb on the lower screen), three levels
+     deep at most, exactly as CapCut does it:
+       nothing selected   the main tools (Edit, Audio, Text, Stickers...)
+       a group open       that group's tools (Audio: Music, Sound effects...)
+       something selected that thing's tools (a clip: Split, Speed, Volume...)
+     A tool either acts at once (Split, Delete) or slides up ONE panel with
+     only its own controls and a check mark to close it. Never a wall of
+     settings. Every target is at least 48px. */
+  let activeTool = null, toolGroup = null, lastSelKey = "", pendingTool = null;
+  const selKey = () => (S.sel ? S.sel.type + ":" + (S.sel.id != null ? S.sel.id : "") : "");
+
+  const I = (d, extra) => '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"' + (extra || "") + ">" + d + "</svg>";
+  const ICON = {
+    back: I('<polyline points="15 18 9 12 15 6"/>'),
+    check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
+    edit: I('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>'),
+    split: I('<line x1="12" y1="3" x2="12" y2="21"/><path d="M8 7H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h3M16 7h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-3"/>'),
+    audio: I('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+    text: I('<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>'),
+    sticker: I('<path d="M15 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h7l8-8V6a3 3 0 0 0-3-3z"/><path d="M13 21v-5a3 3 0 0 1 3-3h5"/>'),
+    effects: I('<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'),
+    overlay: I('<rect x="3" y="3" width="13" height="13" rx="2"/><rect x="8" y="8" width="13" height="13" rx="2"/>'),
+    captions: I('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="6" y1="14" x2="10" y2="14"/><line x1="13" y1="14" x2="18" y2="14"/>'),
+    filters: I('<circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/>'),
+    adjust: I('<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>'),
+    tidy: I('<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="8" y2="12"/><line x1="16" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="14" y2="18"/><line x1="10" y1="10" x2="14" y2="14"/><line x1="14" y1="10" x2="10" y2="14"/>'),
+    post: I('<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>'),
+    add: I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+    speed: I('<path d="M12 21a9 9 0 1 1 9-9"/><polyline points="12 7 12 12 15.5 14"/>'),
+    volume: I('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/>'),
+    anim: I('<circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 1 9 9M3 12a9 9 0 0 1 9-9" stroke-dasharray="2 3"/><path d="M21 12a9 9 0 0 1-9 9"/>'),
+    trans: I('<rect x="2" y="6" width="8" height="12" rx="1.5"/><rect x="14" y="6" width="8" height="12" rx="1.5"/><path d="M10 12h4"/>'),
+    crop: I('<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>'),
+    canvas: I('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="8" width="10" height="8" rx="1"/>'),
+    rotate: I('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>'),
+    freeze: I('<line x1="12" y1="2" x2="12" y2="22"/><line x1="4" y1="7" x2="20" y2="17"/><line x1="4" y1="17" x2="20" y2="7"/>'),
+    replace: I('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
+    extract: I('<path d="M3 12h3l3-7 4 14 3-7h5"/>'),
+    layout: I('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/>'),
+    fade: I('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l6-6M7 19l14-14" opacity="0.6"/>'),
+    rename: I('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+    duplicate: I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
+    trash: I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+    font: I('<polyline points="4 20 9 4 14 20"/><line x1="5.8" y1="14" x2="12.2" y2="14"/><path d="M17 10a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM20 10v10"/>'),
+    style: I('<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"/>'),
+    place: I('<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>'),
+    opacity: I('<path d="M12 2.7l5.7 5.6a8 8 0 1 1-11.4 0z"/><path d="M12 9v11" opacity="0.6"/>'),
+    blend: I('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>'),
+    arrange: I('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M14 6h4a2 2 0 0 1 2 2v2M10 18H6a2 2 0 0 1-2-2v-2"/>'),
+    strength: I('<line x1="4" y1="20" x2="4" y2="14"/><line x1="10" y1="20" x2="10" y2="9"/><line x1="16" y1="20" x2="16" y2="5"/><line x1="22" y1="20" x2="22" y2="2" opacity="0.4"/>'),
+    music: I('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+    sfx: I('<path d="M2 12h2M6 8v8M10 5v14M14 9v6M18 7v10M22 12h-2"/>'),
+    mine: I('<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>'),
+    voice: I('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/>'),
+    duck: I('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><polyline points="13 12 16 15 19 12" opacity="0.7"/>'),
+    play: I('<polygon points="6 3 20 12 6 21 6 3"/>'),
+    timing: I('<circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 14.5 14.5"/><line x1="9" y1="2" x2="15" y2="2"/>')
+  };
+
+  // selecting the clip under the playhead, for the tools that act on "this clip"
+  function selectClipHere(tool) {
+    const info = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+    if (!info) { toast("Add footage to the timeline first"); return; }
+    pendingTool = tool || null;
+    S.sel = { type: "clip", id: info.clip.id };
+    renderTimeline();
+    renderInspector();
   }
 
-  function renderInspector() {
-    const ins = $("inspector");
-    if (ins.classList.contains("hidden")) setTimeout(revealInspector, 0);   // once it has been filled
-    ins.innerHTML = "";
-    if (!S.sel) { ins.classList.add("hidden"); return; }
-    ins.classList.remove("hidden");
+  function mainTools() {
+    return [
+      { id: "edit", label: "Edit", icon: ICON.edit, run: () => selectClipHere(null) },
+      { id: "audio", label: "Audio", icon: ICON.audio, group: "audio" },
+      { id: "text", label: "Text", icon: ICON.text, group: "text" },
+      { id: "stickers", label: "Stickers", icon: ICON.sticker, run: () => openStickers(null) },
+      { id: "effects", label: "Effects", icon: ICON.effects, run: () => openEffects(null) },
+      { id: "overlay", label: "Overlay", icon: ICON.overlay, run: () => $("tbOverlay").click() },
+      { id: "captions", label: "Captions", icon: ICON.captions, run: () => $("tbCaptions").click() },
+      { id: "filters", label: "Filters", icon: ICON.filters, run: () => { if (!S.clips.length) { toast("Add clips to the timeline first"); return; } pendingTool = "filters"; S.sel = { type: "all" }; renderTimeline(); renderInspector(); } },
+      { id: "adjust", label: "Adjust", icon: ICON.adjust, run: () => selectClipHere("adjust") },
+      { id: "tidy", label: "Tidy", icon: ICON.tidy, run: () => $("tbTidy").click() },
+      { id: "post", label: "Post", icon: ICON.post, run: () => $("tbPost").click() },
+      { id: "add", label: "Add", icon: ICON.add, run: () => $("tbAdd").click() }
+    ];
+  }
+  function groupTools(g) {
+    if (g === "audio") {
+      const sheet = (pane) => { $("tbAudio").click(); if (pane !== "music") showAudioPane(pane); };
+      return [
+        { id: "music", label: "Music", icon: ICON.music, run: () => sheet("music") },
+        { id: "sfx", label: "Sound effects", icon: ICON.sfx, run: () => sheet("fx") },
+        { id: "mine", label: "Your audio", icon: ICON.mine, run: () => sheet("mine") },
+        { id: "extract", label: "Extract", icon: ICON.extract, run: () => $("tbExtract").click() },
+        { id: "voice", label: "Voiceover", icon: ICON.voice, run: startVoiceover }
+      ];
+    }
+    return [
+      { id: "addtext", label: "Add text", icon: ICON.text, run: () => { pendingTool = "edit"; addText(); } },
+      { id: "captions", label: "Captions", icon: ICON.captions, run: () => $("tbCaptions").click() },
+      { id: "stickers", label: "Stickers", icon: ICON.sticker, run: () => openStickers(null) }
+    ];
+  }
+  const act = (id, label, icon, run) => ({ id: id, label: label, icon: icon, run: run });
+  const tool = (id, label, icon, panel, extra) => Object.assign({ id: id, label: label, icon: icon, panel: panel }, extra || {});
+  const common = () => [act("duplicate", "Duplicate", ICON.duplicate, duplicateSelection), act("delete", "Delete", ICON.trash, deleteSelection)];
 
-    const closeBtn = mk("button", "ins-close", "✕");
-    closeBtn.addEventListener("click", () => {
-      S.sel = null;
-      renderTimeline();
-      renderInspector();
+  // small builders every panel shares
+  const redrawPanel = () => { commit(); renderInspector(); syncOverlays(); };
+  function chipsRow(items, cur, pick, after) {
+    const row = mk("div", "filter-chips");
+    items.forEach(([v, label]) => {
+      const b = mk("button", "fchip" + (cur === v ? " active" : ""), label);
+      b.type = "button";
+      b.addEventListener("click", () => { pick(v); (after || redrawPanel)(); });
+      row.appendChild(b);
     });
+    return row;
+  }
+  function colorPick(val, set) {
+    const c = document.createElement("input");
+    c.type = "color";
+    c.value = /^#[0-9a-f]{6}$/i.test(val || "") ? val : "#ffffff";
+    c.addEventListener("input", () => { set(c.value); syncOverlays(); });
+    c.addEventListener("change", () => commit());
+    return c;
+  }
+  const pct = (v) => Math.round(v * 100) + "%";
 
-    if (S.sel.type === "all") {
-      ins.appendChild(mk("span", "ins-title", "<em>✦</em> Look, applies to every clip"));
-      ins.appendChild(filterChips(
-        () => (S.clips[0] ? S.clips[0].filter : "none"),
-        (key) => { S.clips.forEach((c) => { c.filter = key; }); }
-      ));
-      ins.appendChild(closeBtn);
-      return;
+  /* The tools for whatever is selected, CapCut's order: the most used first
+     (Split, Speed, Volume, Animation), Delete last. */
+  function selectionTools() {
+    const s = S.sel;
+    if (!s) return [];
+    if (s.type === "all") {
+      return [tool("filters", "Filters", ICON.filters, (box) => {
+        box.appendChild(group("Look, on every clip", filterChips(() => (S.clips[0] ? S.clips[0].filter : "none"), (key) => { S.clips.forEach((c) => { c.filter = key; }); syncOverlays(); })));
+      })];
     }
-
-    if (S.sel.type === "effect") {
-      const e = effectById(S.sel.id);
-      if (!e) { ins.classList.add("hidden"); return; }
-      effectPanel(ins, e);
-      ins.appendChild(closeBtn);
-      return;
-    }
-
-    if (S.sel.type === "broll") {
-      const b = brollById(S.sel.id);
-      if (!b) { ins.classList.add("hidden"); return; }
-      const m = mediaById(b.mediaId);
-      ins.appendChild(mk("span", "ins-title", "<em>▣</em>" + (m ? m.name : "overlay")));
-
-      /* Cover fills the frame; inset keeps the speaker visible. Which one is
-         right depends entirely on whether their face IS the moment, so this
-         is a choice rather than a setting with a correct value. */
-      const modes = mk("div", "filter-chips");
-      [["inset", "Panel"], ["cover", "Full frame"]].forEach(([key, label]) => {
-        const ch = mk("button", "fchip" + (b.mode === key ? " active" : ""), label);
-        ch.addEventListener("click", () => {
-          b.mode = key;
-          commit(); renderInspector(); syncOverlays();
-        });
-        modes.appendChild(ch);
-      });
-      ins.appendChild(group("Size", modes));
-      if (b.mode !== "cover") {
-        /* CapCut's overlay controls. Drag it on the picture to move it; two
-           fingers size and turn it, or use these. */
-        ins.appendChild(mk("span", "ins-meta", "Drag it on the picture to move it. Two fingers make it bigger or smaller and turn it."));
-        const shapes = mk("div", "filter-chips");
-        [["square", "Square"], ["original", "Its own shape"], ["round", "Round"]].forEach(([k, label]) => {
-          const ch = mk("button", "fchip" + ((b.shape || "square") === k ? " active" : ""), label);
-          ch.addEventListener("click", () => { if (k === "square") delete b.shape; else b.shape = k; commit(); renderInspector(); syncOverlays(); });
-          shapes.appendChild(ch);
-        });
-        ins.appendChild(group("Shape", shapes));
-        ins.appendChild(group("Scale", slider(0.08, 1.6, 0.01, b.scale || BROLL_SIZE,
-          (v) => { b.scale = v; syncOverlays(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
-        ins.appendChild(group("Rotate", slider(-180, 180, 1, b.rot || 0,
-          (v) => { b.rot = v; syncOverlays(); }, () => commit(), (v) => v + "°")));
-        const reset = mk("button", "fchip", "Back to the middle");
-        reset.addEventListener("click", () => { delete b.x; delete b.y; delete b.scale; delete b.rot; commit(); renderInspector(); syncOverlays(); });
-        ins.appendChild(group("Place", reset));
+    if (s.type === "clip") {
+      const c = clipById(s.id);
+      if (!c) return [];
+      const m = mediaById(c.mediaId), isVid = m && m.type === "video", idx = S.clips.indexOf(c);
+      const list = [act("split", "Split", ICON.split, splitAtPlayhead)];
+      if (isVid) {
+        list.push(tool("speed", "Speed", ICON.speed, (box) => {
+          box.appendChild(group("Speed", slider(0.25, 3, 0.05, c.speed, (v) => { c.speed = v; renderTimeline(); }, () => commit(), (v) => v.toFixed(2) + "×")));
+          box.appendChild(chipsRow([[0.5, "0.5×"], [1, "1×"], [1.5, "1.5×"], [2, "2×"], [3, "3×"]], c.speed, (v) => { c.speed = v; renderTimeline(); }));
+        }));
+        list.push(tool("volume", "Volume", ICON.volume, (box) => {
+          box.appendChild(group("Volume", slider(0, 1, 0.05, c.volume, (v) => { c.volume = v; }, () => commit(), pct)));
+          box.appendChild(group("Sound", chipsRow([[false, "On"], [true, "Muted"]], !!c.muted, (v) => { c.muted = v; })));
+        }));
+      } else {
+        list.push(tool("duration", "Duration", ICON.timing, (box) => {
+          box.appendChild(group("Shows for", slider(0.5, 15, 0.1, c.out - c.in, (v) => { c.out = c.in + v; renderTimeline(); }, () => commit(), (v) => v.toFixed(1) + "s")));
+        }));
       }
-      ins.appendChild(group("Opacity", slider(0, 1, 0.01, b.opacity == null ? 1 : b.opacity,
-        (v) => { b.opacity = v; syncOverlays(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
-      // blend modes: how the overlay mixes with the footage under it
-      const blend = document.createElement("select");
-      blend.className = "ins-select";
-      BLENDS.forEach(([k, label]) => { const o = document.createElement("option"); o.value = k; o.textContent = label; blend.appendChild(o); });
-      blend.value = b.blend || "normal";
-      blend.addEventListener("change", () => { if (blend.value === "normal") delete b.blend; else b.blend = blend.value; commit(); syncOverlays(); });
-      ins.appendChild(group("Blend", blend));
-      ins.appendChild(group("Length", slider(0.3, 12, 0.1, b.dur,
-        (v) => { b.dur = v; renderTimeline(); syncOverlays(); },
-        () => commit(), (v) => v.toFixed(1) + "s")));
-      ins.appendChild(group("Starts at", slider(0, Math.max(0.1, total()), 0.05, Math.min(b.start, total()),
-        (v) => { b.start = v; renderTimeline(); syncOverlays(); },
-        () => commit(), (v) => fmt(v))));
-      ins.appendChild(closeBtn);
-      return;
-    }
-
-    if (S.sel.type === "music") {
-      if (!S.music) { ins.classList.add("hidden"); return; }
-      const title = mk("span", "ins-title", "<em>\u266A</em>");
-      title.appendChild(document.createTextNode(S.music.title));
-      ins.appendChild(title);
-
-      ins.appendChild(group("Volume", slider(0, 1, 0.05, typeof S.music.gain === "number" ? S.music.gain : 0.35,
-        (v) => { S.music.gain = v; applyMusicGain(); },
-        () => commit(), (v) => Math.round(v * 100) + "%")));
-
-      // Lower under speech: on unless switched off (see mixMusic)
-      const duckRow = mk("div", "filter-chips");
-      [["On", true], ["Off", false]].forEach(([label, on]) => {
-        const b = mk("button", "fchip" + ((S.music.duck !== false) === on ? " active" : ""), label);
-        b.addEventListener("click", () => {
-          S.music.duck = on;
-          commit();
-          duckRow.querySelectorAll(".fchip").forEach((c) => c.classList.remove("active"));
-          b.classList.add("active");
-        });
-        duckRow.appendChild(b);
-      });
-      ins.appendChild(group("Lower under speech", duckRow));
-      ins.appendChild(group("Fade in", slider(0, 5, 0.1, typeof S.music.fadeIn === "number" ? S.music.fadeIn : 0.3,
-        (v) => { S.music.fadeIn = v; applyMusicGain(); },
-        () => commit(), (v) => v.toFixed(1) + "s")));
-      ins.appendChild(group("Fade out", slider(0, 8, 0.1, typeof S.music.fadeOut === "number" ? S.music.fadeOut : 1.5,
-        (v) => { S.music.fadeOut = v; applyMusicGain(); },
-        () => commit(), (v) => v.toFixed(1) + "s")));
-
-      const swap = mk("button", "fchip", "Change");
-      swap.addEventListener("click", () => {
-        renderSoundSheet();
-        showAudioPane("music");
-        openSheet("soundSheet");
-        renderMusic();
-      });
-      const drop = mk("button", "fchip", "Remove");
-      drop.addEventListener("click", () => {
-        S.music = null;
-        loadMusicElement();
-        S.sel = null;
-        commit();
-        renderTimeline();
-        renderInspector();
-        toast("Music removed");
-      });
-      const row = mk("div", "filter-chips");
-      row.appendChild(swap);
-      row.appendChild(drop);
-      ins.appendChild(group("Track", row));
-
-      ins.appendChild(closeBtn);
-      return;
-    }
-
-    if (S.sel.type === "sfx") {
-      const x = sfxById(S.sel.id);
-      if (!x) { ins.classList.add("hidden"); return; }
-      const e = sfxEngine();
-      const info = e ? e.info(x.name) : null;
-      ins.appendChild(mk("span", "ins-title", "<em>♪</em>" + (info ? info.label : x.name)));
-
-      const hear = mk("button", "fchip", "Preview");
-      hear.addEventListener("click", () => previewSfx(x.name));
-      ins.appendChild(group("Sound", hear));
-
-      ins.appendChild(group("Volume", slider(0, 2, 0.05, typeof x.gain === "number" ? x.gain : 1,
-        (v) => { x.gain = v; },
-        () => commit(), (v) => Math.round(v * 100) + "%")));
-      ins.appendChild(group("Starts at", slider(0, Math.max(0.1, total()), 0.05, Math.min(x.start, total()),
-        (v) => { x.start = v; renderTimeline(); },
-        () => commit(), (v) => fmt(v))));
-      ins.appendChild(closeBtn);
-      return;
-    }
-
-    if (S.sel.type === "uaudio") {
-      const a = audioById(S.sel.id);
-      if (!a) { ins.classList.add("hidden"); return; }
-      const m = mediaById(a.mediaId);
-      const title = mk("span", "ins-title", "<em>♪</em>");
-      title.appendChild(document.createTextNode(a.name || "Audio"));
-      ins.appendChild(title);
-
-      // above 100% only once the sound runs through the audio graph (see voiceFor)
-      ins.appendChild(group("Volume", slider(0, 1.5, 0.05, typeof a.gain === "number" ? a.gain : 1,
-        (v) => { a.gain = v; syncAudioClips(); },
-        () => commit(), (v) => Math.round(v * 100) + "%")));
-      ins.appendChild(group("Fade in", slider(0, 3, 0.05, a.fadeIn || 0,
-        (v) => { a.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
-      ins.appendChild(group("Fade out", slider(0, 3, 0.05, a.fadeOut || 0,
-        (v) => { a.fadeOut = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
-      ins.appendChild(group("Starts at", slider(0, Math.max(0.1, total()), 0.05, Math.min(a.start, total()),
-        (v) => { a.start = v; renderTimeline(); syncAudioClips(); },
-        () => commit(), (v) => fmt(v))));
-      if (m && m.type === "video") {
-        ins.appendChild(group("Speed", slider(0.25, 3, 0.05, a.speed || 1,
-          (v) => { a.speed = v; renderTimeline(); syncAudioClips(); },
-          () => commit(), (v) => v.toFixed(2) + "×"), 3));
-      }
-      const meta = mk("span", "ins-meta", "");
-      meta.textContent = (m && m.type === "video" ? "Sound from " : "From ") + (m ? m.name : "a file that is gone") +
-        " · " + a.in.toFixed(1) + "s to " + a.out.toFixed(1) + "s · plays " + audioDur(a).toFixed(1) + "s";
-      ins.appendChild(meta);
-      ins.appendChild(closeBtn);
-      return;
-    }
-
-    if (S.sel.type === "clip") {
-      const c = clipById(S.sel.id);
-      if (!c) { ins.classList.add("hidden"); return; }
-      const m = mediaById(c.mediaId);
-      const isVid = m && m.type === "video";
-      const idx = S.clips.indexOf(c);
-
-      ins.appendChild(mk("span", "ins-title", "<em>" + (isVid ? "▶" : "▣") + "</em>" + escHtml(c.name || (m ? m.name : "clip"))));
-
-      /* CapCut's clip toolbar, as tabs: Edit (length, speed, sound, freeze,
-         replace, fades), Look (looks and Adjust), Frame (fill or fit, crop,
-         flip and turn, layout), Animation (in, out, loop) and Transition
-         (into this clip from the one before; not on the first). */
-      const TABS = [["edit", "Edit"], ["look", "Look"], ["frame", "Frame"], ["anim", "Animation"]].concat(idx > 0 ? [["trans", "Transition"]] : []);
-      if (!TABS.some((x) => x[0] === clipTab)) clipTab = "edit";
-      const tabs = mk("div", "ins-tabs");
-      TABS.forEach(([key, label]) => {
-        const b = mk("button", "ins-tab" + (clipTab === key ? " active" : ""), label);
-        b.type = "button";
-        b.addEventListener("click", () => { if (cropEdit && key !== "frame") endCrop(false); clipTab = key; renderInspector(); });
-        tabs.appendChild(b);
-      });
-      ins.appendChild(tabs);
-      const redo = () => { commit(); renderInspector(); syncNow(); };
-      const chipRow = (items, cur, pick) => {
-        const row = mk("div", "filter-chips");
-        items.forEach(([v, label]) => {
-          const b = mk("button", "fchip" + (cur === v ? " active" : ""), label);
-          b.type = "button";
-          b.addEventListener("click", () => { pick(v); redo(); });
-          row.appendChild(b);
-        });
-        return row;
-      };
-
-      if (clipTab === "edit") {
-        /* Rename: the clip's own name, shown on the timeline and carried into
-           the Premiere/DaVinci file. Empty goes back to the file's name. */
-        const nameIn = document.createElement("input");
-        nameIn.type = "text";
-        nameIn.maxLength = 60;
-        nameIn.value = c.name || "";
-        nameIn.placeholder = m ? m.name : "Clip name";
-        nameIn.setAttribute("aria-label", "Clip name");
-        nameIn.addEventListener("input", () => {
-          const v = nameIn.value.replace(/\s+/g, " ").trim();
-          if (v) c.name = v; else delete c.name;
-          renderTimeline();
-        });
-        nameIn.addEventListener("change", () => { commit(); recordEdit("rename-clip", { named: !!c.name }); });
-        nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter") nameIn.blur(); });
-        ins.appendChild(group("Name", nameIn));
-        if (isVid) {
-          ins.appendChild(group("Speed", slider(0.25, 3, 0.05, c.speed,
-            (v) => { c.speed = v; renderTimeline(); }, () => commit(), (v) => v.toFixed(2) + "×"), 2));
-          ins.appendChild(group("Volume", slider(0, 1, 0.05, c.volume,
-            (v) => { c.volume = v; }, () => commit(), (v) => Math.round(v * 100) + "%"), 2));
-          const mute = mk("button", "ins-toggle" + (c.muted ? " on" : ""), c.muted ? "Muted" : "Sound on");
-          mute.addEventListener("click", () => {
-            c.muted = !c.muted;
-            mute.classList.toggle("on", c.muted);
-            mute.textContent = c.muted ? "Muted" : "Sound on";
-            commit();
-          });
-          ins.appendChild(mute);
-          /* CapCut's Extract audio: the sound moves to the audio track, lined up
-             under this clip, and the clip goes quiet. */
-          const extract = mk("button", "fchip", "Extract audio");
-          extract.title = "Move this clip's sound onto its own track";
-          extract.addEventListener("click", () => extractClipAudio(c));
-          ins.appendChild(group("Sound", extract));
-        } else {
-          ins.appendChild(group("Show for", slider(0.5, 15, 0.5, c.out - c.in,
-            (v) => { c.out = c.in + v; renderTimeline(); }, () => commit(), (v) => v.toFixed(1) + "s")));
-        }
-        const more = mk("div", "filter-chips");
-        if (isVid) {
-          const fz = mk("button", "fchip", "Freeze frame");
-          fz.title = "Hold the picture under the playhead for 3 seconds";
-          fz.addEventListener("click", () => freezeFrame(c));
-          more.appendChild(fz);
-        }
-        const rp = mk("button", "fchip", "Replace");
-        rp.title = "Swap in another video or photo, keeping its place and look";
-        rp.addEventListener("click", () => replaceClip(c));
-        more.appendChild(rp);
-        ins.appendChild(group("Clip", more));
-        ins.appendChild(group("Fade in", slider(0, 1.5, 0.05, c.fadeIn || 0,
-          (v) => { c.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s"), 3));
-        ins.appendChild(group("Fade out", slider(0, 1.5, 0.05, c.fadeOut || 0,
-          (v) => { c.fadeOut = v; }, () => commit(), (v) => v.toFixed(2) + "s"), 3));
-        const meta = mk("span", "ins-meta",
-          "in " + c.in.toFixed(2) + "s · out " + c.out.toFixed(2) + "s · plays " + dispDur(c).toFixed(2) + "s");
-        ins.appendChild(meta);
-      }
-
-      if (clipTab === "look") {
-        ins.appendChild(group("Look", filterChips(() => c.filter, (k) => { c.filter = k; })));
-        // Adjust: per clip, live while dragging, saved on release
-        const adjWrap = mk("div", "adj-grid");
+      list.push(tool("anim", "Animation", ICON.anim, (box) => clipAnimPanel(box, c, redrawPanel)));
+      if (idx > 0) list.push(tool("trans", "Transition", ICON.trans, (box) => transitionPanel(box, c, S.clips[idx - 1], redrawPanel)));
+      list.push(tool("filters", "Filters", ICON.filters, (box) => box.appendChild(group("Look", filterChips(() => c.filter, (k) => { c.filter = k; syncOverlays(); })))));
+      list.push(tool("adjust", "Adjust", ICON.adjust, (box) => {
         ADJ.forEach(([k, label, lo, hi]) => {
-          adjWrap.appendChild(group(label, slider(lo, hi, 1, (c.adj && c.adj[k]) || 0,
+          box.appendChild(group(label, slider(lo, hi, 1, (c.adj && c.adj[k]) || 0,
             (v) => { c.adj = Object.assign({}, c.adj, { [k]: v }); if (!v) delete c.adj[k]; syncOverlays(); },
             () => commit(), (v) => (v > 0 && lo < 0 ? "+" : "") + v)));
         });
-        const adjRow = mk("div", "filter-chips");
-        const adjAll = mk("button", "fchip", "Use on every clip");
-        adjAll.addEventListener("click", () => {
-          S.clips.forEach((x) => { if (c.adj) x.adj = Object.assign({}, c.adj); else delete x.adj; });
-          commit(); syncNow(); toast("Adjustments copied to every clip");
-        });
-        const adjReset = mk("button", "fchip", "Reset");
-        adjReset.addEventListener("click", () => { delete c.adj; redo(); });
-        adjRow.appendChild(adjAll);
-        adjRow.appendChild(adjReset);
-        adjWrap.appendChild(adjRow);
-        ins.appendChild(group("Adjust", adjWrap));
-      }
-
-      if (clipTab === "frame") {
-        if (cropEdit && cropEdit.clip === c) {
-          // the crop being set: shape, then Done or Cancel
-          ins.appendChild(mk("span", "ins-meta", "Drag the box or its corners on the picture."));
-          const ratios = mk("div", "filter-chips");
-          CROP_RATIOS.forEach(([v, label]) => {
-            const b = mk("button", "fchip" + (cropEdit.ratio === v ? " active" : ""), label);
-            b.type = "button";
-            b.addEventListener("click", () => { setCropRatio(v); renderInspector(); });
-            ratios.appendChild(b);
-          });
-          ins.appendChild(group("Shape", ratios));
-          const done = mk("div", "filter-chips");
-          const ok = mk("button", "fchip active", "Done"), no = mk("button", "fchip", "Cancel"), full = mk("button", "fchip", "Whole picture");
-          ok.addEventListener("click", () => endCrop(true));
-          no.addEventListener("click", () => endCrop(false));
-          full.addEventListener("click", () => { cropEdit.rect = { x: 0, y: 0, w: 1, h: 1 }; cropEdit.ratio = null; renderInspector(); syncOverlays(); });
-          done.appendChild(ok); done.appendChild(full); done.appendChild(no);
-          ins.appendChild(group("Crop", done));
-        } else {
-          ins.appendChild(group("Fill or fit", chipRow([["fill", "Fill the frame"], ["fit", "Whole picture"]], c.fit === "fit" ? "fit" : "fill",
-            (v) => { if (v === "fit") c.fit = "fit"; else delete c.fit; })));
-          if (c.fit === "fit") {
-            const bgRow = chipRow(FIT_BACKGROUNDS, c.bg || "blur", (v) => { if (v === "blur") delete c.bg; else c.bg = v; });
-            if (c.bg === "color") {
-              const ci = document.createElement("input");
-              ci.type = "color"; ci.value = c.bgColor || "#111210";
-              ci.addEventListener("input", () => { c.bgColor = ci.value; syncOverlays(); });
-              ci.addEventListener("change", () => commit());
-              bgRow.appendChild(ci);
-            }
-            ins.appendChild(group("Background", bgRow));
-            const all = mk("button", "fchip", "Use on every clip");
-            all.addEventListener("click", () => { S.clips.forEach((x) => { x.fit = "fit"; if (c.bg) x.bg = c.bg; else delete x.bg; if (c.bgColor) x.bgColor = c.bgColor; }); redo(); toast("Every clip now shows its whole picture"); });
-            ins.appendChild(group("", all));
-          }
-          const crop = mk("div", "filter-chips");
-          const cb = mk("button", "fchip" + (c.crop ? " active" : ""), c.crop ? "Change crop" : "Crop");
-          cb.addEventListener("click", () => startCrop(c));
-          crop.appendChild(cb);
-          if (c.crop) {
-            const cr = mk("button", "fchip", "Remove crop");
-            cr.addEventListener("click", () => { delete c.crop; redo(); });
-            crop.appendChild(cr);
-          }
-          ins.appendChild(group("Crop", crop));
-          // Flip and rotate, as seen on screen
-          const orient = mk("div", "filter-chips");
-          const flipBtn = (label, key) => {
-            const b = mk("button", "fchip" + (c[key] ? " active" : ""), label);
-            b.addEventListener("click", () => { if (c[key]) delete c[key]; else c[key] = true; redo(); });
-            orient.appendChild(b);
-          };
-          flipBtn("Mirror", "flipH");
-          flipBtn("Upside down", "flipV");
-          const rot = mk("button", "fchip" + (c.rot ? " active" : ""), "Rotate" + (c.rot ? " " + c.rot + "°" : ""));
-          rot.title = "Turn a quarter clockwise";
-          rot.addEventListener("click", () => { c.rot = ((c.rot || 0) + 90) % 360; if (!c.rot) delete c.rot; redo(); });
-          orient.appendChild(rot);
-          ins.appendChild(group("Flip and rotate", orient));
-          if (isVid) {
-            // split screen / screen and face (drawLayout)
-            const lay = layoutOf(c);
-            ins.appendChild(group("Layout", chipRow(Object.keys(LAYOUTS).map((k) => [k, LAYOUTS[k]]), lay ? lay.type : "fill", (k) => {
-              if (k === "fill") delete c.layout;
-              else if (!lay || lay.type !== k) c.layout = k === "split" ? { type: "split", a: 0.27, b: 0.73 } : { type: "screen", fx: 0.85, fy: 0.2, fs: 0.32, sx: 0.5 };
-            })));
-            const pct = (v) => Math.round(v * 100) + "%";
-            const laySlider = (label, key, min, max) => ins.appendChild(group(label, slider(min, max, 0.01, lay[key],
-              (v) => { lay[key] = v; syncNow(); }, () => commit(), pct)));
-            if (lay && lay.type === "split") {
-              laySlider("First person, across", "a", 0, 1);
-              laySlider("Second person, across", "b", 0, 1);
-            } else if (lay && lay.type === "screen") {
-              laySlider("Face, across", "fx", 0, 1);
-              laySlider("Face, down", "fy", 0, 1);
-              laySlider("Face size", "fs", 0.1, 1);
-              laySlider("Screen, across", "sx", 0, 1);
-            }
-          }
+        const row = mk("div", "filter-chips");
+        const all = mk("button", "fchip", "Use on every clip");
+        all.addEventListener("click", () => { S.clips.forEach((x) => { if (c.adj) x.adj = Object.assign({}, c.adj); else delete x.adj; }); commit(); syncNow(); toast("Adjustments copied to every clip"); });
+        const reset = mk("button", "fchip", "Reset");
+        reset.addEventListener("click", () => { delete c.adj; redrawPanel(); });
+        row.appendChild(all); row.appendChild(reset);
+        box.appendChild(row);
+      }));
+      list.push(tool("crop", "Crop", ICON.crop, (box) => cropPanel(box, c), { onDone: () => endCrop(true), onClose: () => { if (cropEdit) endCrop(false); } }));
+      list.push(tool("canvas", "Canvas", ICON.canvas, (box) => {
+        box.appendChild(group("Frame", chipsRow([["fill", "Fill the frame"], ["fit", "Whole picture"]], c.fit === "fit" ? "fit" : "fill", (v) => { if (v === "fit") c.fit = "fit"; else delete c.fit; })));
+        if (c.fit === "fit") {
+          const bg = chipsRow(FIT_BACKGROUNDS, c.bg || "blur", (v) => { if (v === "blur") delete c.bg; else c.bg = v; });
+          if (c.bg === "color") { const ci = colorPick(c.bgColor || "#111210", (v) => { c.bgColor = v; }); bg.appendChild(ci); }
+          box.appendChild(group("Background", bg));
+          const all = mk("button", "fchip", "Use on every clip");
+          all.addEventListener("click", () => { S.clips.forEach((x) => { x.fit = "fit"; if (c.bg) x.bg = c.bg; else delete x.bg; if (c.bgColor) x.bgColor = c.bgColor; }); redrawPanel(); });
+          box.appendChild(all);
         }
+      }));
+      list.push(tool("rotate", "Rotate", ICON.rotate, (box) => {
+        const row = mk("div", "filter-chips");
+        const flip = (label, key) => { const b = mk("button", "fchip" + (c[key] ? " active" : ""), label); b.addEventListener("click", () => { if (c[key]) delete c[key]; else c[key] = true; redrawPanel(); }); row.appendChild(b); };
+        flip("Mirror", "flipH");
+        flip("Upside down", "flipV");
+        const rot = mk("button", "fchip" + (c.rot ? " active" : ""), "Rotate" + (c.rot ? " " + c.rot + "°" : ""));
+        rot.addEventListener("click", () => { c.rot = ((c.rot || 0) + 90) % 360; if (!c.rot) delete c.rot; redrawPanel(); });
+        row.appendChild(rot);
+        box.appendChild(row);
+      }));
+      if (isVid) {
+        list.push(act("freeze", "Freeze", ICON.freeze, () => freezeFrame(c)));
+        list.push(act("extract", "Extract audio", ICON.extract, () => extractClipAudio(c)));
+        list.push(tool("layout", "Layout", ICON.layout, (box) => {
+          const lay = layoutOf(c);
+          box.appendChild(group("Layout", chipsRow(Object.keys(LAYOUTS).map((k) => [k, LAYOUTS[k]]), lay ? lay.type : "fill", (k) => {
+            if (k === "fill") delete c.layout;
+            else if (!lay || lay.type !== k) c.layout = k === "split" ? { type: "split", a: 0.27, b: 0.73 } : { type: "screen", fx: 0.85, fy: 0.2, fs: 0.32, sx: 0.5 };
+          })));
+          const laySlider = (label, key, min, max) => box.appendChild(group(label, slider(min, max, 0.01, lay[key], (v) => { lay[key] = v; syncNow(); }, () => commit(), pct)));
+          if (lay && lay.type === "split") { laySlider("First person, across", "a", 0, 1); laySlider("Second person, across", "b", 0, 1); }
+          else if (lay && lay.type === "screen") { laySlider("Face, across", "fx", 0, 1); laySlider("Face, down", "fy", 0, 1); laySlider("Face size", "fs", 0.1, 1); laySlider("Screen, across", "sx", 0, 1); }
+        }));
       }
+      list.push(act("replace", "Replace", ICON.replace, () => replaceClip(c)));
+      list.push(tool("fade", "Fade", ICON.fade, (box) => {
+        box.appendChild(group("Fade in", slider(0, 1.5, 0.05, c.fadeIn || 0, (v) => { c.fadeIn = v; syncOverlays(); }, () => commit(), (v) => v.toFixed(2) + "s")));
+        box.appendChild(group("Fade out", slider(0, 1.5, 0.05, c.fadeOut || 0, (v) => { c.fadeOut = v; syncOverlays(); }, () => commit(), (v) => v.toFixed(2) + "s")));
+      }));
+      list.push(tool("rename", "Rename", ICON.rename, (box) => {
+        const nameIn = document.createElement("input");
+        nameIn.type = "text"; nameIn.maxLength = 60; nameIn.value = c.name || ""; nameIn.placeholder = m ? m.name : "Clip name";
+        nameIn.className = "panel-input";
+        nameIn.addEventListener("input", () => { const v = nameIn.value.replace(/\s+/g, " ").trim(); if (v) c.name = v; else delete c.name; renderTimeline(); });
+        nameIn.addEventListener("change", () => { commit(); recordEdit("rename-clip", { named: !!c.name }); });
+        nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter") nameIn.blur(); });
+        box.appendChild(group("Name", nameIn));
+        setTimeout(() => nameIn.focus(), 50);
+      }));
+      return list.concat(common());
+    }
+    if (s.type === "text") {
+      const t = textById(s.id);
+      if (!t) return [];
+      const tp = (id, label, icon, tab) => tool(id, label, icon, (box) => textPanel(box, t, tab));
+      if (t.sticker) {
+        return [tp("stk", "Sticker", ICON.sticker, "stk"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"),
+          act("replace", "Replace", ICON.replace, () => openStickers(t))].concat(common());
+      }
+      const heading = textStyleOf(t) === "heading";
+      const list = [tp("edit", "Edit", ICON.rename, "text"), tp("font", "Font", ICON.font, "font")];
+      if (heading) list.push(tp("style", "Style", ICON.style, "style"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"));
+      return list.concat(common());
+    }
+    if (s.type === "broll") {
+      const b = brollById(s.id);
+      if (!b) return [];
+      return [
+        act("split", "Split", ICON.split, splitAtPlayhead),
+        tool("arrange", "Arrange", ICON.arrange, (box) => {
+          box.appendChild(group("Size", chipsRow([["inset", "Panel"], ["cover", "Full frame"]], b.mode === "cover" ? "cover" : "inset", (k) => { b.mode = k; })));
+          if (b.mode !== "cover") {
+            box.appendChild(mk("p", "panel-note", "Drag it on the picture to move it. Two fingers make it bigger or smaller and turn it."));
+            box.appendChild(group("Shape", chipsRow([["square", "Square"], ["original", "Its own shape"], ["round", "Round"]], b.shape || "square", (k) => { if (k === "square") delete b.shape; else b.shape = k; })));
+            box.appendChild(group("Scale", slider(0.08, 1.6, 0.01, b.scale || BROLL_SIZE, (v) => { b.scale = v; syncOverlays(); }, () => commit(), pct)));
+            box.appendChild(group("Rotate", slider(-180, 180, 1, b.rot || 0, (v) => { b.rot = v; syncOverlays(); }, () => commit(), (v) => v + "°")));
+            const reset = mk("button", "fchip", "Back to the middle");
+            reset.addEventListener("click", () => { delete b.x; delete b.y; delete b.scale; delete b.rot; redrawPanel(); });
+            box.appendChild(reset);
+          }
+        }),
+        tool("opacity", "Opacity", ICON.opacity, (box) => box.appendChild(group("Opacity", slider(0, 1, 0.01, b.opacity == null ? 1 : b.opacity, (v) => { b.opacity = v; syncOverlays(); }, () => commit(), pct)))),
+        tool("blend", "Blend", ICON.blend, (box) => box.appendChild(group("Blend", chipsRow(BLENDS, b.blend || "normal", (v) => { if (v === "normal") delete b.blend; else b.blend = v; })))),
+        tool("timing", "Timing", ICON.timing, (box) => {
+          box.appendChild(group("Length", slider(0.3, 12, 0.1, b.dur, (v) => { b.dur = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => v.toFixed(1) + "s")));
+          box.appendChild(group("Starts at", slider(0, Math.max(0.1, total()), 0.05, Math.min(b.start, total()), (v) => { b.start = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => fmt(v))));
+        })
+      ].concat(common());
+    }
+    if (s.type === "effect") {
+      const e = effectById(s.id);
+      if (!e) return [];
+      return [
+        act("change", "Change", ICON.replace, () => openEffects(e)),
+        tool("strength", "Adjust", ICON.strength, (box) => effectPanel(box, e))
+      ].concat(common());
+    }
+    if (s.type === "uaudio") {
+      const a = audioById(s.id);
+      if (!a) return [];
+      const m = mediaById(a.mediaId);
+      const list = [
+        act("split", "Split", ICON.split, splitAtPlayhead),
+        tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 1.5, 0.05, typeof a.gain === "number" ? a.gain : 1, (v) => { a.gain = v; syncAudioClips(); }, () => commit(), pct)))),
+        tool("fade", "Fade", ICON.fade, (box) => {
+          box.appendChild(group("Fade in", slider(0, 3, 0.05, a.fadeIn || 0, (v) => { a.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
+          box.appendChild(group("Fade out", slider(0, 3, 0.05, a.fadeOut || 0, (v) => { a.fadeOut = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
+        })
+      ];
+      if (m && m.type === "video") list.push(tool("speed", "Speed", ICON.speed, (box) => box.appendChild(group("Speed", slider(0.25, 3, 0.05, a.speed || 1, (v) => { a.speed = v; renderTimeline(); syncAudioClips(); }, () => commit(), (v) => v.toFixed(2) + "×")))));
+      return list.concat(common());
+    }
+    if (s.type === "music") {
+      if (!S.music) return [];
+      const change = () => { renderSoundSheet(); showAudioPane("music"); openSheet("soundSheet"); renderMusic(); };
+      return [
+        tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 1, 0.05, typeof S.music.gain === "number" ? S.music.gain : 0.35, (v) => { S.music.gain = v; applyMusicGain(); }, () => commit(), pct)))),
+        tool("fade", "Fade", ICON.fade, (box) => {
+          box.appendChild(group("Fade in", slider(0, 5, 0.1, typeof S.music.fadeIn === "number" ? S.music.fadeIn : 0.3, (v) => { S.music.fadeIn = v; applyMusicGain(); }, () => commit(), (v) => v.toFixed(1) + "s")));
+          box.appendChild(group("Fade out", slider(0, 8, 0.1, typeof S.music.fadeOut === "number" ? S.music.fadeOut : 1.5, (v) => { S.music.fadeOut = v; applyMusicGain(); }, () => commit(), (v) => v.toFixed(1) + "s")));
+        }),
+        tool("duck", "Lower for voices", ICON.duck, (box) => box.appendChild(group("Lower the music while someone talks", chipsRow([[true, "On"], [false, "Off"]], S.music.duck !== false, (v) => { S.music.duck = v; })))),
+        act("replace", "Replace", ICON.replace, change),
+        act("delete", "Delete", ICON.trash, deleteSelection)
+      ];
+    }
+    if (s.type === "sfx") {
+      const x = sfxById(s.id);
+      if (!x) return [];
+      return [
+        act("play", "Play", ICON.play, () => previewSfx(x.name)),
+        tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 2, 0.05, typeof x.gain === "number" ? x.gain : 1, (v) => { x.gain = v; }, () => commit(), pct))))
+      ].concat(common());
+    }
+    return [];
+  }
 
-      if (clipTab === "anim") clipAnimPanel(ins, c, redo);
-      if (clipTab === "trans" && idx > 0) transitionPanel(ins, c, S.clips[idx - 1], redo);
+  // the crop tool opens the crop box on the picture straight away
+  function cropPanel(box, c) {
+    if (!cropEdit || cropEdit.clip !== c) { setTimeout(() => { if (activeTool === "crop" && S.sel && S.sel.id === c.id && !cropEdit) startCrop(c); }, 0); }
+    box.appendChild(mk("p", "panel-note", "Drag the box or its corners on the picture."));
+    const ratios = mk("div", "filter-chips");
+    CROP_RATIOS.forEach(([v, label]) => {
+      const b = mk("button", "fchip" + (cropEdit && cropEdit.ratio === v ? " active" : ""), label);
+      b.type = "button";
+      b.addEventListener("click", () => { if (cropEdit) { setCropRatio(v); renderInspector(); } });
+      ratios.appendChild(b);
+    });
+    box.appendChild(group("Shape", ratios));
+    const row = mk("div", "filter-chips");
+    const whole = mk("button", "fchip", "Whole picture");
+    whole.addEventListener("click", () => { if (cropEdit) { cropEdit.rect = { x: 0, y: 0, w: 1, h: 1 }; cropEdit.ratio = null; renderInspector(); syncOverlays(); } });
+    const cancel = mk("button", "fchip", "Cancel");
+    cancel.addEventListener("click", () => { activeTool = null; endCrop(false); });
+    row.appendChild(whole); row.appendChild(cancel);
+    box.appendChild(row);
+  }
 
-      ins.appendChild(closeBtn);
+  function currentTools() { return S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools(); }
+
+  function renderActionBar() {
+    const bar = $("actionBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    const level = S.sel ? "context" : toolGroup ? "group" : "main";
+    bar.dataset.level = level;
+    if (level !== "main") {
+      const back = mk("button", "ab-back", ICON.back);
+      back.type = "button";
+      back.setAttribute("aria-label", "Back");
+      back.addEventListener("click", () => {
+        if (cropEdit) endCrop(false);
+        if (S.sel) { S.sel = null; activeTool = null; renderTimeline(); }
+        else toolGroup = null;
+        renderInspector();
+      });
+      bar.appendChild(back);
+    }
+    const strip = mk("div", "ab-strip");
+    currentTools().forEach((t) => {
+      const b = mk("button", "ab-tool" + (activeTool === t.id && S.sel ? " active" : "") + (t.id === "delete" ? " danger" : ""));
+      b.type = "button";
+      b.innerHTML = t.icon + '<span class="ab-label"></span>';
+      b.lastChild.textContent = t.label;
+      b.addEventListener("click", () => {
+        if (t.group) { toolGroup = t.group; renderInspector(); return; }
+        if (t.panel) {
+          if (cropEdit && t.id !== "crop") endCrop(false);
+          activeTool = activeTool === t.id ? null : t.id;
+          renderInspector();
+          return;
+        }
+        if (t.run) t.run();
+      });
+      strip.appendChild(b);
+    });
+    bar.appendChild(strip);
+  }
+
+  function renderInspector() {
+    const key = selKey();
+    if (key !== lastSelKey) {
+      lastSelKey = key;
+      if (cropEdit && (!S.sel || S.sel.type !== "clip" || cropEdit.clip.id !== S.sel.id)) { const ce = cropEdit; cropEdit = null; void ce; }
+      activeTool = pendingTool;
+      if (S.sel) toolGroup = null;
+    }
+    pendingTool = null;
+    renderActionBar();
+    const ins = $("inspector");
+    ins.innerHTML = "";
+    const t = S.sel && activeTool ? selectionTools().find((x) => x.id === activeTool) : null;
+    if (!t || !t.panel) {
+      activeTool = null;
+      ins.classList.add("hidden");
+      document.body.classList.remove("panel-open");
       return;
     }
+    ins.classList.remove("hidden");
+    document.body.classList.add("panel-open");
+    const head = mk("div", "panel-head");
+    head.appendChild(mk("span", "panel-title", ""));
+    head.firstChild.textContent = t.label;
+    const done = mk("button", "panel-done", ICON.check);
+    done.type = "button";
+    done.setAttribute("aria-label", "Done");
+    done.addEventListener("click", () => {
+      const fn = t.onDone;
+      activeTool = null;
+      if (fn) fn(); else renderInspector();
+    });
+    head.appendChild(done);
+    ins.appendChild(head);
+    const body = mk("div", "panel-body");
+    ins.appendChild(body);
+    t.panel(body);
+  }
 
-
-    // text selection: CapCut's text panel, in five tabs
-    const t = textById(S.sel.id);
-    if (!t) { ins.classList.add("hidden"); return; }
+  /* The text and sticker panels: one tool each (Edit, Font, Style,
+     Animation, Position, Sticker), CapCut's text tabs as separate tools. */
+  function textPanel(ins, t, tab) {
+    textTab = tab;
     const sticker = t.sticker || null;
-    ins.appendChild(mk("span", "ins-title", sticker ? "<em>\u263A</em> Sticker" : "<em>T</em> Text"));
     const style = textStyleOf(t);
     const heading = style === "heading";
     const k = textLook(t);
     const live = () => { syncOverlays(); };
     const save = () => commit();
-    const redo = () => { commit(); renderInspector(); syncOverlays(); };
-
-    const tabs = mk("div", "ins-tabs");
-    const TABS = sticker ? [["stk", "Sticker"], ["anim", "Animation"], ["place", "Position"]]
-      : heading ? [["text", "Text"], ["font", "Font"], ["style", "Style"], ["anim", "Animation"], ["place", "Position"]]
-      : [["text", "Text"], ["font", "Font"]];
-    if (!TABS.some((x) => x[0] === textTab)) textTab = "text";
-    TABS.forEach(([key, label]) => {
-      const b = mk("button", "ins-tab" + (textTab === key ? " active" : ""), label);
-      b.type = "button";
-      b.addEventListener("click", () => { textTab = key; renderInspector(); });
-      tabs.appendChild(b);
-    });
-    ins.appendChild(tabs);
-
-    // small builders for this panel
-    const colorIn = (val, set) => {
-      const c = document.createElement("input");
-      c.type = "color"; c.value = /^#[0-9a-f]{6}$/i.test(val || "") ? val : "#ffffff";
-      c.addEventListener("input", () => { set(c.value); live(); });
-      c.addEventListener("change", save);
-      return c;
-    };
-    const chips = (items, cur, pick) => {
-      const row = mk("div", "filter-chips");
-      items.forEach(([v, label]) => {
-        const b = mk("button", "fchip" + (cur === v ? " active" : ""), label);
-        b.type = "button";
-        b.addEventListener("click", () => { pick(v); redo(); });
-        row.appendChild(b);
-      });
-      return row;
-    };
+    const redo = redrawPanel;
+    const colorIn = colorPick;
+    const chips = (items, cur, pick) => chipsRow(items, cur, pick);
     const onOff = (on, set) => chips([[true, "On"], [false, "Off"]], !!on, set);
-    const pct = (v) => Math.round(v * 100) + "%";
     const row = (...els) => { const r = mk("div", "ins-row"); els.forEach((e) => r.appendChild(e)); return r; };
 
     if (textTab === "stk" && sticker) {
-      const swap = mk("button", "fchip", "Change sticker");
-      swap.addEventListener("click", () => openStickers(t));
-      ins.appendChild(group("Sticker", swap));
       ins.appendChild(group("Size", slider(10, 220, 1, t.size, (v) => { t.size = v; live(); }, save, (v) => v + "")));
-      if (sticker === "shape") ins.appendChild(group("Colour", colorIn(t.color, (v) => { t.color = v; }), 2));
+      if (sticker === "shape") ins.appendChild(group("Colour", colorIn(t.color, (v) => { t.color = v; })));
       ins.appendChild(group("Opacity", slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct)));
       ins.appendChild(group("Shadow", onOff(k.shadow, (v) => { t.shadow = v; if (v && t.shOpacity == null) { t.shOpacity = 0.6; t.shBlur = 0.3; t.shDist = 0.05; t.shAngle = 90; } })));
-      ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur,
-        (v) => { t.dur = v; renderTimeline(); }, save, (v) => v.toFixed(1) + "s")));
+      ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur, (v) => { t.dur = v; renderTimeline(); }, save, (v) => v.toFixed(1) + "s")));
     }
 
     if (textTab === "text") {
-      // Heading, lower third or title card (drawStyledText)
+      const ti = document.createElement("textarea");
+      ti.rows = 2; ti.value = t.text; ti.maxLength = 200;
+      ti.className = "ins-textarea";
+      ti.addEventListener("input", () => { t.text = ti.value; renderTimeline(); live(); });
+      ti.addEventListener("change", save);
+      ins.appendChild(group(style === "lower" ? "Name" : "Text", ti));
+      if (t.text === "Your text") setTimeout(() => { ti.focus(); ti.select(); }, 60);
       ins.appendChild(group("Kind", chips([["heading", "Heading"], ["lower", "Lower third"], ["card", "Title card"]], style, (kk) => {
         if (kk === "heading") delete t.style; else t.style = kk;
         if (kk === "card" && !t.bg) t.bg = BRAND.main;
         if (kk === "lower" && !t.accent) t.accent = BRAND.accent;
         if (kk !== "heading" && (!t.color || t.color.toLowerCase() === "#ffffff")) t.color = BRAND.text;
       })));
-      const ti = document.createElement("textarea");
-      ti.rows = 2; ti.value = t.text; ti.maxLength = 200;
-      ti.className = "ins-textarea";
-      ti.addEventListener("input", () => { t.text = ti.value; renderTimeline(); live(); });
-      ti.addEventListener("change", save);
-      ins.appendChild(group(style === "lower" ? "Name" : "Says", ti));
       if (!heading) {
         const si = document.createElement("input");
-        si.type = "text"; si.value = t.sub || ""; si.maxLength = 80;
+        si.type = "text"; si.value = t.sub || ""; si.maxLength = 80; si.className = "panel-input";
         si.placeholder = style === "lower" ? "Who they are (optional)" : "A second line (optional)";
         si.addEventListener("input", () => { t.sub = si.value; live(); });
         si.addEventListener("change", save);
         ins.appendChild(group("Second line", si));
       }
       if (style === "card") {
-        ins.appendChild(group("Background", colorIn(t.bg || "#111210", (v) => { t.bg = v; }), 2));
+        ins.appendChild(group("Background", colorIn(t.bg || "#111210", (v) => { t.bg = v; })));
         const own = mk("div", "filter-chips");
         const before = mk("button", "fchip", "Put before the video");
         const after = mk("button", "fchip", "Put after the video");
-        before.title = "Its own clip at the start: adds time instead of covering the footage";
-        after.title = "Its own clip at the end";
         before.addEventListener("click", () => makeCardClip(t, "start"));
         after.addEventListener("click", () => makeCardClip(t, "end"));
-        own.appendChild(before);
-        own.appendChild(after);
+        own.appendChild(before); own.appendChild(after);
         ins.appendChild(group("As its own clip", own));
       }
-      ins.appendChild(group("Size", slider(10, 160, 1, t.size, (v) => { t.size = v; live(); }, save, (v) => v + "px")));
-      ins.appendChild(group("Color", colorIn(t.color, (v) => { t.color = v; }), 2));
-      ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur,
-        (v) => { t.dur = v; renderTimeline(); }, save, (v) => v.toFixed(1) + "s")));
+      ins.appendChild(group("Size", slider(10, 160, 1, t.size, (v) => { t.size = v; live(); }, save, (v) => v + "")));
+      ins.appendChild(group("Colour", colorIn(t.color, (v) => { t.color = v; })));
+      ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur, (v) => { t.dur = v; renderTimeline(); }, save, (v) => v.toFixed(1) + "s")));
     }
 
     if (textTab === "font") {
@@ -4778,7 +4756,8 @@
       const fam = t.font || (heading ? "Anton" : "");
       const fb = mk("button", "font-btn");
       fb.type = "button";
-      const fname = mk("span", "font-btn-name", fam || "vClyps' own");
+      const fname = mk("span", "font-btn-name", "");
+      fname.textContent = fam || "vClyps' own";
       if (fam) fname.style.fontFamily = "'" + fam + "', system-ui, sans-serif";
       fb.appendChild(fname);
       fb.appendChild(mk("span", "font-btn-more", SF ? SF.TEXT.length + " fonts" : ""));
@@ -4819,29 +4798,22 @@
         requestAnimationFrame(() => drawPresetTile(cv, t, p));
       });
       ins.appendChild(group("Looks", pres));
-      ins.appendChild(group("Text", row(colorIn(t.color, (v) => { t.color = v; }),
-        slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct))));
-      ins.appendChild(group("Outline", row(colorIn(k.strokeColor, (v) => { t.strokeColor = v; }),
-        slider(0, 0.3, 0.01, k.strokeW, (v) => { t.strokeW = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
+      ins.appendChild(group("Text", row(colorIn(t.color, (v) => { t.color = v; }), slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct))));
+      ins.appendChild(group("Outline", row(colorIn(k.strokeColor, (v) => { t.strokeColor = v; }), slider(0, 0.3, 0.01, k.strokeW, (v) => { t.strokeW = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
       ins.appendChild(group("Background", onOff(k.boxOn, (v) => { t.boxOn = v; })));
       if (k.boxOn) {
-        ins.appendChild(group("Background colour", row(colorIn(k.boxColor, (v) => { t.boxColor = v; }),
-          slider(0, 1, 0.05, k.boxOpacity, (v) => { t.boxOpacity = v; live(); }, save, pct))));
+        ins.appendChild(group("Background colour", row(colorIn(k.boxColor, (v) => { t.boxColor = v; }), slider(0, 1, 0.05, k.boxOpacity, (v) => { t.boxOpacity = v; live(); }, save, pct))));
         ins.appendChild(group("Corners", slider(0, 1, 0.05, k.boxRadius, (v) => { t.boxRadius = v; live(); }, save, pct)));
       }
       ins.appendChild(group("Shadow", onOff(k.shadow, (v) => { t.shadow = v; })));
       if (k.shadow) {
-        ins.appendChild(group("Shadow colour", row(colorIn(k.shColor, (v) => { t.shColor = v; }),
-          slider(0, 1, 0.05, k.shOpacity, (v) => { t.shOpacity = v; live(); }, save, pct))));
+        ins.appendChild(group("Shadow colour", row(colorIn(k.shColor, (v) => { t.shColor = v; }), slider(0, 1, 0.05, k.shOpacity, (v) => { t.shOpacity = v; live(); }, save, pct))));
         ins.appendChild(group("Blur", slider(0, 1, 0.01, k.shBlur, (v) => { t.shBlur = v; live(); }, save, (v) => Math.round(v * 100) + "")));
         ins.appendChild(group("Distance", slider(0, 0.3, 0.01, k.shDist, (v) => { t.shDist = v; live(); }, save, (v) => Math.round(v * 100) + "")));
         ins.appendChild(group("Angle", slider(0, 359, 1, k.shAngle, (v) => { t.shAngle = v; live(); }, save, (v) => v + "°")));
       }
       ins.appendChild(group("Glow", onOff(k.glowOn, (v) => { t.glowOn = v; })));
-      if (k.glowOn) {
-        ins.appendChild(group("Glow colour", row(colorIn(k.glowColor, (v) => { t.glowColor = v; }),
-          slider(0.1, 1.5, 0.05, k.glowSize, (v) => { t.glowSize = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
-      }
+      if (k.glowOn) ins.appendChild(group("Glow colour", row(colorIn(k.glowColor, (v) => { t.glowColor = v; }), slider(0.1, 1.5, 0.05, k.glowSize, (v) => { t.glowSize = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
       ins.appendChild(group("Letter spacing", slider(-0.1, 0.5, 0.01, k.spacing, (v) => { t.spacing = v; live(); }, save, (v) => Math.round(v * 100) + "")));
       ins.appendChild(group("Line spacing", slider(0.8, 2, 0.05, k.lineH, (v) => { t.lineH = v; live(); }, save, (v) => v.toFixed(2))));
       ins.appendChild(group("Align", chips([["left", "Left"], ["center", "Centre"], ["right", "Right"]], k.align, (v) => { t.align = v; })));
@@ -4849,13 +4821,12 @@
 
     if (textTab === "anim" && TA()) {
       /* CapCut's layout: In, Out and Loop, each a grid of moving previews
-         of this very text's look. Tap one to use it and see it play. */
+         of this very text's look, and the length bar under them. */
       const lib = TA();
       const KIND = { in: ["animIn", lib.IN], out: ["animOut", lib.OUT], loop: ["animLoop", lib.LOOP] };
       const sub = mk("div", "ins-seg anim-kinds");
       [["in", "In"], ["out", "Out"], ["loop", "Loop"]].forEach(([key, label]) => {
-        const field = KIND[key][0];
-        const b = mk("button", animKind === key ? "active" : "", label + (t[field] ? " •" : ""));
+        const b = mk("button", animKind === key ? "active" : "", label + (t[KIND[key][0]] ? " •" : ""));
         b.type = "button";
         b.addEventListener("click", () => { animKind = key; renderInspector(); });
         sub.appendChild(b);
@@ -4867,47 +4838,35 @@
         const b = mk("button", "anim-tile" + ((t[field] || "none") === id ? " selected" : ""));
         b.type = "button";
         b.title = label;
-        if (id !== "none") {
-          const cv = document.createElement("canvas");
-          cv.dataset.anim = id;
-          b.appendChild(cv);
-        } else b.appendChild(mk("span", "anim-none", "None"));
+        if (id !== "none") { const cv = document.createElement("canvas"); cv.dataset.anim = id; b.appendChild(cv); }
+        else b.appendChild(mk("span", "anim-none", "None"));
         b.appendChild(mk("span", "anim-name", label));
         b.addEventListener("click", () => {
           if (id === "none") delete t[field];
           else {
             t[field] = id;
-            // a fresh pick starts at the length that suits it, unless one was set by hand
             const lenKey = animKind === "in" ? "animInLen" : "animOutLen";
             if (animKind !== "loop" && !t[lenKey + "Set"]) t[lenKey] = lib.lengthFor(id);
           }
-          commit();
-          renderInspector();
-          syncOverlays();
+          redo();
           if (id !== "none") previewTextAnim(t, animKind === "out" ? "out" : "in");
         });
         grid.appendChild(b);
       });
       ins.appendChild(grid);
-      /* How long it takes, CapCut's duration bar: In and Out each have their
-         own, up to the text's whole time on screen (half each when both
-         are on); a loop has a speed instead. Changes play straight away. */
       if (animKind !== "loop") {
         const lenKey = animKind === "in" ? "animInLen" : "animOutLen";
         const max = Math.max(0.2, Math.min(5, t.animIn && t.animOut ? t.dur / 2 : t.dur));
         const cur = clamp(t[lenKey] || t.animLen || 0.5, 0.1, max);
-        ins.appendChild(group(animKind === "in" ? "In length" : "Out length", slider(0.1, max, 0.05, cur,
-          (v) => { t[lenKey] = v; t[lenKey + "Set"] = true; },
-          () => { save(); previewTextAnim(t, animKind); }, (v) => v.toFixed(2) + "s")));
+        ins.appendChild(group("Duration", slider(0.1, max, 0.05, cur, (v) => { t[lenKey] = v; t[lenKey + "Set"] = true; }, () => { save(); previewTextAnim(t, animKind); }, (v) => v.toFixed(1) + "s")));
       } else {
-        ins.appendChild(group("Loop speed", slider(0.25, 3, 0.05, t.animLoopSpeed || 1,
-          (v) => { t.animLoopSpeed = v; syncOverlays(); }, save, (v) => v.toFixed(2) + "×")));
+        ins.appendChild(group("Speed", slider(0.25, 3, 0.05, t.animLoopSpeed || 1, (v) => { t.animLoopSpeed = v; syncOverlays(); }, save, (v) => v.toFixed(2) + "×")));
       }
       animateAnimTiles(t, animKind);
     }
 
     if (textTab === "place") {
-      ins.appendChild(mk("span", "ins-meta", "Drag the text on the picture to move it. Two fingers pinch it bigger or smaller and turn it."));
+      ins.appendChild(mk("p", "panel-note", "Drag it on the picture to move it. Two fingers make it bigger or smaller and turn it."));
       const seg = mk("div", "ins-seg");
       ["top", "center", "bottom"].forEach((p) => {
         const b = mk("button", t.pos === p && t.y == null ? "active" : "", p[0].toUpperCase() + p.slice(1));
@@ -4919,11 +4878,10 @@
       ins.appendChild(group("Across", slider(0, 1, 0.01, t.x != null ? t.x : 0.5, (v) => { t.x = v; live(); }, save, pct)));
       ins.appendChild(group("Down", slider(0, 1, 0.01, t.y != null ? t.y : L.cy, (v) => { t.y = v; live(); }, save, pct)));
       ins.appendChild(group("Rotate", slider(-180, 180, 1, k.rotate, (v) => { t.rotate = v; live(); }, save, (v) => v + "°")));
-      ins.appendChild(group("Curve", slider(-100, 100, 1, k.curve, (v) => { t.curve = v; live(); }, save, (v) => String(v))));
+      if (!sticker) ins.appendChild(group("Curve", slider(-100, 100, 1, k.curve, (v) => { t.curve = v; live(); }, save, (v) => String(v))));
     }
-
-    ins.appendChild(closeBtn);
   }
+
 
   /* ═══════════ PLAYBACK ENGINE ═══════════ */
 
@@ -5004,6 +4962,57 @@
      fingers pinch it bigger or smaller and turn it (snapping level within a
      few degrees). Hits come from where drawHeading last drew each text. */
   let textGestureUsed = false;
+
+  /* ─── The bin (Instagram's) ───
+     While a text, sticker or overlay is dragged on the picture, a bin sits
+     at the bottom of the picture. Over it, the bin grows and the item fades
+     as if going in; nothing is deleted until the finger lets go, and then
+     only after "Delete this?" unless the person said not to ask again.
+     Both can be switched off in Settings. */
+  const BIN = (() => {
+    const base = { on: true, ask: true };
+    try { return Object.assign(base, JSON.parse(localStorage.getItem("vclyps-bin") || "{}")); } catch (e) { return base; }
+  })();
+  const saveBin = () => { try { localStorage.setItem("vclyps-bin", JSON.stringify(BIN)); } catch (e) {} };
+  var binHover = null;   // the key of the thing over the bin right now (drawn faded); var: read while drawing from the start
+  function binShow(on, box) {
+    const bin = $("trashBin");
+    bin.classList.toggle("hidden", !on);
+    if (on && box) { bin.style.left = box.x + box.w / 2 + "px"; bin.style.top = box.y + box.h - Math.min(76, box.h * 0.16) + "px"; }
+    if (!on) bin.classList.remove("over");
+  }
+  function binOver(p, box) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h - Math.min(76, box.h * 0.16);
+    return Math.hypot(p.x - cx, p.y - cy) < Math.max(44, box.w * 0.14) || p.y > box.y + box.h * 0.93;
+  }
+  // after the drop: ask, then delete (or put it back where it was)
+  function binDrop(it, putBack) {
+    const what = it.kind === "broll" ? "overlay" : it.item.sticker ? "sticker" : "text";
+    const go = () => {
+      S.sel = { type: it.kind, id: it.item.id };
+      deleteSelection();
+      buzz("medium");
+      toast("Deleted. Undo brings it back");
+    };
+    if (!BIN.ask) { go(); return; }
+    const box = $("binConfirm");
+    $("binQ").textContent = "Delete this " + what + "?";
+    box.classList.remove("hidden");
+    const close = () => { box.classList.add("hidden"); $("binDelete").onclick = $("binCancel").onclick = $("binNever").onclick = null; };
+    $("binDelete").onclick = () => { close(); go(); };
+    $("binNever").onclick = () => { BIN.ask = false; saveBin(); syncBinSettings(); close(); go(); };
+    $("binCancel").onclick = () => { close(); putBack(); };
+    setTimeout(() => $("binDelete").focus(), 30);
+  }
+  function syncBinSettings() {
+    document.querySelectorAll("#binSeg button").forEach((b) => b.classList.toggle("active", (b.dataset.b === "1") === BIN.on));
+    document.querySelectorAll("#binAskSeg button").forEach((b) => b.classList.toggle("active", (b.dataset.a === "1") === BIN.ask));
+  }
+  (function wireBinSettings() {
+    document.querySelectorAll("#binSeg button").forEach((b) => b.addEventListener("click", () => { BIN.on = b.dataset.b === "1"; saveBin(); syncBinSettings(); }));
+    document.querySelectorAll("#binAskSeg button").forEach((b) => b.addEventListener("click", () => { BIN.ask = b.dataset.a === "1"; saveBin(); syncBinSettings(); }));
+    syncBinSettings();
+  })();
 
   /* Alignment while a text is dragged, CapCut's guides: its centre lands on
      the picture's centre lines, its edges on the safe margins (5% in from
@@ -5150,7 +5159,7 @@
           renderInspector();
           syncOverlays();
         }
-        g = { it: it, box: pictureBox(), moved: false };
+        g = { it: it, box: pictureBox(), moved: false, start: { x: it.x(), y: it.y() } };
         guideKey = "";
       }
       pts.set(e.pointerId, p);
@@ -5177,6 +5186,15 @@
         if (!p0) return;
         const al = alignText(it.key, g.x0 + (p.x - p0.x) / box.w, g.y0 + (p.y - p0.y) / box.h, box);
         it.setXY(clamp(al.x, 0, 1), clamp(al.y, 0, 1));
+        // the bin: shown while dragging, "over" when the finger reaches it
+        if (BIN.on) {
+          binShow(true, box);
+          const over = binOver(p, box);
+          if (over && binHover !== it.key) buzz("light");
+          binHover = over ? it.key : null;
+          $("trashBin").classList.toggle("over", over);
+          if (over) textGuides = null;
+        }
       }
       g.moved = true;
       syncOverlays();
@@ -5185,6 +5203,18 @@
       if (!g || !pts.has(e.pointerId)) return;
       pts.delete(e.pointerId);
       if (pts.size) { startFrom(); return; }   // one finger lifted from a pinch: carry on dragging with the other
+      const dropped = binHover === g.it.key;
+      binHover = null;
+      binShow(false);
+      if (dropped) {
+        // into the bin: put it back where it started if they change their mind
+        const it = g.it, x0 = g.start.x, y0 = g.start.y;
+        g = null;
+        textGuides = null;
+        syncOverlays();
+        binDrop(it, () => { it.setXY(x0, y0); syncOverlays(); });
+        return;
+      }
       if (g.moved) {
         commit();
         recordEdit(g.it.kind === "text" ? "text-move" : "overlay-move", {});
@@ -5615,7 +5645,9 @@
     on.forEach((t) => {
       if (textStyleOf(t) !== "heading") return;
       if (karaoke && t.cap) return;   // word-timed captions own the caption layer: no doubling
-      drawHeading(ctx, t, f, hits, time);
+      // over the bin: drawn faded, as if already going in
+      if (binHover === t.id) { ctx.save(); ctx.globalAlpha *= 0.35; drawHeading(ctx, t, f, hits, time); ctx.restore(); }
+      else drawHeading(ctx, t, f, hits, time);
     });
   }
 
@@ -6742,7 +6774,7 @@
     if (!src || !src.w || !src.h) return;
     const g = brollGeom(b, { x: 0, y: 0, w: W, h: H });
     ctx.save();
-    ctx.globalAlpha = clamp(b.opacity == null ? 1 : b.opacity, 0, 1);
+    ctx.globalAlpha = clamp(b.opacity == null ? 1 : b.opacity, 0, 1) * (binHover === "b" + b.id ? 0.35 : 1);
     if (b.blend && b.blend !== "normal") ctx.globalCompositeOperation = b.blend;
     ctx.translate(g.cx, g.cy);
     if (g.rot) ctx.rotate((g.rot * Math.PI) / 180);
@@ -9927,4 +9959,5 @@
     booting = false;
   }
   requestAnimationFrame((ts) => { lastTs = ts; requestAnimationFrame(loop); });
+  renderInspector();   // the bottom bar's main tools from the start
 })();
