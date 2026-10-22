@@ -2883,7 +2883,7 @@
       }
       tel.addEventListener("pointerdown", (e) => {
         if (e.target.classList.contains("handle")) return;
-        holdToDrag(e, (ev) => startTextDrag(ev, t));
+        holdToDrag(e, (ev) => startTextDrag(ev, t, tel));
       });
       tt.appendChild(tel);
     });
@@ -3071,19 +3071,26 @@
   }
 
   /* text drag / select */
-  function startTextDrag(e, t) {
+  function startTextDrag(e, t, el) {
     e.preventDefault();
     const startX = e.clientX;
     const oStart = t.start;
     let moved = false;
     const sc = $("tlScroll"), s0 = sc.scrollLeft;
     let lastX = startX;
+    // keep the finger on this element for the whole drag
+    try { if (el && el.setPointerCapture && e.pointerId != null) el.setPointerCapture(e.pointerId); } catch (err) {}
+    /* Only the dragged text moves while the finger does; the timeline is
+       redrawn once, on release. Redrawing on every move took the element
+       out from under the finger, and a phone then scrolled instead. */
     const apply = () => {
       if (!moved) return;
       const dx = lastX - startX + (sc.scrollLeft - s0);
       const lim = Math.max(0, total() - 0.3);
       t.start = clamp(snapSpan(clamp(oStart + dx / S.pps, 0, lim), t.dur, t), 0, lim);
-      renderTimeline();
+      if (el && el.isConnected) { el.style.left = t.start * S.pps + "px"; el.classList.add("dragging"); }
+      else renderTimeline();
+      syncOverlays();
     };
     const edge = edgeScroller(apply);
 
@@ -3097,6 +3104,7 @@
       window.removeEventListener("pointerup", up);
       edge.stop();
       hideSnap();
+      window.removeEventListener("pointercancel", up);
       if (moved) commit();
       S.sel = { type: "text", id: t.id };
       renderTimeline();
@@ -3104,6 +3112,7 @@
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);   // whatever happens, the text is put down where it is
   }
 
   /* scrub on ruler / empty track */
@@ -3208,9 +3217,13 @@
        · with a mouse, the wheel scrolls the timeline sideways and Ctrl or Cmd
          with the wheel (or a trackpad pinch) zooms it. */
   let touchLocked = false, pinching = false;
-  $("tlScroll").addEventListener("touchmove", (e) => {
+  /* On the document, not the timeline: a touch keeps reporting to the
+     element it started on even after a redraw has taken that element out of
+     the page, and from there it no longer bubbles up to the timeline. That
+     is how dragging a text stopped dead on phones until 0.31.1. */
+  document.addEventListener("touchmove", (e) => {
     if (touchLocked || pinching) e.preventDefault();
-  }, { passive: false });
+  }, { passive: false, capture: true });
 
   (function pinchToZoom() {
     const sc = $("tlScroll");

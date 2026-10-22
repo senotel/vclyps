@@ -2696,3 +2696,4 @@ body.dark .uclip { color: #7fb8e0; }
 .anim-tile.selected { border-color: var(--acc); color: var(--text); }
 /* the music clip moves and trims like the others: a swipe still scrolls the timeline, a hold picks it up */
 .mclip { touch-action: pan-x; cursor: grab; }
+.tclip.dragging { opacity: 0.8; z-index: 8; cursor: grabbing; }

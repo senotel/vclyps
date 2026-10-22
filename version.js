@@ -59,9 +59,10 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.31.0";
+  var VERSION = "0.31.1";
   var RELEASED = "2026-10-22";
-  var NOTES = "99 text animations: 40 ways in, 34 ways out and 25 loops, many of them " +
+  var NOTES = "Texts move on the timeline on phones again: hold one, then drag. " +
+              "0.31.0: 99 text animations: 40 ways in, 34 ways out and 25 loops, many of them " +
               "letter by letter or word by word, each shown moving in its own preview. " +
               "Lines show when a text lines up with the middle, the edges or another text. " +
               "The music moves and trims like any clip, and texts stretch from their edges " +
