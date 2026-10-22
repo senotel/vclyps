@@ -503,7 +503,7 @@
         <span class="tl-hint" id="tlHint">Tap a clip to edit it · drag to reorder · pull the edges to trim</span>
         <div class="tl-zoom" data-min="2">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="range" id="zoomSlider" min="4" max="160" value="24" aria-label="Timeline zoom" />
+          <input type="range" id="zoomSlider" min="4" max="160" value="40" aria-label="Timeline zoom" />
         </div>
       </div>
       <div class="tl-scroll" id="tlScroll">
@@ -524,6 +524,8 @@
           <div class="track track-audio" id="audioTrack"></div>
           <div class="track track-music" id="musicTrack"></div>
           <div class="playhead" id="playhead"></div>
+          <!-- shows where a dragged edge has snapped to (showSnap) -->
+          <div class="snap-line hidden" id="snapLine"></div>
         </div>
       </div>
     </div>
@@ -540,6 +542,10 @@
       <img id="pi" class="hidden" alt="" />
       <!-- split screen and screen-and-face layouts, drawn from #pv (drawPreviewLayout) -->
       <canvas class="layout-canvas hidden" id="layoutCanvas"></canvas>
+      <!-- Adjust: warmth and vignette over the clip's picture, under b-roll
+           and text, drawn the same way in the export (adjustVeils) -->
+      <div class="adj-veil hidden" id="adjWarm"></div>
+      <div class="adj-veil hidden" id="adjVig"></div>
       <!-- B-roll sits OVER the footage rather than replacing it, so the speaker
            keeps talking underneath. Always muted — two audio sources fighting is
            never what you want. -->
@@ -590,6 +596,29 @@
          generates for soundboard.html — no files, nothing downloaded. Preview
          plays it where you stand; Add drops it on the audio track at the
          playhead. -->
+    <!-- EXPORT SETTINGS: CapCut's export screen. Remembered on this device. -->
+    <div class="sheet hidden" id="exportSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Export</h3>
+        <span class="sheet-sub" id="exSize"></span>
+      </div>
+      <div class="cap-field">
+        <label>Resolution</label>
+        <div class="ins-seg cap-seg" id="exRes"><button data-v="720">720p</button><button data-v="1080">1080p</button><button data-v="1440">2K</button></div>
+      </div>
+      <div class="cap-field">
+        <label>Frame rate</label>
+        <div class="ins-seg cap-seg" id="exFps"><button data-v="24">24</button><button data-v="25">25</button><button data-v="30">30</button><button data-v="50">50</button><button data-v="60">60</button></div>
+      </div>
+      <div class="cap-field">
+        <label>Quality</label>
+        <div class="ins-seg cap-seg" id="exQ"><button data-v="low">Smaller file</button><button data-v="rec">Recommended</button><button data-v="high">Higher</button></div>
+      </div>
+      <p class="set-note" id="exNote"></p>
+      <button class="primary-btn" id="exGo" type="button">Export</button>
+    </div>
+
     <div class="sheet hidden" id="soundSheet">
       <div class="sheet-grip"></div>
       <div class="sheet-head">
@@ -774,7 +803,7 @@
         <div class="cap-field">
           <label for="capFont">Font</label>
           <div class="cap-inline">
-            <select id="capFont"></select>
+            <button class="font-btn" id="capFont" type="button"><span class="font-btn-name">The style's own font</span><span class="font-btn-more">132 fonts</span></button>
             <button class="secondary-btn" id="capFontUpload" type="button">Upload a font</button>
             <input type="file" id="capFontFile" accept=".ttf,.otf,.woff,.woff2,font/*" hidden />
           </div>
@@ -794,6 +823,24 @@
             <input type="range" id="capPos" min="10" max="90" step="1" value="72" />
           </label>
           <button class="text-btn" id="capResetPlace" type="button">Reset size and position</button>
+        </div>
+        <!-- LOOK: change any part of the style without picking another one.
+             Each starts at the style's own and only what is touched changes. -->
+        <div class="cap-field cap-look" id="capLook">
+          <label>Make it yours</label>
+          <div class="look-row"><span>Text</span><input type="color" id="capFill" aria-label="Text colour" /><button class="text-btn" data-reset="fill" type="button">Style's</button></div>
+          <div class="look-row"><span>Word being said</span><input type="color" id="capActive" aria-label="Colour of the word being said" /><button class="text-btn" data-reset="active" type="button">Style's</button></div>
+          <div class="look-row"><span>Outline</span><input type="color" id="capStroke" aria-label="Outline colour" /><input type="range" id="capStrokeW" min="0" max="30" step="1" aria-label="Outline thickness" /><button class="text-btn" data-reset="stroke" type="button">Style's</button></div>
+          <div class="look-row"><span>Background</span>
+            <div class="ins-seg cap-seg" id="capBox"><button data-b="">Style's</button><button data-b="none">None</button><button data-b="line">Behind it</button><button data-b="word">Each word</button><button data-b="active">Said word</button></div>
+            <input type="color" id="capBoxColor" aria-label="Background colour" />
+          </div>
+          <div class="look-row"><span>Shadow</span><div class="ins-seg cap-seg" id="capShadow"><button data-s="">Style's</button><button data-s="on">On</button><button data-s="off">Off</button></div></div>
+          <div class="look-row"><span>Letters</span><div class="ins-seg cap-seg" id="capCase"><button data-k="">Style's</button><button data-k="upper">AA</button><button data-k="none">Aa</button><button data-k="lower">aa</button></div></div>
+          <div class="look-row"><span>Slant</span><div class="ins-seg cap-seg" id="capSlant"><button data-i="">Style's</button><button data-i="off">Upright</button><button data-i="on">Italic</button></div></div>
+          <div class="look-row"><span>Spacing</span><input type="range" id="capTrack" min="-5" max="30" step="1" aria-label="Letter spacing" /><output id="capTrackOut"></output></div>
+          <div class="look-row"><span>Movement</span><select id="capAnim" aria-label="How the words move"></select></div>
+          <button class="text-btn" id="capLookReset" type="button">Back to the style's look</button>
         </div>
       </div>
 
@@ -947,6 +994,7 @@
   <script defer src="version.js"></script>
   <script defer src="platform.js"></script>
   <script defer src="emoji.js"></script>
+  <script defer src="fonts.js"></script>
   <script defer src="caption-tools.js"></script>
   <script defer src="caption-styles.js"></script>
   <script defer src="captions.js"></script>

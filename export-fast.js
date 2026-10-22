@@ -50,13 +50,14 @@
   // H.264 profiles from most to least capable; each also tried in software.
   const H264 = ["avc1.640028", "avc1.4d0028", "avc1.42e028"];
   function bitrateFor(w, h) { return Math.round(Math.min(16e6, Math.max(4e6, w * h * 30 * 0.16))); }
+  // a bitrate the caller chose (export settings), or the default for the size
 
-  async function videoConfig(w, h, fps) {
+  async function videoConfig(w, h, fps, bitrate) {
     if (typeof VideoEncoder === "undefined") return null;
     for (const codec of H264) {
       for (const hw of ["prefer-hardware", "no-preference"]) {
         const cfg = {
-          codec: codec, width: w, height: h, framerate: fps, bitrate: bitrateFor(w, h),
+          codec: codec, width: w, height: h, framerate: fps, bitrate: bitrate || bitrateFor(w, h),
           hardwareAcceleration: hw, latencyMode: "quality", avc: { format: "avc" }
         };
         try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg; } catch (e) {}
@@ -75,10 +76,10 @@
   /* Yes only when the whole chain is here: a video encoder for this size, an
      AAC encoder (an MP4 with AAC plays everywhere people post), canvas
      frames, and offline audio. */
-  async function supported(w, h, fps) {
+  async function supported(w, h, fps, bitrate) {
     if (typeof VideoFrame === "undefined" || typeof AudioData === "undefined") return { ok: false, why: "no WebCodecs" };
     if (!(global.OfflineAudioContext || global.webkitOfflineAudioContext)) return { ok: false, why: "no offline audio" };
-    const v = await videoConfig(w, h, fps);
+    const v = await videoConfig(w, h, fps, bitrate);
     if (!v) return { ok: false, why: "no H.264 encoder for " + w + "x" + h };
     const a = await audioConfig();
     if (!a) return { ok: false, why: "no AAC encoder" };
@@ -551,12 +552,12 @@
     return muxerLib;
   }
 
-  /* opts: canvas (drawn by renderFrame), fps, duration (s), audio
+  /* opts: canvas (drawn by renderFrame), fps, bitrate (optional), duration (s), audio
      (AudioBuffer at 48 kHz or null), renderFrame(t) async, onProgress(done,
      total, framesPerSecond), cancelled() → bool. Returns a video/mp4 Blob. */
   async function encode(opts) {
     const W = opts.canvas.width, H = opts.canvas.height, fps = opts.fps || 30;
-    const sup = await supported(W, H, fps);
+    const sup = await supported(W, H, fps, opts.bitrate);
     if (!sup.ok) throw new Error("Fast export is not available here: " + sup.why);
     const lib = await muxer();
     const target = new lib.ArrayBufferTarget();

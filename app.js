@@ -36,7 +36,7 @@
     sel: null,               // {type:'clip'|'text'|'all', id}
     time: 0,
     playing: false,
-    pps: 24,
+    pps: 40,
     userMuted: false,
     seed: 1,
     format: "auto",
@@ -726,6 +726,71 @@
       renderTimeline();
     });
     v.addEventListener("error", () => renderAll());
+    queueFrames(item);
+  }
+
+  /* ─── The frame strip ───
+     CapCut fills each clip on the timeline with pictures from inside it, so
+     you can see where things happen without playing. Up to 60 small square
+     frames per video, taken in the background one video at a time and kept
+     in memory only; the timeline picks the nearest one for each tile. */
+  const frameQueue = [];
+  let framing = false;
+  function queueFrames(item) {
+    if (!item || item.frames || frameQueue.indexOf(item) >= 0) return;
+    frameQueue.push(item);
+    if (!framing) nextFrames();
+  }
+  function nextFrames() {
+    const item = frameQueue.shift();
+    if (!item) { framing = false; return; }
+    framing = true;
+    const v = document.createElement("video");
+    v.preload = "auto";
+    v.muted = true;
+    v.playsInline = true;
+    v.src = item.url;
+    const cnv = document.createElement("canvas");
+    const SZ = 96;
+    cnv.width = SZ; cnv.height = SZ;
+    const ctx = cnv.getContext("2d");
+    const out = [];
+    let times = [], i = 0, lastDraw = 0;
+    const done = () => {
+      v.removeAttribute("src");
+      try { v.load(); } catch (e) {}
+      item.frames = out;
+      renderTimeline();
+      setTimeout(nextFrames, 50);
+    };
+    v.addEventListener("loadedmetadata", () => {
+      const d = isFinite(v.duration) ? v.duration : 0;
+      if (!d) { done(); return; }
+      const n = Math.max(2, Math.min(60, Math.ceil(d)));
+      for (let k = 0; k < n; k++) times.push(Math.min(d - 0.05, (k + 0.5) * d / n));
+      v.currentTime = times[0];
+    });
+    v.addEventListener("seeked", () => {
+      try {
+        const vw = v.videoWidth, vh = v.videoHeight, s = Math.min(vw, vh);
+        ctx.drawImage(v, (vw - s) / 2, (vh - s) / 2, s, s, 0, 0, SZ, SZ);
+        out.push({ t: times[i], url: cnv.toDataURL("image/jpeg", 0.62) });
+      } catch (e) {}
+      i++;
+      // show the strip filling in as it goes, without redrawing on every frame
+      if (performance.now() - lastDraw > 700) { lastDraw = performance.now(); item.frames = out.slice(); renderTimeline(); item.frames = null; }
+      if (i < times.length) v.currentTime = times[i];
+      else done();
+    });
+    v.addEventListener("error", done);
+  }
+  // the strip frame nearest a source time
+  function frameAt(m, t) {
+    const f = m && m.frames;
+    if (!f || !f.length) return m ? m.thumb : null;
+    let best = f[0];
+    f.forEach((x) => { if (Math.abs(x.t - t) < Math.abs(best.t - t)) best = x; });
+    return best.url;
   }
 
   function removeMedia(id) {
@@ -960,6 +1025,102 @@
     renderInspector();
   }
 
+  /* ─── Freeze frame (CapCut's Freeze) ───
+     The picture under the playhead becomes a still that holds for three
+     seconds: the clip is split there and the still goes in between, with
+     the clip's look, adjustments, flip and turn. The still is a real photo
+     in the project, saved on the device like any other. */
+  async function freezeFrame(c) {
+    const info = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+    if (!info || info.clip !== c) { toast("Move the playhead onto this clip, to the moment to freeze"); return; }
+    const m = mediaById(c.mediaId);
+    if (!m || m.type !== "video") return;
+    pause();
+    syncMedia();
+    const target = c.in + info.offset * c.speed;
+    // the preview must be showing exactly that frame before it is copied
+    await new Promise((resolve) => {
+      if (!pv.seeking && Math.abs(pv.currentTime - target) < 0.02 && pv.readyState >= 2) { resolve(); return; }
+      const ok = () => { pv.removeEventListener("seeked", ok); resolve(); };
+      pv.addEventListener("seeked", ok);
+      try { pv.currentTime = target; } catch (e) { resolve(); }
+      setTimeout(ok, 1500);
+    });
+    const vw = pv.videoWidth, vh = pv.videoHeight;
+    if (!vw || !vh) { toast("That frame isn't ready yet. Try again in a moment"); return; }
+    const cnv = document.createElement("canvas");
+    cnv.width = vw; cnv.height = vh;
+    try { cnv.getContext("2d").drawImage(pv, 0, 0, vw, vh); } catch (e) { toast("This video's frames can't be copied"); return; }
+    const blob = await new Promise((r) => cnv.toBlob(r, "image/jpeg", 0.93));
+    if (!blob) { toast("Couldn't make the still"); return; }
+    const base = (c.name || m.name || "clip").slice(0, 40);
+    const file = new File([blob], base + " freeze.jpg", { type: "image/jpeg" });
+    const url = URL.createObjectURL(file);
+    const item = { id: nextId++, url: url, type: "image", name: base + " (freeze)", duration: IMG_DUR, thumb: url, file: file, w: vw, h: vh };
+    S.media.push(item);
+    keepFile(item, file);
+
+    let at = S.clips.indexOf(c);
+    if (info.offset > 0.05 && dispDur(c) - info.offset > 0.05) {
+      const second = Object.assign({}, c, { id: nextId++, in: target });
+      delete second.name;
+      c.out = target;
+      S.clips.splice(at + 1, 0, second);
+      at += 1;
+    } else if (info.offset > 0.05) {
+      at += 1;   // at the very end: the still goes after the clip
+    }
+    const still = {
+      id: nextId++, mediaId: item.id, in: 0, out: 3, speed: 1, volume: 1, muted: true,
+      filter: c.filter, fadeIn: 0, fadeOut: 0, freeze: true
+    };
+    ["adj", "rot", "flipH", "flipV"].forEach((k) => { if (c[k] != null) still[k] = k === "adj" ? Object.assign({}, c[k]) : c[k]; });
+    S.clips.splice(at, 0, still);
+    S.sel = { type: "clip", id: still.id };
+    commit();
+    recordEdit("freeze", { at: Math.round(S.time * 10) / 10 });
+    renderAll();
+    renderTimeline();
+    renderInspector();
+    syncNow();
+    toast("Frozen for 3 seconds. Drag its edge to make it longer");
+  }
+
+  /* ─── Replace (CapCut's Replace) ───
+     A new video or photo takes a clip's place: same spot, same length where
+     the new footage is long enough, same look, adjustments and transition. */
+  function replaceClip(c) {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "video/*,image/*";
+    inp.addEventListener("change", () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      const before = S.media.length;
+      if (!addFiles([f], "library") || S.media.length === before) return;
+      const m = S.media[S.media.length - 1];
+      const keep = dispDur(c);
+      mediaDuration(m).then((d) => {
+        if (!clipById(c.id)) return;
+        c.mediaId = m.id;
+        c.in = 0;
+        if (m.type === "image") { c.out = keep; c.speed = 1; delete c.layout; }
+        else c.out = Math.min(d || keep * c.speed, keep * c.speed);
+        delete c.freeze;
+        delete c.kb;
+        commit();
+        recordEdit("replace", { type: m.type });
+        renderTimeline();
+        renderInspector();
+        syncNow();
+        toast(m.type !== "image" && d && d < keep * c.speed - 0.05
+          ? "Replaced. The new video is shorter, so the clip is too"
+          : "Replaced. Same place, length and look");
+      });
+    });
+    inp.click();
+  }
+
   function addText() {
     if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
     const t = {
@@ -969,7 +1130,10 @@
       dur: 3,
       size: 34,
       color: "#ffffff",
-      pos: "bottom"
+      pos: "center",   // the middle of the picture, where CapCut puts a new text
+      // a new text starts in a text font (fonts.js), never a caption one
+      font: TEXT_NEW_FONT,
+      weight: 700
     };
     S.texts.push(t);
     S.sel = { type: "text", id: t.id };
@@ -2053,7 +2217,35 @@
       swears: [],          // the person's own words to hide
       vocab: [],           // names and terms, spelled their way
       translate: ""        // show the captions in this language
+      ,look: {}            // changes to the style's look: see lookedStyle()
     };
+  }
+
+  /* The style with the person's changes on top ("Make it yours"). Only the
+     fields they touched differ; picking another style clears them. */
+  const CAP_LOOK_KEYS = ["fill", "active", "stroke", "strokeW", "box", "boxColor", "shadow", "case", "italic", "anim", "tracking"];
+  function lookedStyle(st) {
+    const L = S.capOpts.look || {};
+    if (!st || !CAP_LOOK_KEYS.some((k) => L[k] != null)) return st;
+    const o = Object.assign({}, st);
+    if (L.fill) { o.fill = L.fill; delete o.gradient; }
+    if (L.active) o.active = L.active;
+    if (L.stroke) o.stroke = L.stroke;
+    if (L.strokeW != null) { o.strokeW = L.strokeW; if (!o.stroke) o.stroke = L.stroke || "#000000"; }
+    if (L.box === "none") delete o.box;
+    else if (L.box) {
+      const was = st.box || {};
+      o.box = { on: L.box, color: L.boxColor || was.color || "#000000", text: was.text, pad: was.pad || (L.box === "line" ? 0.26 : 0.14), radius: was.radius != null ? was.radius : 0.14, alpha: L.box === "line" ? (was.alpha || 0.8) : was.alpha };
+    } else if (L.boxColor && st.box) o.box = Object.assign({}, st.box, { color: L.boxColor });
+    if (L.shadow === "off") { delete o.shadow; delete o.hard; }
+    else if (L.shadow === "on" && !o.shadow) o.shadow = ["rgba(0,0,0,0.65)", 0.3, 0, 0.04];
+    if (L.case === "upper") { o.upper = true; o.lower = false; }
+    else if (L.case === "lower") { o.lower = true; o.upper = false; }
+    else if (L.case === "none") { o.upper = false; o.lower = false; }
+    if (L.italic === "on") o.italic = true; else if (L.italic === "off") o.italic = false;
+    if (L.anim) o.anim = L.anim;
+    if (L.tracking != null) o.tracking = L.tracking;
+    return o;
   }
 
   const CapT = () => window.SenotelCaptionTools || null;
@@ -2069,7 +2261,7 @@
   function capDrawOpts(box) {
     const o = S.capOpts;
     return {
-      style: o.style, font: o.font || null, scale: o.scale || 1, y: o.y,
+      style: lookedStyle(capStyle()) || o.style, font: o.font || null, scale: o.scale || 1, y: o.y,
       highlight: o.highlight, speakers: o.speakers, emoji: o.emoji,
       censor: o.censor, isBad: o.censor === "off" ? null : capMatcher(o.translate || S.capLang),
       translate: o.translate || null, box: box || null
@@ -2289,6 +2481,7 @@
       b.appendChild(mk("span", "cap-tile-name", st.name));
       b.addEventListener("click", () => {
         S.capOpts.style = st.id;
+        S.capOpts.look = {};   // a new style comes with its own look
         // words at a time follows the new style unless the person set it
         capChanged(S.capOpts.words ? "" : "remap");
         if (!S.captions.length) capSay("Style set. Tap Add captions to caption your video", true);
@@ -2318,25 +2511,55 @@
     sorted.forEach((l) => { add($("capLang"), l[0], l[1]); add($("capTr"), l[0], l[1]); });
   }
 
+  /* The caption font button shows the chosen font in that font, and opens
+     the caption library (fonts.js), with your own fonts at the top. */
   function fillFontSelect() {
-    const T = CapT();
-    const sel = $("capFont");
-    sel.innerHTML = "";
-    const add = (parent, v, label) => { const o = document.createElement("option"); o.value = v; o.textContent = label; parent.appendChild(o); };
-    add(sel, "", "The style's own font");
-    if (!T) return;
-    const g1 = document.createElement("optgroup");
-    g1.label = "Caption fonts";
-    T.FONTS.map((f) => f[0]).sort().forEach((f) => add(g1, f, f));
-    sel.appendChild(g1);
-    const mine = T.customFonts();
-    if (mine.length) {
-      const g2 = document.createElement("optgroup");
-      g2.label = "Your fonts";
-      mine.forEach((f) => add(g2, f, f));
-      sel.appendChild(g2);
-    }
-    sel.value = S.capOpts.font || "";
+    const btn = $("capFont"), SF = window.SenotelFonts;
+    const name = S.capOpts.font || "";
+    const label = btn.querySelector(".font-btn-name");
+    label.textContent = name || "The style's own font";
+    label.style.fontFamily = name ? "'" + name + "', system-ui, sans-serif" : "";
+    if (name && SF) SF.load(name, 700);
+    btn.querySelector(".font-btn-more").textContent = SF ? SF.CAPTION.length + " fonts" : "";
+  }
+  function openCaptionFonts() {
+    const SF = window.SenotelFonts, T = CapT();
+    if (!SF) return;
+    const extra = [{ value: "", label: "The style's own font", note: "Each style comes with its own" }];
+    (T ? T.customFonts() : []).forEach((f) => extra.push({ value: f, label: f, family: f, note: "Your font, kept on this device" }));
+    SF.openPicker({
+      kind: "caption", value: S.capOpts.font || "", extra: extra,
+      onPick: (v) => { S.capOpts.font = v; fillFontSelect(); capChanged(); filterTiles(); }
+    });
+  }
+
+  // "Make it yours": the controls show the style's own values until changed
+  const CAP_ANIMS = [["", "The style's own"], ["none", "Still"], ["pop", "Pop"], ["bounce", "Bounce"], ["zoom", "Zoom in"], ["fade", "Fade"],
+    ["slide", "Slide up"], ["rise", "Rise"], ["drop", "Drop"], ["shake", "Shake"], ["swing", "Swing"], ["wave", "Wave"], ["flash", "Flash"],
+    ["reveal", "Word by word"], ["sweep", "Karaoke sweep"], ["type", "Typewriter"], ["single", "One word at a time"]];
+  function renderCapLook() {
+    const st = capStyle(), L = S.capOpts.look || {}, eff = lookedStyle(st) || {};
+    const hex = (c, d) => (/^#[0-9a-f]{6}$/i.test(c || "") ? c : d);
+    $("capFill").value = hex(eff.fill || (eff.gradient && eff.gradient[0]), "#ffffff");
+    $("capActive").value = hex(eff.active, "#ffe600");
+    $("capStroke").value = hex(eff.stroke, "#000000");
+    $("capStrokeW").value = Math.round((eff.stroke ? eff.strokeW || 0 : 0) * 100);
+    $("capBoxColor").value = hex(eff.box && eff.box.color, "#000000");
+    document.querySelectorAll("#capBox button").forEach((b) => b.classList.toggle("active", b.dataset.b === (L.box || "")));
+    document.querySelectorAll("#capShadow button").forEach((b) => b.classList.toggle("active", b.dataset.s === (L.shadow || "")));
+    document.querySelectorAll("#capCase button").forEach((b) => b.classList.toggle("active", b.dataset.k === (L.case || "")));
+    document.querySelectorAll("#capSlant button").forEach((b) => b.classList.toggle("active", b.dataset.i === (L.italic || "")));
+    $("capTrack").value = Math.round((eff.tracking || 0) * 100);
+    $("capTrackOut").textContent = L.tracking != null ? Math.round(L.tracking * 100) + "" : "Style's";
+    const sel = $("capAnim");
+    if (!sel.options.length) CAP_ANIMS.forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; sel.appendChild(o); });
+    sel.value = L.anim || "";
+  }
+  function setCapLook(k, v, final) {
+    S.capOpts.look = Object.assign({}, S.capOpts.look || {});
+    if (v == null || v === "") delete S.capOpts.look[k]; else S.capOpts.look[k] = v;
+    if (final) capChanged(); else syncOverlays();
+    renderCapLook();
   }
 
   function renderCaptionSheet() {
@@ -2345,16 +2568,13 @@
     if (T) T.loadFontCss();
     buildTiles();
     fillLangSelects();
-    if (!$("capFont").options.length || $("capFont").dataset.custom !== String(T ? T.customFonts().length : 0)) {
-      fillFontSelect();
-      $("capFont").dataset.custom = String(T ? T.customFonts().length : 0);
-    }
+    fillFontSelect();
+    renderCapLook();
     const has = S.captions.length > 0;
     $("capMake").textContent = has ? "Update captions" : "Add captions";
     $("capRemove").classList.toggle("hidden", !has);
     $("capHeard").textContent = has && S.capLang ? "Heard in " + langName(S.capLang) : "";
     document.querySelectorAll("#capGrid .cap-tile").forEach((b) => b.classList.toggle("selected", b.dataset.style === o.style));
-    $("capFont").value = o.font || "";
     document.querySelectorAll("#capWords button").forEach((b) => b.classList.toggle("active", +b.dataset.w === (o.words || 0)));
     const st = capStyle();
     $("capSize").value = Math.round((o.scale || 1) * 100);
@@ -2416,11 +2636,27 @@
         if (which === "style") { filterTiles(); animateTiles(); }
       });
     });
-    $("capFont").addEventListener("change", () => {
-      S.capOpts.font = $("capFont").value;
-      capChanged();
-      filterTiles();
+    $("capFont").addEventListener("click", openCaptionFonts);
+    // Make it yours: colours apply live and are saved when let go
+    [["capFill", "fill"], ["capActive", "active"], ["capStroke", "stroke"], ["capBoxColor", "boxColor"]].forEach(([id, k]) => {
+      $(id).addEventListener("input", () => setCapLook(k, $(id).value, false));
+      $(id).addEventListener("change", () => setCapLook(k, $(id).value, true));
     });
+    $("capStrokeW").addEventListener("input", () => setCapLook("strokeW", +$("capStrokeW").value / 100, false));
+    $("capStrokeW").addEventListener("change", () => setCapLook("strokeW", +$("capStrokeW").value / 100, true));
+    $("capTrack").addEventListener("input", () => setCapLook("tracking", +$("capTrack").value / 100, false));
+    $("capTrack").addEventListener("change", () => setCapLook("tracking", +$("capTrack").value / 100, true));
+    document.querySelectorAll("#capLook [data-reset]").forEach((b) => {
+      b.addEventListener("click", () => {
+        if (b.dataset.reset === "stroke") { S.capOpts.look = Object.assign({}, S.capOpts.look); delete S.capOpts.look.strokeW; }
+        setCapLook(b.dataset.reset, null, true);
+      });
+    });
+    [["capBox", "box", "b"], ["capShadow", "shadow", "s"], ["capCase", "case", "k"], ["capSlant", "italic", "i"]].forEach(([id, k, d]) => {
+      document.querySelectorAll("#" + id + " button").forEach((b) => b.addEventListener("click", () => setCapLook(k, b.dataset[d], true)));
+    });
+    $("capAnim").addEventListener("change", () => setCapLook("anim", $("capAnim").value, true));
+    $("capLookReset").addEventListener("click", () => { S.capOpts.look = {}; capChanged(); });
     $("capFontUpload").addEventListener("click", () => $("capFontFile").click());
     $("capFontFile").addEventListener("change", async () => {
       const f = $("capFontFile").files && $("capFontFile").files[0];
@@ -2527,6 +2763,7 @@
   /* ═══════════ TIMELINE RENDER & INTERACTION ═══════════ */
 
   const PADX = 20;
+  const CLIP_TILE = 56;   // width of one frame in the strip; about the main track's height
 
   function renderTimeline() {
     const vt = $("videoTrack"), tt = $("textTrack"), ruler = $("ruler");
@@ -2542,17 +2779,21 @@
        scroll past both ends of your edit. */
     $("tlInner").style.padding = "0 " + padL() + "px";
 
-    // ruler ticks
+    /* The ruler, as CapCut spaces it: a time every so often, never closer
+       than about 70px apart, and a single dot halfway between. No tick
+       forest, nothing to read that isn't needed. */
     ruler.innerHTML = "";
-    const step = S.pps >= 40 ? 1 : S.pps >= 20 ? 2 : S.pps >= 12 ? 5 : 10;
+    const step = [1, 2, 5, 10, 15, 30, 60, 120, 300].find((s) => s * S.pps >= 70) || 600;
     for (let s = 0; s <= W / S.pps; s += step) {
-      const tick = document.createElement("div");
-      tick.className = "rt";
-      tick.style.left = s * S.pps + "px";
       const lb = document.createElement("span");
+      lb.className = "rt";
+      lb.style.left = s * S.pps + "px";
       lb.textContent = fmt(s);
-      tick.appendChild(lb);
-      ruler.appendChild(tick);
+      ruler.appendChild(lb);
+      const dot = document.createElement("i");
+      dot.className = "rdot";
+      dot.style.left = (s + step / 2) * S.pps + "px";
+      ruler.appendChild(dot);
     }
 
     // video clips
@@ -2564,20 +2805,34 @@
       cel.className = "clip" + (S.sel && S.sel.type === "clip" && S.sel.id === c.id ? " sel" : "");
       cel.style.left = x + "px";
       cel.style.width = w + "px";
-      if (m && m.thumb) {
+      /* Pictures from inside the clip, edge to edge (the frame strip), the
+         way CapCut shows footage. Only what helps is written on top: a name
+         you gave the clip, and its length while it is selected. */
+      const strip = mk("div", "cstrip");
+      const tile = CLIP_TILE;
+      const n = Math.min(240, Math.ceil(w / tile));
+      for (let i = 0; i < n; i++) {
+        const src = m && m.type === "video" ? frameAt(m, c.in + ((i + 0.5) * tile / S.pps) * c.speed) : m && m.thumb;
         const img = document.createElement("img");
-        img.src = m.thumb;
-        cel.appendChild(img);
+        img.draggable = false;
+        img.alt = "";
+        if (src) img.src = src;
+        strip.appendChild(img);
       }
-      const nm = document.createElement("span");
-      nm.className = "cname";
-      // a clip can be given its own name (inspector → Name); otherwise its file's
-      nm.textContent = c.name || (m ? m.name : "clip");
-      cel.appendChild(nm);
-      const du = document.createElement("span");
-      du.className = "cdur";
-      du.textContent = dispDur(c).toFixed(1) + "s";
-      cel.appendChild(du);
+      cel.appendChild(strip);
+      if (c.name) {
+        const nm = document.createElement("span");
+        nm.className = "cname";
+        nm.textContent = c.name;
+        cel.appendChild(nm);
+      }
+      if (c.freeze) cel.appendChild(mk("span", "cbadge", "Freeze"));
+      if (S.sel && S.sel.type === "clip" && S.sel.id === c.id) {
+        const du = document.createElement("span");
+        du.className = "cdur";
+        du.textContent = dispDur(c).toFixed(1) + "s";
+        cel.appendChild(du);
+      }
 
       if (S.sel && S.sel.type === "clip" && S.sel.id === c.id) {
         const hl = document.createElement("div");
@@ -2624,6 +2879,21 @@
 
     // a phone folds away the lanes with nothing on them (styles.css)
     [ot, tt, ut, at, mt].forEach((t) => t.classList.toggle("empty", !t.children.length));
+    /* ...except that, as in CapCut, an empty text lane and an empty sound
+       lane offer to be filled: "+ Add text", "+ Add audio", along the edit. */
+    const offer = (track, label, go) => {
+      const b = mk("button", "lane-add", "+ " + label);
+      b.type = "button";
+      b.style.width = Math.max(total() * S.pps, 200) + "px";
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); go(); });
+      track.appendChild(b);
+      track.classList.add("offer");
+    };
+    [tt, ut].forEach((t) => t.classList.remove("offer"));
+    if (S.clips.length) {
+      if (!S.texts.length) offer(tt, "Add text", addText);
+      if (!S.audio.length && !S.sfx.length && !S.music) offer(ut, "Add audio", () => $("tbAudio").click());
+    }
     updatePlayheadUI();
   }
 
@@ -2751,16 +3021,29 @@
     const m = mediaById(clip.mediaId);
     const maxOut = m && m.type === "video" && m.duration ? m.duration : 120;
     const oIn = clip.in, oOut = clip.out;
+    /* The end of a trimmed clip snaps to the playhead and to the texts,
+       overlays and sounds above it. Not to the cuts after it: those move
+       with the trim, so they are no place to aim for. */
+    const at = clipStartOf(clip);
+    const marks = [S.time];
+    S.texts.forEach((t) => marks.push(t.start, t.start + t.dur));
+    S.broll.forEach((b) => marks.push(b.start, b.start + b.dur));
+    S.audio.forEach((a) => marks.push(a.start, a.start + audioDur(a)));
+    S.sfx.forEach((x) => marks.push(x.start, x.start + sfxDur(x.name)));
 
     const move = (ev) => {
       const dSrc = ((ev.clientX - startX) / S.pps) * clip.speed;
       if (side === "l") clip.in = clamp(oIn + dSrc, 0, clip.out - 0.15);
-      else clip.out = clamp(oOut + dSrc, clip.in + 0.15, maxOut);
+      else {
+        const end = snapPoint(at + (oOut + dSrc - clip.in) / clip.speed, null, null, marks);
+        clip.out = clamp(clip.in + (end - at) * clip.speed, clip.in + 0.15, maxOut);
+      }
       renderTimeline();
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      hideSnap();
       S.time = clamp(S.time, 0, total());
       commit();
       recordEdit("trim", {
@@ -2785,7 +3068,8 @@
     const apply = () => {
       if (!moved) return;
       const dx = lastX - startX + (sc.scrollLeft - s0);
-      t.start = clamp(oStart + dx / S.pps, 0, Math.max(0, total() - 0.3));
+      const lim = Math.max(0, total() - 0.3);
+      t.start = clamp(snapSpan(clamp(oStart + dx / S.pps, 0, lim), t.dur, t), 0, lim);
       renderTimeline();
     };
     const edge = edgeScroller(apply);
@@ -2799,6 +3083,7 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       edge.stop();
+      hideSnap();
       if (moved) commit();
       S.sel = { type: "text", id: t.id };
       renderTimeline();
@@ -2837,7 +3122,7 @@
     let down = false, x0 = 0, s0 = 0, moved = false;
     let touch = false;
     sc.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".clip, .tclip, .oclip, .aclip, .uclip, .mclip, .clip-add, .handle, .ruler")) return;
+      if (e.target.closest(".clip, .tclip, .oclip, .aclip, .uclip, .mclip, .clip-add, .lane-add, .handle, .ruler")) return;
       down = true; moved = false; x0 = e.clientX; s0 = sc.scrollLeft;
       touch = e.pointerType === "touch";
     });
@@ -2937,7 +3222,7 @@
   /* Double-tap the timeline (double-click with a mouse) to put the zoom back
      to normal, the way CapCut does after a pinch went too far. Only clean
      taps count: a swipe or a hold never does. */
-  const PPS_DEFAULT = 24;
+  const PPS_DEFAULT = 40;   // about CapCut's opening zoom: a time label every 2 seconds
   (function doubleTapToResetZoom() {
     const sc = $("tlScroll");
     let down = null, lastTap = null;
@@ -3247,23 +3532,61 @@
      dragging its feet; moving the one element under the finger and settling up
      once on release is what makes it feel like CapCut. */
 
-  function snapMarks() {
+  /* What an edge can land on: the playhead, every cut, and both ends of
+     every text, overlay and sound, except the thing being moved. */
+  function snapMarks(except) {
     const marks = [S.time, 0];
     let acc = 0;
     S.clips.forEach((c) => { acc += dispDur(c); marks.push(acc); });
+    const span = (list, len) => list.forEach((x) => { if (x !== except) { marks.push(x.start, x.start + len(x)); } });
+    span(S.texts, (t) => t.dur);
+    span(S.broll, (b) => b.dur);
+    span(S.audio, (a) => audioDur(a));
+    span(S.sfx, (x) => sfxDur(x.name));
     return marks;
   }
 
+  /* The snap line. When an edge lands on a mark, a thin line shows where,
+     and a phone gives one short buzz on landing (not on every move), as in
+     CapCut. lastSnap is the mark the latest snap landed on, or null. */
+  let lastSnap = null, shownSnap = null;
+  function showSnap() {
+    const line = $("snapLine");
+    if (lastSnap == null) { line.classList.add("hidden"); shownSnap = null; return; }
+    if (shownSnap == null || Math.abs(shownSnap - lastSnap) > 1e-6) {
+      try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+    }
+    shownSnap = lastSnap;
+    line.style.left = padL() + lastSnap * S.pps + "px";
+    line.classList.remove("hidden");
+  }
+  function hideSnap() { lastSnap = null; showSnap(); }
+
   /* Returns the start time to use, having tried to land either edge on a mark. */
-  function snapSpan(start, span) {
+  function snapSpan(start, span, except) {
     const tol = 8 / S.pps;
     let best = start, bestD = tol;
-    snapMarks().forEach((m) => {
+    lastSnap = null;
+    snapMarks(except).forEach((m) => {
       const dStart = Math.abs(m - start);
-      if (dStart < bestD) { bestD = dStart; best = m; }
+      if (dStart < bestD) { bestD = dStart; best = m; lastSnap = m; }
       const dEnd = Math.abs(m - (start + span));
-      if (dEnd < bestD) { bestD = dEnd; best = m - span; }
+      if (dEnd < bestD) { bestD = dEnd; best = m - span; lastSnap = m; }
     });
+    showSnap();
+    return best;
+  }
+  // One edge on its own (a trim): the time to use for it
+  function snapPoint(t, except, skip, marks) {
+    const tol = 8 / S.pps;
+    let best = t, bestD = tol;
+    lastSnap = null;
+    (marks || snapMarks(except)).forEach((m) => {
+      if (skip != null && Math.abs(m - skip) < 1e-6) return;
+      const d = Math.abs(m - t);
+      if (d < bestD) { bestD = d; best = m; lastSnap = m; }
+    });
+    showSnap();
     return best;
   }
 
@@ -3315,7 +3638,7 @@
       if (!moved && Math.abs(dx) < 3) return;
       moved = true;
       const raw = clamp(startAt + dx / S.pps, 0, limit);
-      item.start = clamp(snapSpan(raw, span), 0, limit);
+      item.start = clamp(snapSpan(raw, span, item), 0, limit);
       if (el) el.style.left = item.start * S.pps + "px";
       syncOverlays();
       if (kind === "uaudio") syncAudioClips();   // its row is settled on release
@@ -3323,6 +3646,7 @@
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      hideSnap();
       if (moved) {
         commit();
         renderTimeline();
@@ -3350,11 +3674,11 @@
     const move = (ev) => {
       const d = (ev.clientX - startX) / S.pps;
       if (side === "l") {
-        const at = clamp(at0 + d, 0, at0 + dur0 - MIN);
+        const at = clamp(snapPoint(at0 + d, b), 0, at0 + dur0 - MIN);
         b.start = at;
         b.dur = dur0 + (at0 - at);
       } else {
-        b.dur = Math.max(MIN, dur0 + d);
+        b.dur = Math.max(MIN, snapPoint(at0 + dur0 + d, b) - at0);
       }
       if (el) {
         el.style.left = b.start * S.pps + "px";
@@ -3365,6 +3689,7 @@
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      hideSnap();
       commit();
       renderTimeline();
       renderInspector();
@@ -3523,6 +3848,9 @@
     const startX = e.clientX;
     const move = (ev) => {
       let d = (ev.clientX - startX) / S.pps;
+      // the moving edge lands on cuts, the playhead and other items' edges
+      const edge0 = side === "l" ? start0 : start0 + (out0 - in0) / sp;
+      d = snapPoint(edge0 + d, a) - edge0;
       if (side === "l") {
         d = clamp(d, Math.max(-start0, -in0 / sp), (out0 - in0) / sp - MIN);
         a.in = in0 + d * sp;
@@ -3540,6 +3868,7 @@
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      hideSnap();
       commit();
       renderTimeline();
       renderInspector();
@@ -4006,6 +4335,55 @@
 
       ins.appendChild(group("Look", filterChips(() => c.filter, (k) => { c.filter = k; })));
 
+      // Adjust: per clip, live while dragging, saved on release
+      const adjWrap = mk("div", "adj-grid");
+      ADJ.forEach(([k, label, lo, hi]) => {
+        adjWrap.appendChild(group(label, slider(lo, hi, 1, (c.adj && c.adj[k]) || 0,
+          (v) => { c.adj = Object.assign({}, c.adj, { [k]: v }); if (!v) delete c.adj[k]; syncMedia(); },
+          () => commit(), (v) => (v > 0 && lo < 0 ? "+" : "") + v)));
+      });
+      const adjRow = mk("div", "filter-chips");
+      const adjAll = mk("button", "fchip", "Use on every clip");
+      adjAll.addEventListener("click", () => {
+        S.clips.forEach((x) => { if (c.adj) x.adj = Object.assign({}, c.adj); else delete x.adj; });
+        commit(); syncNow(); toast("Adjustments copied to every clip");
+      });
+      const adjReset = mk("button", "fchip", "Reset");
+      adjReset.addEventListener("click", () => { delete c.adj; commit(); renderInspector(); syncNow(); });
+      adjRow.appendChild(adjAll);
+      adjRow.appendChild(adjReset);
+      adjWrap.appendChild(adjRow);
+      ins.appendChild(group("Adjust", adjWrap));
+
+      // Flip and rotate, as seen on screen
+      const orient = mk("div", "filter-chips");
+      const flipBtn = (label, key) => {
+        const b = mk("button", "fchip" + (c[key] ? " active" : ""), label);
+        b.addEventListener("click", () => { if (c[key]) delete c[key]; else c[key] = true; commit(); renderInspector(); syncNow(); });
+        orient.appendChild(b);
+      };
+      flipBtn("Mirror", "flipH");
+      flipBtn("Upside down", "flipV");
+      const rot = mk("button", "fchip" + (c.rot ? " active" : ""), "Rotate" + (c.rot ? " " + c.rot + "°" : ""));
+      rot.title = "Turn a quarter clockwise";
+      rot.addEventListener("click", () => { c.rot = ((c.rot || 0) + 90) % 360; if (!c.rot) delete c.rot; commit(); renderInspector(); syncNow(); });
+      orient.appendChild(rot);
+      ins.appendChild(group("Flip and rotate", orient));
+
+      // Freeze and Replace
+      const more = mk("div", "filter-chips");
+      if (isVid) {
+        const fz = mk("button", "fchip", "Freeze frame");
+        fz.title = "Hold the picture under the playhead for 3 seconds";
+        fz.addEventListener("click", () => freezeFrame(c));
+        more.appendChild(fz);
+      }
+      const rp = mk("button", "fchip", "Replace");
+      rp.title = "Swap in another video or photo, keeping its place and look";
+      rp.addEventListener("click", () => replaceClip(c));
+      more.appendChild(rp);
+      ins.appendChild(group("Clip", more));
+
       if (isVid) {
         // split screen / screen and face (drawLayout)
         const lay = layoutOf(c);
@@ -4098,87 +4476,188 @@
       return;
     }
 
-    // text selection
+    // text selection: CapCut's text panel, in five tabs
     const t = textById(S.sel.id);
     if (!t) { ins.classList.add("hidden"); return; }
     ins.appendChild(mk("span", "ins-title", "<em>T</em> Text"));
     const style = textStyleOf(t);
+    const heading = style === "heading";
+    const k = textLook(t);
+    const live = () => { syncOverlays(); };
+    const save = () => commit();
+    const redo = () => { commit(); renderInspector(); syncOverlays(); };
 
-    // Heading, lower third or title card (drawStyledText)
-    const kinds = mk("div", "filter-chips");
-    [["heading", "Heading"], ["lower", "Lower third"], ["card", "Title card"]].forEach(([k, label]) => {
-      const b = mk("button", "fchip" + (style === k ? " active" : ""), label);
-      b.addEventListener("click", () => {
-        if (k === "heading") delete t.style; else t.style = k;
-        // the brand's colours are where a card or a lower third starts
-        if (k === "card" && !t.bg) t.bg = BRAND.main;
-        if (k === "lower" && !t.accent) t.accent = BRAND.accent;
-        if (k !== "heading" && (!t.color || t.color.toLowerCase() === "#ffffff")) t.color = BRAND.text;
-        commit();
-        renderInspector();
-        syncOverlays();
-      });
-      kinds.appendChild(b);
+    const tabs = mk("div", "ins-tabs");
+    const TABS = heading ? [["text", "Text"], ["font", "Font"], ["style", "Style"], ["anim", "Animation"], ["place", "Position"]]
+      : [["text", "Text"], ["font", "Font"]];
+    if (!TABS.some((x) => x[0] === textTab)) textTab = "text";
+    TABS.forEach(([key, label]) => {
+      const b = mk("button", "ins-tab" + (textTab === key ? " active" : ""), label);
+      b.type = "button";
+      b.addEventListener("click", () => { textTab = key; renderInspector(); });
+      tabs.appendChild(b);
     });
-    ins.appendChild(group("Style", kinds));
+    ins.appendChild(tabs);
 
-    const ti = document.createElement("input");
-    ti.type = "text"; ti.value = t.text; ti.maxLength = 80;
-    ti.addEventListener("input", () => { t.text = ti.value; renderTimeline(); syncOverlays(); });
-    ti.addEventListener("change", () => commit());
-    ins.appendChild(group(style === "lower" ? "Name" : "Says", ti));
-
-    if (style !== "heading") {
-      const si = document.createElement("input");
-      si.type = "text"; si.value = t.sub || ""; si.maxLength = 80;
-      si.placeholder = style === "lower" ? "Who they are (optional)" : "A second line (optional)";
-      si.addEventListener("input", () => { t.sub = si.value; syncOverlays(); });
-      si.addEventListener("change", () => commit());
-      ins.appendChild(group("Second line", si));
-    }
-    if (style === "card") {
-      const bi = document.createElement("input");
-      bi.type = "color"; bi.value = t.bg || "#111210";
-      bi.addEventListener("input", () => { t.bg = bi.value; syncOverlays(); });
-      bi.addEventListener("change", () => commit());
-      ins.appendChild(group("Background", bi, 2));
-      const own = mk("div", "filter-chips");
-      const before = mk("button", "fchip", "Put before the video");
-      const after = mk("button", "fchip", "Put after the video");
-      before.title = "Its own clip at the start: adds time instead of covering the footage";
-      after.title = "Its own clip at the end";
-      before.addEventListener("click", () => makeCardClip(t, "start"));
-      after.addEventListener("click", () => makeCardClip(t, "end"));
-      own.appendChild(before);
-      own.appendChild(after);
-      ins.appendChild(group("As its own clip", own));
-    }
-
-    ins.appendChild(group("Size", slider(14, 88, 2, t.size,
-      (v) => { t.size = v; }, () => commit(), (v) => v + "px"), 2));
-
-    const ci = document.createElement("input");
-    ci.type = "color"; ci.value = t.color;
-    ci.addEventListener("input", () => { t.color = ci.value; });
-    ci.addEventListener("change", () => commit());
-    ins.appendChild(group("Color", ci, 2));
-
-    const seg = mk("div", "ins-seg");
-    seg.dataset.min = "3";
-    ["top", "center", "bottom"].forEach((p) => {
-      const b = mk("button", t.pos === p ? "active" : "", p[0].toUpperCase() + p.slice(1));
-      b.addEventListener("click", () => {
-        t.pos = p;
-        seg.querySelectorAll("button").forEach((y) => y.classList.remove("active"));
-        b.classList.add("active");
-        commit();
+    // small builders for this panel
+    const colorIn = (val, set) => {
+      const c = document.createElement("input");
+      c.type = "color"; c.value = /^#[0-9a-f]{6}$/i.test(val || "") ? val : "#ffffff";
+      c.addEventListener("input", () => { set(c.value); live(); });
+      c.addEventListener("change", save);
+      return c;
+    };
+    const chips = (items, cur, pick) => {
+      const row = mk("div", "filter-chips");
+      items.forEach(([v, label]) => {
+        const b = mk("button", "fchip" + (cur === v ? " active" : ""), label);
+        b.type = "button";
+        b.addEventListener("click", () => { pick(v); redo(); });
+        row.appendChild(b);
       });
-      seg.appendChild(b);
-    });
-    if (style === "heading") ins.appendChild(seg);   // the other styles have their own place
+      return row;
+    };
+    const onOff = (on, set) => chips([[true, "On"], [false, "Off"]], !!on, set);
+    const pct = (v) => Math.round(v * 100) + "%";
+    const row = (...els) => { const r = mk("div", "ins-row"); els.forEach((e) => r.appendChild(e)); return r; };
 
-    ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur,
-      (v) => { t.dur = v; renderTimeline(); }, () => commit(), (v) => v.toFixed(1) + "s")));
+    if (textTab === "text") {
+      // Heading, lower third or title card (drawStyledText)
+      ins.appendChild(group("Kind", chips([["heading", "Heading"], ["lower", "Lower third"], ["card", "Title card"]], style, (kk) => {
+        if (kk === "heading") delete t.style; else t.style = kk;
+        if (kk === "card" && !t.bg) t.bg = BRAND.main;
+        if (kk === "lower" && !t.accent) t.accent = BRAND.accent;
+        if (kk !== "heading" && (!t.color || t.color.toLowerCase() === "#ffffff")) t.color = BRAND.text;
+      })));
+      const ti = document.createElement("textarea");
+      ti.rows = 2; ti.value = t.text; ti.maxLength = 200;
+      ti.className = "ins-textarea";
+      ti.addEventListener("input", () => { t.text = ti.value; renderTimeline(); live(); });
+      ti.addEventListener("change", save);
+      ins.appendChild(group(style === "lower" ? "Name" : "Says", ti));
+      if (!heading) {
+        const si = document.createElement("input");
+        si.type = "text"; si.value = t.sub || ""; si.maxLength = 80;
+        si.placeholder = style === "lower" ? "Who they are (optional)" : "A second line (optional)";
+        si.addEventListener("input", () => { t.sub = si.value; live(); });
+        si.addEventListener("change", save);
+        ins.appendChild(group("Second line", si));
+      }
+      if (style === "card") {
+        ins.appendChild(group("Background", colorIn(t.bg || "#111210", (v) => { t.bg = v; }), 2));
+        const own = mk("div", "filter-chips");
+        const before = mk("button", "fchip", "Put before the video");
+        const after = mk("button", "fchip", "Put after the video");
+        before.title = "Its own clip at the start: adds time instead of covering the footage";
+        after.title = "Its own clip at the end";
+        before.addEventListener("click", () => makeCardClip(t, "start"));
+        after.addEventListener("click", () => makeCardClip(t, "end"));
+        own.appendChild(before);
+        own.appendChild(after);
+        ins.appendChild(group("As its own clip", own));
+      }
+      ins.appendChild(group("Size", slider(10, 160, 1, t.size, (v) => { t.size = v; live(); }, save, (v) => v + "px")));
+      ins.appendChild(group("Color", colorIn(t.color, (v) => { t.color = v; }), 2));
+      ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur,
+        (v) => { t.dur = v; renderTimeline(); }, save, (v) => v.toFixed(1) + "s")));
+    }
+
+    if (textTab === "font") {
+      const SF = window.SenotelFonts;
+      const fam = t.font || (heading ? "Anton" : "");
+      const fb = mk("button", "font-btn");
+      fb.type = "button";
+      const fname = mk("span", "font-btn-name", fam || "vClyps' own");
+      if (fam) fname.style.fontFamily = "'" + fam + "', system-ui, sans-serif";
+      fb.appendChild(fname);
+      fb.appendChild(mk("span", "font-btn-more", SF ? SF.TEXT.length + " fonts" : ""));
+      fb.addEventListener("click", () => {
+        if (!SF) return;
+        const extra = [{ value: "", label: heading ? "Anton (the original)" : "vClyps' own", family: heading ? "Anton" : null, note: "What texts used before fonts could be picked" }];
+        SF.openPicker({
+          kind: "text", value: t.font || "", extra: extra,
+          onPick: (v) => {
+            if (v) { t.font = v; t.weight = SF.pick(v, heading ? 700 : 400); SF.load(v, t.weight, t.italic); }
+            else { delete t.font; delete t.weight; }
+            redo();
+          }
+        });
+      });
+      ins.appendChild(group("Font", fb));
+      const info = t.font && SF ? SF.info(t.font) : null;
+      if (info && info.weights.length > 1) {
+        const NAMES = { 100: "Thin", 200: "Extra light", 300: "Light", 400: "Regular", 500: "Medium", 600: "Semibold", 700: "Bold", 800: "Extra bold", 900: "Black" };
+        ins.appendChild(group("Weight", chips(info.weights.map((w) => [w, NAMES[w] || String(w)]), SF.pick(t.font, k.weight), (w) => { t.weight = w; })));
+      }
+      ins.appendChild(group("Slant", chips([[false, "Upright"], [true, "Italic"]], !!k.italic, (v) => { t.italic = v; })));
+      ins.appendChild(group("Letters", chips([[false, "As typed"], [true, "ALL CAPS"]], !!k.upper, (v) => { t.upper = v; })));
+    }
+
+    if (textTab === "style") {
+      // one-tap looks: they change the styling, never the words, font or place
+      const pres = mk("div", "tx-presets");
+      TEXT_PRESETS.forEach((p) => {
+        const b = mk("button", "tx-preset");
+        b.type = "button";
+        b.title = p.name;
+        const cv = document.createElement("canvas");
+        cv.width = 120; cv.height = 64;
+        b.appendChild(cv);
+        b.addEventListener("click", () => { applyTextPreset(t, p); redo(); });
+        pres.appendChild(b);
+        requestAnimationFrame(() => drawPresetTile(cv, t, p));
+      });
+      ins.appendChild(group("Looks", pres));
+      ins.appendChild(group("Text", row(colorIn(t.color, (v) => { t.color = v; }),
+        slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct))));
+      ins.appendChild(group("Outline", row(colorIn(k.strokeColor, (v) => { t.strokeColor = v; }),
+        slider(0, 0.3, 0.01, k.strokeW, (v) => { t.strokeW = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
+      ins.appendChild(group("Background", onOff(k.boxOn, (v) => { t.boxOn = v; })));
+      if (k.boxOn) {
+        ins.appendChild(group("Background colour", row(colorIn(k.boxColor, (v) => { t.boxColor = v; }),
+          slider(0, 1, 0.05, k.boxOpacity, (v) => { t.boxOpacity = v; live(); }, save, pct))));
+        ins.appendChild(group("Corners", slider(0, 1, 0.05, k.boxRadius, (v) => { t.boxRadius = v; live(); }, save, pct)));
+      }
+      ins.appendChild(group("Shadow", onOff(k.shadow, (v) => { t.shadow = v; })));
+      if (k.shadow) {
+        ins.appendChild(group("Shadow colour", row(colorIn(k.shColor, (v) => { t.shColor = v; }),
+          slider(0, 1, 0.05, k.shOpacity, (v) => { t.shOpacity = v; live(); }, save, pct))));
+        ins.appendChild(group("Blur", slider(0, 1, 0.01, k.shBlur, (v) => { t.shBlur = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+        ins.appendChild(group("Distance", slider(0, 0.3, 0.01, k.shDist, (v) => { t.shDist = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+        ins.appendChild(group("Angle", slider(0, 359, 1, k.shAngle, (v) => { t.shAngle = v; live(); }, save, (v) => v + "°")));
+      }
+      ins.appendChild(group("Glow", onOff(k.glowOn, (v) => { t.glowOn = v; })));
+      if (k.glowOn) {
+        ins.appendChild(group("Glow colour", row(colorIn(k.glowColor, (v) => { t.glowColor = v; }),
+          slider(0.1, 1.5, 0.05, k.glowSize, (v) => { t.glowSize = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
+      }
+      ins.appendChild(group("Letter spacing", slider(-0.1, 0.5, 0.01, k.spacing, (v) => { t.spacing = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+      ins.appendChild(group("Line spacing", slider(0.8, 2, 0.05, k.lineH, (v) => { t.lineH = v; live(); }, save, (v) => v.toFixed(2))));
+      ins.appendChild(group("Align", chips([["left", "Left"], ["center", "Centre"], ["right", "Right"]], k.align, (v) => { t.align = v; })));
+    }
+
+    if (textTab === "anim") {
+      ins.appendChild(group("In", chips(TEXT_ANIMS_IN, t.animIn || "none", (v) => { if (v === "none") delete t.animIn; else t.animIn = v; previewTextAnim(t, "in"); })));
+      ins.appendChild(group("Out", chips(TEXT_ANIMS_OUT, t.animOut || "none", (v) => { if (v === "none") delete t.animOut; else t.animOut = v; previewTextAnim(t, "out"); })));
+      ins.appendChild(group("Loop", chips(TEXT_ANIMS_LOOP, t.animLoop || "none", (v) => { if (v === "none") delete t.animLoop; else t.animLoop = v; previewTextAnim(t, "in"); })));
+      ins.appendChild(group("Length", slider(0.2, 2, 0.05, t.animLen || 0.5, (v) => { t.animLen = v; }, save, (v) => v.toFixed(2) + "s")));
+    }
+
+    if (textTab === "place") {
+      ins.appendChild(mk("span", "ins-meta", "Drag the text on the picture to move it. Two fingers pinch it bigger or smaller and turn it."));
+      const seg = mk("div", "ins-seg");
+      ["top", "center", "bottom"].forEach((p) => {
+        const b = mk("button", t.pos === p && t.y == null ? "active" : "", p[0].toUpperCase() + p.slice(1));
+        b.addEventListener("click", () => { t.pos = p; delete t.x; delete t.y; redo(); });
+        seg.appendChild(b);
+      });
+      ins.appendChild(group("Place", seg));
+      const L = headingLayout(t, 1, 1);
+      ins.appendChild(group("Across", slider(0, 1, 0.01, t.x != null ? t.x : 0.5, (v) => { t.x = v; live(); }, save, pct)));
+      ins.appendChild(group("Down", slider(0, 1, 0.01, t.y != null ? t.y : L.cy, (v) => { t.y = v; live(); }, save, pct)));
+      ins.appendChild(group("Rotate", slider(-180, 180, 1, k.rotate, (v) => { t.rotate = v; live(); }, save, (v) => v + "°")));
+      ins.appendChild(group("Curve", slider(-100, 100, 1, k.curve, (v) => { t.curve = v; live(); }, save, (v) => String(v))));
+    }
 
     ins.appendChild(closeBtn);
   }
@@ -4257,8 +4736,108 @@
   });
 
   // tap the video: enter fullscreen, or toggle play/pause once already fullscreen
+  /* ─── Text on the picture (CapCut) ───
+     Touch a heading on the picture to select it; drag to move it; two
+     fingers pinch it bigger or smaller and turn it (snapping level within a
+     few degrees). Hits come from where drawHeading last drew each text. */
+  let textGestureUsed = false;
+  (function textOnPicture() {
+    const stage = $("stage");
+    const pts = new Map();
+    let g = null;   // the gesture: {t, box, x0, y0, size0, rot0, d0, a0}
+    const local = (e) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    function hitText(p) {
+      let found = null;
+      textHits.forEach((h, id) => {
+        const r = (-(h.rot || 0) * Math.PI) / 180;
+        const dx = p.x - h.x, dy = p.y - h.y;
+        const lx = dx * Math.cos(r) - dy * Math.sin(r), ly = dx * Math.sin(r) + dy * Math.cos(r);
+        const slop = 10;   // a fingertip's worth of forgiveness
+        if (Math.abs(lx) <= h.w / 2 + slop && Math.abs(ly) <= h.h / 2 + slop) found = id;
+      });
+      return found;
+    }
+    const twoFinger = () => {
+      const [a, b] = Array.from(pts.values());
+      return { d: Math.hypot(b.x - a.x, b.y - a.y), a: Math.atan2(b.y - a.y, b.x - a.x), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    };
+    stage.addEventListener("pointerdown", (e) => {
+      if (inFs() || EXP.active) return;
+      const p = local(e);
+      if (!g) {
+        const id = hitText(p);
+        const t = id != null ? textById(id) : null;
+        if (!t) return;
+        e.preventDefault();
+        e.stopPropagation();
+        textGestureUsed = true;
+        if (S.playing) pause();
+        if (!(S.sel && S.sel.type === "text" && S.sel.id === t.id)) {
+          S.sel = { type: "text", id: t.id };
+          renderTimeline();
+          renderInspector();
+          syncOverlays();
+        }
+        const box = pictureBox();
+        const L = headingLayout(t, box.w, box.h);
+        g = { t: t, box: box, cx0: L.cx / box.w, cy0: L.cy / box.h, moved: false };
+      }
+      pts.set(e.pointerId, p);
+      try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+      g.p0 = new Map(pts);
+      g.size0 = g.t.size;
+      g.rot0 = g.t.rotate || 0;
+      g.x0 = g.t.x != null ? g.t.x : g.cx0;
+      g.y0 = g.t.y != null ? g.t.y : g.cy0;
+      if (pts.size === 2) { const tf = twoFinger(); g.d0 = tf.d; g.a0 = tf.a; g.c0 = tf; }
+    }, true);
+    stage.addEventListener("pointermove", (e) => {
+      if (!g || !pts.has(e.pointerId)) return;
+      e.preventDefault();
+      pts.set(e.pointerId, local(e));
+      const t = g.t, box = g.box;
+      if (pts.size >= 2 && g.d0) {
+        const tf = twoFinger();
+        t.size = clamp(g.size0 * (tf.d / g.d0), 10, 220);
+        let rot = g.rot0 + ((tf.a - g.a0) * 180) / Math.PI;
+        rot = ((rot + 540) % 360) - 180;
+        if (Math.abs(rot) < 4) rot = 0;   // level is easy to land on
+        t.rotate = Math.round(rot);
+        t.x = clamp(g.x0 + (tf.cx - g.c0.cx) / box.w, 0, 1);
+        t.y = clamp(g.y0 + (tf.cy - g.c0.cy) / box.h, 0, 1);
+      } else {
+        const p = pts.get(e.pointerId), p0 = g.p0.get(e.pointerId);
+        if (!p0) return;
+        let x = g.x0 + (p.x - p0.x) / box.w, y = g.y0 + (p.y - p0.y) / box.h;
+        // the centre lines are easy to land on, as in CapCut
+        if (Math.abs(x - 0.5) < 0.015) x = 0.5;
+        if (Math.abs(y - 0.5) < 0.015) y = 0.5;
+        t.x = clamp(x, 0, 1);
+        t.y = clamp(y, 0, 1);
+      }
+      g.moved = true;
+      syncOverlays();
+    }, true);
+    const end = (e) => {
+      if (!g || !pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      if (pts.size) {   // one finger lifted from a pinch: carry on dragging with the other
+        g.p0 = new Map(pts); g.d0 = 0;
+        g.size0 = g.t.size; g.rot0 = g.t.rotate || 0;
+        g.x0 = g.t.x != null ? g.t.x : g.cx0; g.y0 = g.t.y != null ? g.t.y : g.cy0;
+        return;
+      }
+      if (g.moved) { commit(); recordEdit("text-move", {}); if (textTab === "place") renderInspector(); }
+      g = null;
+    };
+    stage.addEventListener("pointerup", end, true);
+    stage.addEventListener("pointercancel", end, true);
+  })();
+
   $("stage").addEventListener("click", (e) => {
     if (e.target.closest("#stageEmpty")) return; // the add-button handles itself
+    // a touch on a text was about the text, not the video
+    if (textGestureUsed) { textGestureUsed = false; return; }
     if (!S.clips.length) return;
     if (inFs()) { primeAudio(); if (S.playing) pause(); else play(); }
     else enterFs();
@@ -4288,10 +4867,103 @@
     updatePlayheadUI();
   }
 
+  /* ═══════════ ADJUST, FLIP AND ROTATE (preview == export) ═══════════
+     Adjust is CapCut's: brightness, contrast, saturation, warmth and a
+     vignette, per clip. The first three are filters on the picture; warmth
+     is a colour laid over it in soft light, and the vignette a darkening
+     toward the corners. Each is worked out here once and drawn the same way
+     in the preview (CSS) and the export (canvas). */
+  const ADJ = [
+    ["bright", "Brightness", -100, 100], ["contrast", "Contrast", -100, 100], ["sat", "Saturation", -100, 100],
+    ["warmth", "Warmth", -100, 100], ["vignette", "Vignette", 0, 100]
+  ];
+  function pictureFilter(c, blurPx) {
+    const parts = [];
+    const look = FILTERS[c.filter] ? FILTERS[c.filter].css : "none";
+    if (look !== "none") parts.push(look);
+    const a = c.adj;
+    if (a) {
+      if (a.bright) parts.push("brightness(" + (1 + a.bright / 200).toFixed(3) + ")");
+      if (a.contrast) parts.push("contrast(" + (1 + a.contrast / 200).toFixed(3) + ")");
+      if (a.sat) parts.push("saturate(" + (1 + a.sat / 100).toFixed(3) + ")");
+    }
+    if (blurPx) parts.push("blur(" + blurPx.toFixed(1) + "px)");
+    return parts.join(" ") || "none";
+  }
+  // warm: an amber; cool: a blue. At full strength, 55% of it in soft light.
+  function warmthOf(c) {
+    const w = (c && c.adj && c.adj.warmth) || 0;
+    if (!w) return null;
+    return { color: w > 0 ? "255,138,36" : "36,120,255", alpha: (Math.abs(w) / 100) * 0.55 };
+  }
+  function vignetteOf(c) {
+    const v = (c && c.adj && c.adj.vignette) || 0;
+    return v ? (v / 100) * 0.8 : 0;
+  }
+  function adjustVeils(c) {
+    const warm = warmthOf(c), vig = vignetteOf(c);
+    const box = pictureBox();
+    const place = (el) => { el.style.left = box.x + "px"; el.style.top = box.y + "px"; el.style.width = box.w + "px"; el.style.height = box.h + "px"; };
+    const wEl = $("adjWarm"), vEl = $("adjVig");
+    wEl.classList.toggle("hidden", !warm);
+    vEl.classList.toggle("hidden", !vig);
+    if (warm) { place(wEl); wEl.style.background = "rgba(" + warm.color + "," + warm.alpha.toFixed(3) + ")"; }
+    if (vig) { place(vEl); vEl.style.background = "radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0," + vig.toFixed(3) + ") 100%)"; }
+  }
+  // the same two layers on the export canvas, over the frame f
+  function drawAdjustVeils(ctx, c, f) {
+    const warm = warmthOf(c), vig = vignetteOf(c);
+    if (warm) {
+      ctx.save();
+      ctx.globalCompositeOperation = "soft-light";
+      ctx.fillStyle = "rgba(" + warm.color + "," + warm.alpha + ")";
+      ctx.fillRect(f.x, f.y, f.w, f.h);
+      ctx.restore();
+    }
+    if (vig) {
+      // CSS's "ellipse at center" reaches the corners: radii w/2·√2 and h/2·√2
+      ctx.save();
+      ctx.translate(f.x + f.w / 2, f.y + f.h / 2);
+      ctx.scale(1, f.h / f.w);
+      const r = (f.w / 2) * Math.SQRT2;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0.45, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0," + vig + ")");
+      ctx.fillStyle = g;
+      ctx.fillRect(-f.w / 2, -f.w / 2, f.w, f.w);
+      ctx.restore();
+    }
+  }
+
+  /* Flip and rotate. rot is 0, 90, 180 or 270; flipH mirrors and flipV
+     turns upside down, both as seen on screen, after the rotation. */
+  const turned = (c) => !!c && (c.rot === 90 || c.rot === 270);
+  function orientCss(c, el, natW, natH) {
+    if (!c || (!c.rot && !c.flipH && !c.flipV)) return "";
+    let fit = 1;
+    if (turned(c) && natW && natH) {
+      // the picture lies on its side: shrink it so all of it still fits the stage
+      const sw = $("stage").clientWidth || 1, sh = $("stage").clientHeight || 1;
+      fit = Math.min(sw / natH, sh / natW) / Math.min(sw / natW, sh / natH);
+    }
+    return " scale(" + (c.flipH ? -fit : fit) + "," + (c.flipV ? -fit : fit) + ")" + (c.rot ? " rotate(" + c.rot + "deg)" : "");
+  }
+  // draws a picture into the rect it occupies on the frame, turned and flipped as the clip says
+  function drawOriented(ctx, el, dx, dy, dw, dh, c) {
+    if (!c || (!c.rot && !c.flipH && !c.flipV)) { ctx.drawImage(el, dx, dy, dw, dh); return; }
+    ctx.save();
+    ctx.translate(dx + dw / 2, dy + dh / 2);
+    ctx.scale(c.flipH ? -1 : 1, c.flipV ? -1 : 1);
+    if (c.rot) ctx.rotate((c.rot * Math.PI) / 180);
+    const w = turned(c) ? dh : dw, h = turned(c) ? dw : dh;
+    ctx.drawImage(el, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
   function syncMedia() {
     $("stageEmpty").classList.toggle("hidden", S.clips.length > 0);
     const info = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
-    if (!info) { pv.pause(); return; }
+    if (!info) { pv.pause(); adjustVeils(null); return; }
     const { clip, offset } = info;
     const m = mediaById(clip.mediaId);
     if (!m) return;
@@ -4313,16 +4985,16 @@
       pv.volume = clip.volume;
       pv.muted = clip.muted || (EXP.active ? false : S.userMuted);
       const fx = transFx(info);
-      const blur = fx.blur ? " blur(" + (fx.blur * pictureBox().h).toFixed(1) + "px)" : "";
-      pv.style.filter = (FILTERS[clip.filter].css === "none" ? "" : FILTERS[clip.filter].css) + blur || "none";
+      pv.style.filter = pictureFilter(clip, fx.blur ? fx.blur * pictureBox().h : 0);
       let zs = fx.scale;
       if (clip.kb) {
         const p = clamp(offset / Math.max(dispDur(clip), 0.01), 0, 1);
         zs *= clip.kb.s0 + (clip.kb.s1 - clip.kb.s0) * p;
       }
-      pv.style.transform = zs !== 1 || fx.dx
+      pv.style.transform = ((zs !== 1 || fx.dx
         ? (fx.dx ? "translateX(" + (fx.dx * 100).toFixed(2) + "%) " : "") + "scale(" + zs + ")"
-        : "";
+        : "") + orientCss(layoutOf(clip) ? null : clip, pv, pv.videoWidth, pv.videoHeight)).trim();
+      adjustVeils(clip);
       if (S.playing && pv.paused) pv.play().catch(() => {});
       if (!S.playing && !pv.paused) pv.pause();
       drawPreviewLayout(clip);
@@ -4336,19 +5008,20 @@
         pi.dataset.mid = String(m.id);
       }
       const fx = transFx(info);
-      const blur = fx.blur ? " blur(" + (fx.blur * pictureBox().h).toFixed(1) + "px)" : "";
-      pi.style.filter = (FILTERS[clip.filter].css === "none" ? "" : FILTERS[clip.filter].css) + blur || "none";
+      pi.style.filter = pictureFilter(clip, fx.blur ? fx.blur * pictureBox().h : 0);
       const slide = fx.dx ? "translateX(" + (fx.dx * 100).toFixed(2) + "%) " : "";
+      const orient = orientCss(clip, pi, pi.naturalWidth, pi.naturalHeight);
       if (clip.kb) {
         const p = clamp(offset / Math.max(dispDur(clip), 0.01), 0, 1);
         const k = clip.kb;
         const zs = (k.s0 + (k.s1 - k.s0) * p) * fx.scale;
         const tx = (k.x0 + (k.x1 - k.x0) * p) * 100;
         const ty = (k.y0 + (k.y1 - k.y0) * p) * 100;
-        pi.style.transform = slide + "scale(" + zs + ") translate(" + tx + "%, " + ty + "%)";
+        pi.style.transform = slide + "scale(" + zs + ") translate(" + tx + "%, " + ty + "%)" + orient;
       } else {
-        pi.style.transform = fx.scale !== 1 || fx.dx ? slide + "scale(" + fx.scale + ")" : "";
+        pi.style.transform = ((fx.scale !== 1 || fx.dx ? slide + "scale(" + fx.scale + ")" : "") + orient).trim();
       }
+      adjustVeils(clip);
     }
   }
 
@@ -4375,10 +5048,9 @@
     return {
       size: size,
       lineH: size * HEADING_LINE,
-      cx: frameW / 2,
-      // vertical CENTRE of the text block — the DOM translates -50% onto it and
-      // the canvas centres its stack of lines on it, so both land together
-      cy: t.pos === "top" ? frameH * 0.14 : t.pos === "center" ? frameH * 0.5 : frameH * 0.86,
+      // centre of the text block: where it was dragged to, else its top / centre / bottom place
+      cx: frameW * (t.x != null ? t.x : 0.5),
+      cy: t.y != null ? frameH * t.y : t.pos === "top" ? frameH * 0.14 : t.pos === "center" ? frameH * 0.5 : frameH * 0.86,
       // the box is a FIXED share of the frame, given to the DOM as an explicit
       // width and to the canvas as the wrap limit. Both therefore break lines
       // at the same place, and the ratio of text width to box width no longer
@@ -4406,6 +5078,292 @@
       out.push(line);
     });
     return out.length ? out : [""];
+  }
+
+  /* ═══════════ TEXT: everything about how a heading looks ═══════════
+     Every control in the text panel ends up here. drawHeading() draws a
+     heading in the preview (on the caption canvas, inside the picture) and
+     in the export, so the two cannot disagree. Every length is a fraction of
+     the text size, so a look holds at any frame size.
+     A text that never had a font chosen keeps the look headings always had
+     (Anton with a soft shadow); a new one starts in TEXT_NEW_FONT. Text
+     fonts come from fonts.js's text library, never the caption one. */
+  const TEXT_NEW_FONT = "Outfit";
+  const TEXT_LOOK = {
+    font: "Anton", weight: 400, italic: false, upper: false, align: "center",
+    spacing: 0, lineH: HEADING_LINE, opacity: 1,
+    strokeColor: "#000000", strokeW: 0,
+    shadow: true, shColor: "#000000", shOpacity: 0.8, shBlur: 0.22, shDist: 0, shAngle: 45,
+    boxOn: false, boxColor: "#000000", boxOpacity: 0.75, boxRadius: 0.25,
+    glowOn: false, glowColor: "#00e5ff", glowSize: 0.6,
+    curve: 0, rotate: 0
+  };
+  function textLook(t) {
+    const o = Object.assign({}, TEXT_LOOK);
+    Object.keys(TEXT_LOOK).forEach((k) => { if (t[k] != null) o[k] = t[k]; });
+    return o;
+  }
+  function rgba(hex, a) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    const n = m ? parseInt(m[1], 16) : 0;
+    return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + clamp(a, 0, 1) + ")";
+  }
+  // The CSS font for a text, with its weight snapped to one the family has
+  function textFontCss(t, px, wantWeight, fallback) {
+    if (!t.font) return wantWeight + " " + px + "px " + fallback;
+    const k = textLook(t), SF = window.SenotelFonts;
+    const w = SF ? SF.pick(k.font, wantWeight || k.weight) : (wantWeight || k.weight);
+    if (SF && !SF.ready(k.font, w, k.italic)) SF.load(k.font, w, k.italic);
+    return (k.italic ? "italic " : "") + w + " " + px + "px \"" + k.font + "\", " + fallback;
+  }
+
+  // where each heading was last drawn in the preview, so it can be dragged
+  const textHits = new Map();
+  // a text font arrives after the first draw (in the fallback): draw again in it
+  if (window.SenotelFonts) window.SenotelFonts.onLoad(() => { try { syncOverlays(); } catch (e) {} });
+
+  function drawHeading(ctx, t, f, hits, time) {
+    const A = textAnimAt(t, time);
+    const L = headingLayout(t, f.w, f.h), k = textLook(t);
+    const size = L.size;
+    ctx.save();
+    ctx.font = t.font ? textFontCss(t, size, k.weight, '"Noto Sans", system-ui, sans-serif') : "400 " + size + "px " + HEADING_FONT;
+    const sp = k.spacing * size;
+    const nativeLS = "letterSpacing" in ctx;
+    if (nativeLS) ctx.letterSpacing = sp + "px";
+    const text = k.upper ? String(t.text).toLocaleUpperCase() : String(t.text);
+    const lines = wrapHeading(ctx, text, L.maxW);
+    const lineH = size * k.lineH;
+    const widths = lines.map((l) => ctx.measureText(l).width + (nativeLS ? 0 : sp * Math.max(0, l.length - 1)));
+    const blockW = Math.max(1, ...widths), blockH = lines.length * lineH;
+    const pad = size * 0.32;
+    const bend = (k.curve / 100) * Math.PI;   // the arc a line spans: 100 = half a circle
+    const sag = bend ? (blockW / Math.abs(bend)) * (1 - Math.cos(Math.abs(bend) / 2)) : 0;
+
+    ctx.translate(f.x + L.cx, f.y + L.cy);
+    // where it rests, for grabbing it on the picture (the animation doesn't move the target)
+    if (hits) hits.set(t.id, { x: f.x + L.cx, y: f.y + L.cy, w: blockW + pad * 2, h: blockH + pad * 2 + sag, rot: k.rotate });
+    if (A.dx || A.dy) ctx.translate(A.dx * size, A.dy * size);
+    if (k.rotate || A.r) ctx.rotate(((k.rotate + A.r) * Math.PI) / 180);
+    if (A.s !== 1) ctx.scale(A.s, A.s);
+    ctx.globalAlpha *= clamp(k.opacity * A.a, 0, 1);
+    // shadows are in device pixels and ignore the transform; scale them by hand
+    const m = ctx.getTransform ? ctx.getTransform() : { a: 1, b: 0 };
+    const px = Math.hypot(m.a, m.b) || 1;
+
+    if (k.boxOn) {
+      const bw = blockW + pad * 2, bh = blockH + pad * 1.2 + sag;
+      const bx = k.align === "left" ? -blockW / 2 - pad : k.align === "right" ? -blockW / 2 - pad : -bw / 2;
+      ctx.fillStyle = rgba(k.boxColor, k.boxOpacity);
+      roundRectPath(ctx, bx, -bh / 2 - (bend > 0 ? sag / 2 : bend < 0 ? -sag / 2 : 0), bw, bh, Math.min(bh / 2, size * k.boxRadius));
+      ctx.fill();
+    }
+
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    const xFor = (w) => (k.align === "left" ? -blockW / 2 : k.align === "right" ? blockW / 2 - w : -w / 2);
+    // one line, straight or bent, letter by letter when the spacing or the curve needs it
+    function line(str, y, w, op) {
+      const draw = (s, x, yy) => (op === "stroke" ? ctx.strokeText(s, x, yy) : ctx.fillText(s, x, yy));
+      if (!bend && (nativeLS || !sp)) { ctx.textAlign = "left"; draw(str, xFor(w), y); return; }
+      const chars = Array.from(str);
+      const cw = chars.map((c) => ctx.measureText(c).width + (nativeLS ? 0 : sp));
+      ctx.textAlign = "center";
+      if (!bend) {
+        let x = xFor(w);
+        chars.forEach((c, i) => { draw(c, x + cw[i] / 2, y); x += cw[i]; });
+        return;
+      }
+      const R = w / Math.abs(bend), up = bend > 0;
+      let run = 0;
+      chars.forEach((c, i) => {
+        const th = (run + cw[i] / 2) / w * Math.abs(bend) - Math.abs(bend) / 2;
+        run += cw[i];
+        ctx.save();
+        if (up) { ctx.translate(R * Math.sin(th), y + R - R * Math.cos(th)); ctx.rotate(th); }
+        else { ctx.translate(R * Math.sin(th), y - R + R * Math.cos(th)); ctx.rotate(-th); }
+        draw(c, 0, 0);
+        ctx.restore();
+      });
+    }
+    // the typewriter shows the first so many letters, each line where it will end up
+    const allChars = lines.reduce((n, l) => n + Array.from(l).length, 0);
+    const showN = A.chars >= 1 ? Infinity : Math.floor(A.chars * allChars);
+    function all(op) {
+      let left = showN;
+      lines.forEach((l, i) => {
+        if (left <= 0) return;
+        const cs = Array.from(l);
+        const part = left >= cs.length ? l : cs.slice(0, left).join("");
+        left -= cs.length;
+        line(part, -blockH / 2 + lineH / 2 + i * lineH - (bend > 0 ? sag / 2 : bend < 0 ? -sag / 2 : 0), widths[i], op);
+      });
+    }
+    const stroked = k.strokeW > 0;
+    ctx.strokeStyle = k.strokeColor;
+    ctx.lineWidth = k.strokeW * size * 2;   // half of it is hidden under the fill
+    ctx.fillStyle = t.color || "#ffffff";
+
+    if (k.glowOn) {
+      ctx.save();
+      ctx.shadowColor = k.glowColor;
+      ctx.shadowBlur = k.glowSize * size * px;
+      ctx.fillStyle = k.glowColor;
+      all("fill"); all("fill");
+      ctx.restore();
+    }
+    if (k.shadow && k.shOpacity > 0) {
+      ctx.save();
+      const a = (k.shAngle * Math.PI) / 180;
+      ctx.shadowColor = rgba(k.shColor, k.shOpacity);
+      ctx.shadowBlur = k.shBlur * size * px;
+      ctx.shadowOffsetX = Math.cos(a) * k.shDist * size * px;
+      ctx.shadowOffsetY = Math.sin(a) * k.shDist * size * px;
+      all(stroked ? "stroke" : "fill");
+      ctx.restore();
+    }
+    if (stroked) all("stroke");
+    all("fill");
+
+    // the selected text wears a plain frame in the preview (never in the export)
+    if (hits && S.sel && S.sel.type === "text" && S.sel.id === t.id) {
+      const fw = blockW + pad * 2, fh = blockH + pad * 2 + sag;
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = "transparent";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5 / (px / (window.devicePixelRatio > 1 ? Math.min(2, window.devicePixelRatio) : 1));
+      ctx.strokeRect(-fw / 2, -fh / 2, fw, fh);
+      const hs = ctx.lineWidth * 4;
+      ctx.fillStyle = "#ffffff";
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => ctx.fillRect(sx * fw / 2 - hs / 2, sy * fh / 2 - hs / 2, hs, hs));
+    }
+    ctx.restore();
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* Every text showing at `time`, in layer order: lower thirds and cards,
+     then headings. The preview and the export both call this. */
+  function drawTexts(ctx, f, time, hits) {
+    const karaoke = S.captions && S.captions.length > 0;
+    const on = S.texts.filter((t) => time >= t.start && time <= t.start + t.dur);
+    on.forEach((t) => { if (textStyleOf(t) !== "heading") drawStyledText(ctx, t, f, time); });
+    if (hits) hits.clear();
+    on.forEach((t) => {
+      if (textStyleOf(t) !== "heading") return;
+      if (karaoke && t.cap) return;   // word-timed captions own the caption layer: no doubling
+      drawHeading(ctx, t, f, hits, time);
+    });
+  }
+
+  /* ─── Text animations (CapCut's In, Out and Loop) ───
+     Worked out per frame from the text's own clock, so the preview and the
+     export run them identically. Distances are in text heights. */
+  let textTab = "text";
+  const TEXT_ANIMS_IN = [["none", "None"], ["fade", "Fade"], ["rise", "Rise"], ["drop", "Drop"], ["left", "Slide in"],
+    ["pop", "Pop"], ["zoom", "Zoom out"], ["spin", "Spin"], ["type", "Typewriter"]];
+  const TEXT_ANIMS_OUT = [["none", "None"], ["fade", "Fade"], ["rise", "Rise away"], ["drop", "Fall away"], ["right", "Slide out"],
+    ["shrink", "Shrink"], ["zoom", "Zoom in"], ["type", "Erase"]];
+  const TEXT_ANIMS_LOOP = [["none", "None"], ["pulse", "Pulse"], ["float", "Float"], ["swing", "Swing"], ["shake", "Shake"]];
+  function textAnimAt(t, time) {
+    const o = { a: 1, dx: 0, dy: 0, s: 1, r: 0, chars: 1 };
+    if (time == null) return o;
+    const len = Math.max(0.05, Math.min(t.animLen || 0.5, t.dur / 2));
+    const pin = clamp((time - t.start) / len, 0, 1), pout = clamp((t.start + t.dur - time) / len, 0, 1);
+    const ein = 1 - Math.pow(1 - pin, 3), eout = 1 - Math.pow(1 - pout, 3);
+    const back = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+    switch (t.animIn) {
+      case "fade": o.a *= ein; break;
+      case "rise": o.a *= ein; o.dy += (1 - ein) * 0.8; break;
+      case "drop": o.a *= ein; o.dy -= (1 - ein) * 0.8; break;
+      case "left": o.a *= ein; o.dx -= (1 - ein) * 2.5; break;
+      case "pop": o.s *= 0.4 + 0.6 * back(pin); o.a *= clamp(pin * 4, 0, 1); break;
+      case "zoom": o.s *= 1 + (1 - ein) * 0.9; o.a *= ein; break;
+      case "spin": o.r -= (1 - ein) * 120; o.s *= 0.5 + 0.5 * ein; o.a *= ein; break;
+      case "type": o.chars = Math.min(o.chars, pin); break;
+    }
+    switch (t.animOut) {
+      case "fade": o.a *= eout; break;
+      case "rise": o.a *= eout; o.dy -= (1 - eout) * 0.8; break;
+      case "drop": o.a *= eout; o.dy += (1 - eout) * 0.8; break;
+      case "right": o.a *= eout; o.dx += (1 - eout) * 2.5; break;
+      case "shrink": o.s *= 0.4 + 0.6 * eout; o.a *= eout; break;
+      case "zoom": o.s *= 1 + (1 - eout) * 0.9; o.a *= eout; break;
+      case "type": o.chars = Math.min(o.chars, pout); break;
+    }
+    const ph = time - t.start;
+    switch (t.animLoop) {
+      case "pulse": o.s *= 1 + 0.05 * Math.sin((ph / 0.9) * Math.PI * 2); break;
+      case "float": o.dy += 0.1 * Math.sin((ph / 1.6) * Math.PI * 2); break;
+      case "swing": o.r += 5 * Math.sin((ph / 1.4) * Math.PI * 2); break;
+      case "shake": o.r += 2.5 * Math.sin((ph / 0.16) * Math.PI * 2); o.dx += 0.03 * Math.sin((ph / 0.11) * Math.PI * 2); break;
+    }
+    return o;
+  }
+  // plays the part of the text an animation just changed, then stops
+  function previewTextAnim(t, which) {
+    if (S.playing) return;
+    const len = Math.min(t.animLen || 0.5, t.dur / 2);
+    S.time = clamp(which === "out" ? t.start + t.dur - len - 0.3 : t.start, 0, total());
+    syncNow();
+    play();
+    clearTimeout(previewTextAnim.timer);
+    previewTextAnim.timer = setTimeout(() => { if (S.playing) pause(); }, (len + 0.6) * 1000);
+  }
+
+  /* ─── One-tap looks (CapCut's text Styles) ───
+     Each sets colour, outline, background, shadow and glow together, and
+     leaves the words, font, size and place alone. */
+  const PRESET_BASE = { color: "#ffffff", opacity: 1, strokeW: 0, strokeColor: "#000000", boxOn: false, boxColor: "#000000", boxOpacity: 0.75, boxRadius: 0.25,
+    shadow: false, shColor: "#000000", shOpacity: 0.8, shBlur: 0.22, shDist: 0, shAngle: 45, glowOn: false, glowColor: "#00e5ff", glowSize: 0.6 };
+  const TEXT_PRESETS = [
+    { name: "Soft shadow", shadow: true, shOpacity: 0.6, shBlur: 0.3 },
+    { name: "Outline", strokeW: 0.08 },
+    { name: "Yellow outline", color: "#ffe600", strokeW: 0.1 },
+    { name: "Comic", strokeW: 0.14, shadow: true, shOpacity: 1, shBlur: 0, shDist: 0.07 },
+    { name: "White label", color: "#111111", boxOn: true, boxColor: "#ffffff", boxOpacity: 1 },
+    { name: "Dark label", boxOn: true, boxColor: "#000000", boxOpacity: 0.72 },
+    { name: "Crimson label", boxOn: true, boxColor: "#dc143c", boxOpacity: 1, boxRadius: 0.15 },
+    { name: "Yellow label", color: "#111111", boxOn: true, boxColor: "#ffe600", boxOpacity: 1, boxRadius: 0.15 },
+    { name: "Mint tag", color: "#0b2a12", boxOn: true, boxColor: "#b7f36b", boxOpacity: 1, boxRadius: 0.5 },
+    { name: "Frosted", boxOn: true, boxColor: "#ffffff", boxOpacity: 0.2, boxRadius: 0.5 },
+    { name: "Hard shadow", shadow: true, shOpacity: 1, shBlur: 0, shDist: 0.07, shAngle: 45 },
+    { name: "Retro 3D", color: "#ffd23f", strokeW: 0.04, shadow: true, shColor: "#ee4266", shOpacity: 1, shBlur: 0, shDist: 0.09, shAngle: 45 },
+    { name: "Gold", color: "#e8c468", strokeW: 0.05, strokeColor: "#3b2a06", shadow: true, shOpacity: 0.6, shBlur: 0.25 },
+    { name: "Ink on paper", color: "#111111", boxOn: true, boxColor: "#f2efe6", boxOpacity: 1, boxRadius: 0.05 },
+    { name: "Neon pink", glowOn: true, glowColor: "#ff2e88", glowSize: 0.7 },
+    { name: "Neon cyan", glowOn: true, glowColor: "#00e5ff", glowSize: 0.7 }
+  ];
+  function applyTextPreset(t, p) {
+    Object.keys(PRESET_BASE).forEach((key) => { t[key] = p[key] != null ? p[key] : PRESET_BASE[key]; });
+    recordEdit("text-look", { look: p.name });
+  }
+  function drawPresetTile(cv, t, p) {
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#2a2b29";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    const sample = Object.assign({}, t, PRESET_BASE, p, { id: -1, text: "Aa", x: 0.5, y: 0.5, rotate: 0, curve: 0, size: (34 / cv.height) * HEADING_REF_H, align: "center" });
+    delete sample.animIn; delete sample.animOut; delete sample.animLoop;
+    drawHeading(ctx, sample, { x: 0, y: 0, w: cv.width, h: cv.height }, null, null);
+  }
+
+  // Before an export: the fonts every text uses, four seconds at most
+  function textFontsReady() {
+    const SF = window.SenotelFonts;
+    if (!SF) return Promise.resolve();
+    const jobs = S.texts.filter((t) => t.font).map((t) => {
+      const k = textLook(t);
+      return SF.load(k.font, k.weight, k.italic);
+    });
+    return Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, 4000))]);
   }
 
   /* ═══════════ LOWER THIRDS AND TITLE CARDS ═══════════
@@ -4475,7 +5433,7 @@
       ctx.fillStyle = t.bg || "#111210";
       ctx.fillRect(f.x, f.y, f.w, f.h);
       const size = unit * 1.15;
-      ctx.font = "400 " + size + "px " + HEADING_FONT;
+      ctx.font = textFontCss(t, size, 400, HEADING_FONT);
       ctx.textAlign = "center";
       ctx.fillStyle = t.color || "#edeae2";
       const lines = wrapHeading(ctx, t.text, f.w * 0.84);
@@ -4494,7 +5452,7 @@
       const inP = ease(local / 0.35);
       const a = clamp(Math.min(local / 0.2, left / 0.25), 0, 1);
       const name = unit * 0.62, sub = name * 0.66, pad = name * 0.5;
-      ctx.font = "600 " + name + "px " + LOWER_FONT;
+      ctx.font = textFontCss(t, name, 600, LOWER_FONT);
       const maxW = f.w * 0.8;
       const nameW = Math.min(maxW, ctx.measureText(t.text).width);
       ctx.font = "500 " + sub + "px " + LOWER_FONT;
@@ -4511,7 +5469,7 @@
       ctx.fillRect(x, y, rule, boxH);
       ctx.textAlign = "left";
       ctx.fillStyle = t.color || "#edeae2";
-      ctx.font = "600 " + name + "px " + LOWER_FONT;
+      ctx.font = textFontCss(t, name, 600, LOWER_FONT);
       ctx.fillText(t.text, x + rule + pad, y + pad + name / 2, maxW);
       if (t.sub) {
         ctx.font = "500 " + sub + "px " + LOWER_FONT;
@@ -4660,8 +5618,10 @@
       return { x: (sw - w) / 2, y: (sh - h) / 2, w: w, h: h };
     }
     const showingImg = !pi.classList.contains("hidden");
-    const vw = showingImg ? pi.naturalWidth : pv.videoWidth;
-    const vh = showingImg ? pi.naturalHeight : pv.videoHeight;
+    // a clip turned on its side is as wide as it was tall
+    const side = now && turned(now.clip);
+    const vw = side ? (showingImg ? pi.naturalHeight : pv.videoHeight) : showingImg ? pi.naturalWidth : pv.videoWidth;
+    const vh = side ? (showingImg ? pi.naturalWidth : pv.videoWidth) : showingImg ? pi.naturalHeight : pv.videoHeight;
     if (!vw || !vh || !sw || !sh) return { x: 0, y: 0, w: sw || 1, h: sh || 1 };
     const sc = Math.min(sw / vw, sh / vh);
     const w = vw * sc, h = vh * sc;
@@ -4687,7 +5647,7 @@
       // when word-timed captions are on, they own the caption layer —
       // don't also render the AI's sentence-captions (would double up)
       if (karaoke && t.cap) return;
-      if (textStyleOf(t) !== "heading") return;   // drawn with the captions (drawPreviewCaptions)
+      return;   // every text is drawn on the caption canvas now (drawTexts), as in the export
       if (S.time >= t.start && S.time <= t.start + t.dur) {
         const L = headingLayout(t, box.w, box.h);
         const d = mk("div", "overlay-text");
@@ -4728,12 +5688,13 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
     // lower thirds and title cards, inside the picture, under the captions; then the logo
-    const styled = S.texts.filter((t) => textStyleOf(t) !== "heading" && S.time >= t.start && S.time <= t.start + t.dur);
     const marked = S.clips.length && BRAND.mark && BRAND.mark !== "off" && BRAND.logo;
-    if (styled.length || marked) {
+    if (S.texts.length || marked) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const box = pictureBox();
-      styled.forEach((t) => drawStyledText(ctx, t, box, S.time));
+      drawTexts(ctx, box, S.time, textHits);
+      // headings on the picture can be pinched, so the browser must not take two fingers for itself
+      $("stage").classList.toggle("text-on", textHits.size > 0);
       if (marked) drawWatermark(ctx, box);
     }
     const C = global_SenotelCaptions();
@@ -6241,17 +7202,58 @@
     return null;
   }
 
+  /* ── Export settings (CapCut's export screen) ──
+     Resolution on the short side, frame rate, and quality. Kept on this
+     device, so the next export starts where the last one was set. The
+     bitrate follows the picture: pixels × frames, then the quality step. */
+  const EXPORT_OPTS = (() => {
+    const base = { res: 1080, fps: 30, q: "rec" };
+    try { return Object.assign(base, JSON.parse(localStorage.getItem("vclyps-export") || "{}")); } catch (e) { return base; }
+  })();
+  const QUALITY = { low: 0.6, rec: 1, high: 1.6 };
+  function exportBitrate(w, h, fps) {
+    const perFrame = w * h * 0.16 * Math.pow(fps / 30, 0.75) * 30;
+    return Math.round(clamp(perFrame * (QUALITY[EXPORT_OPTS.q] || 1), 2e6, 40e6));
+  }
+  function renderExportSheet() {
+    [["exRes", "res"], ["exFps", "fps"], ["exQ", "q"]].forEach(([id, k]) => {
+      document.querySelectorAll("#" + id + " button").forEach((b) => b.classList.toggle("active", String(EXPORT_OPTS[k]) === b.dataset.v));
+    });
+    const s = fastSize();
+    const br = exportBitrate(s.w, s.h, EXPORT_OPTS.fps);
+    const mb = ((br + 192000) / 8 / 1048576) * total();
+    $("exSize").textContent = s.w + " × " + s.h;
+    $("exNote").textContent = "About " + (mb < 1 ? "under 1" : Math.round(mb)) + " MB for this " + Math.round(total()) + "-second video." +
+      (EXPORT_OPTS.res >= 1440 ? " 2K needs a recent phone or computer; if this one can't, it exports at the size it can." : "");
+  }
+  (function wireExportSheet() {
+    [["exRes", "res", Number], ["exFps", "fps", Number], ["exQ", "q", String]].forEach(([id, k, as]) => {
+      document.querySelectorAll("#" + id + " button").forEach((b) => b.addEventListener("click", () => {
+        EXPORT_OPTS[k] = as(b.dataset.v);
+        try { localStorage.setItem("vclyps-export", JSON.stringify(EXPORT_OPTS)); } catch (e) {}
+        renderExportSheet();
+      }));
+    });
+    $("exGo").addEventListener("click", () => { closeSheets(); beginExport(); });
+  })();
+
   $("exportBtn").addEventListener("click", () => {
     if (generating) { toast("Your edit is still finishing. Export when it's ready."); return; }
     if (EXP.active || EXP.starting) { toast("An export is already running"); return; }
     if (!S.clips.length) { toast("The timeline is empty. Add clips or generate an edit first"); return; }
+    renderExportSheet();
+    openSheet("exportSheet");
+  });
+
+  function beginExport() {
+    if (EXP.active || EXP.starting) return;
     if (typeof MediaRecorder === "undefined") { toast("This browser can't record video. Try Chrome or Edge"); return; }
     const picked = pickMime();
     // the fast export first; it hands over to the real-time one if it can't run here
     if (window.SenotelFastExport) { startFastExport(picked); return; }
     if (!picked) { toast("This browser can't record video. Try Chrome or Edge"); return; }
     startExport(picked);
-  });
+  }
 
   /* ═══════════ FAST EXPORT (export-fast.js) ═══════════
      Every frame rendered as fast as the device can, by drawExportFrame (the
@@ -6261,11 +7263,10 @@
      keeps going in a background tab. If this device lacks any part of it,
      or something fails, the real-time export runs instead, so an export
      never simply fails because the fast path did. */
-  const FAST_FPS = 30;
 
   function fastSize() {
     const s = exportSize();
-    const k = 1080 / Math.min(s.w, s.h);       // 1080 on the short side
+    const k = (EXPORT_OPTS.res || 1080) / Math.min(s.w, s.h);   // the chosen resolution on the short side
     // encoders want even sizes
     return { w: Math.round((s.w * k) / 2) * 2, h: Math.round((s.h * k) / 2) * 2 };
   }
@@ -6273,9 +7274,19 @@
   async function startFastExport(picked) {
     if (EXP.active || EXP.starting) return;
     const F = window.SenotelFastExport;
-    const size = fastSize();
-    let sup = null;
-    try { sup = await F.supported(size.w, size.h, FAST_FPS); } catch (e) { sup = { ok: false, why: (e && e.message) || "check failed" }; }
+    /* The chosen size and frame rate, stepping down to the largest this
+       device's encoder takes (2K, then 1080p, then 720p) rather than
+       dropping to the slow export. */
+    const FAST_FPS = EXPORT_OPTS.fps || 30;
+    const want = EXPORT_OPTS.res || 1080;
+    let size = fastSize(), sup = null;
+    for (const res of [want, 1080, 720].filter((r, i, a) => r <= want && a.indexOf(r) === i)) {
+      const s0 = exportSize(), k = res / Math.min(s0.w, s0.h);
+      size = { w: Math.round((s0.w * k) / 2) * 2, h: Math.round((s0.h * k) / 2) * 2 };
+      try { sup = await F.supported(size.w, size.h, FAST_FPS, exportBitrate(size.w, size.h, FAST_FPS)); } catch (e) { sup = { ok: false, why: (e && e.message) || "check failed" }; }
+      if (sup.ok) break;
+    }
+    if (sup.ok && Math.min(size.w, size.h) < want) toast("This device can't encode " + (want >= 1440 ? "2K" : want + "p") + ", so it exports at " + Math.min(size.w, size.h) + "p", 5000);
     if (window.SenotelDiag) window.SenotelDiag.last.fastExport = sup.ok ? "yes" : "no: " + sup.why;
     if (!sup.ok) {
       if (!picked) { toast("This browser can't export video. Try Chrome or Edge"); return; }
@@ -6298,6 +7309,7 @@
       $("expPct").textContent = "0%";
       $("expStatus").textContent = "getting ready…";
       await captionFontReady();
+      await textFontsReady();
       await soundsReady();
       if (!stillHere()) return;
 
@@ -6321,6 +7333,7 @@
       const blob = await F.encode({
         canvas: EXP.canvas,
         fps: FAST_FPS,
+        bitrate: exportBitrate(size.w, size.h, FAST_FPS),
         duration: len,
         audio: audio,
         cancelled: () => !stillHere(),
@@ -6675,6 +7688,7 @@
     $("expPct").textContent = "0%";
 
     await captionFontReady();
+    await textFontsReady();
     await soundsReady();
     await primeFirstFrame();
     if (run !== EXP.run) return;
@@ -6685,7 +7699,7 @@
       EXP.track = stream.getVideoTracks()[0];
       if (!EXP.track || typeof EXP.track.requestFrame !== "function") {
         stream.getTracks().forEach((track) => track.stop());
-        stream = EXP.canvas.captureStream(30);
+        stream = EXP.canvas.captureStream(EXPORT_OPTS.fps || 30);
         EXP.track = stream.getVideoTracks()[0];
       }
       EXP.stream = stream;
@@ -6716,7 +7730,7 @@
     try {
       EXP.rec = new MediaRecorder(stream, {
         mimeType: picked.mime,
-        videoBitsPerSecond: 8000000,
+        videoBitsPerSecond: exportBitrate(EXP.canvas.width, EXP.canvas.height, EXPORT_OPTS.fps || 30),
         audioBitsPerSecond: 128000
       });
     } catch (e) {
@@ -6826,10 +7840,13 @@
         // Now the frame already follows the footage (exportSize), so filling
         // crops nothing in the normal case and only trims a genuinely
         // mismatched cutaway — which beats black bars either way.
-        const sc = Math.max(W / vw, H / vh);
-        const dw = vw * sc, dh = vh * sc;
+        // turned on its side, the picture covers the frame with its height as width
+        const side = turned(info.clip) && !(isVid && layoutOf(info.clip));
+        const ew = side ? vh : vw, eh = side ? vw : vh;
+        const sc = Math.max(W / ew, H / eh);
+        const dw = ew * sc, dh = eh * sc;
         let dx = (W - dw) / 2, dy = (H - dh) / 2;
-        if (dw > W + 1) {
+        if (dw > W + 1 && !side && !info.clip.flipH) {
           // smart crop: keep the frame centered on where the motion lives
           const mcx = (m && m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
           dx = clamp(W / 2 - mcx * dw, W - dw, 0);
@@ -6837,12 +7854,11 @@
         const L = isVid ? layoutOf(info.clip) : null;
         // the same transition the preview shows (transFx), in frame units
         const fx = transFx(info);
-        const look = FILTERS[info.clip.filter].css;
-        ctx.filter = fx.blur ? (look === "none" ? "" : look + " ") + "blur(" + (fx.blur * H).toFixed(1) + "px)" : look;
+        ctx.filter = pictureFilter(info.clip, fx.blur ? fx.blur * H : 0);
         const k = info.clip.kb;
         try {
           if (L) {
-            ctx.filter = look;
+            ctx.filter = pictureFilter(info.clip, 0);
             drawLayout(ctx, elm, vw, vh, L, { x: 0, y: 0, w: W, h: H });
           } else if (k || fx.scale !== 1 || fx.dx) {
             const p = clamp(info.offset / Math.max(dispDur(info.clip), 0.01), 0, 1);
@@ -6853,13 +7869,14 @@
             ctx.translate(W / 2 + tx, H / 2 + ty);
             ctx.scale(zs, zs);
             ctx.translate(-W / 2, -H / 2);
-            ctx.drawImage(elm, dx, dy, dw, dh);
+            drawOriented(ctx, elm, dx, dy, dw, dh, info.clip);
             ctx.restore();
           } else {
-            ctx.drawImage(elm, dx, dy, dw, dh);
+            drawOriented(ctx, elm, dx, dy, dw, dh, info.clip);
           }
         } catch (e) {}
         ctx.filter = "none";
+        drawAdjustVeils(ctx, info.clip, { x: 0, y: 0, w: W, h: H });
       }
     }
 
@@ -6902,35 +7919,8 @@
       ctx.fillRect(0, 0, W, H);
     }
 
-    const karaoke = S.captions && S.captions.length > 0;
-    // lower thirds and cards first, under the headings, as the preview layers them
-    S.texts.forEach((t) => {
-      if (textStyleOf(t) !== "heading" && S.time >= t.start && S.time <= t.start + t.dur) {
-        drawStyledText(ctx, t, { x: 0, y: 0, w: W, h: H }, S.time);
-      }
-    });
-    S.texts.forEach((t) => {
-      if (karaoke && t.cap) return; // karaoke owns captions — no doubling on export
-      if (textStyleOf(t) !== "heading") return;
-      if (S.time >= t.start && S.time <= t.start + t.dur) {
-        // same headingLayout() the preview uses, so the two cannot disagree
-        const L = headingLayout(t, W, H);
-        ctx.font = "400 " + L.size + "px " + HEADING_FONT;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = t.color;
-        ctx.shadowColor = "rgba(0,0,0,0.8)";
-        ctx.shadowBlur = L.size * 0.22;   // scales with the text, was a fixed 16px
-        // Wrap at the same width the DOM box uses and centre the whole block on
-        // cy, so a two-line heading sits where the preview showed it. No
-        // maxWidth argument here — that condenses glyphs rather than wrapping.
-        const lines = wrapHeading(ctx, t.text, L.maxW);
-        let ly = L.cy - ((lines.length - 1) * L.lineH) / 2;
-        lines.forEach((line) => { ctx.fillText(line, L.cx, ly); ly += L.lineH; });
-        ctx.shadowBlur = 0;
-        ctx.textBaseline = "alphabetic";  // captions.js draws next — leave it as found
-      }
-    });
+    // every text, drawn by the same code as the preview (drawTexts)
+    drawTexts(ctx, { x: 0, y: 0, w: W, h: H }, S.time, null);
 
     drawWatermark(ctx, { x: 0, y: 0, w: W, h: H });
 

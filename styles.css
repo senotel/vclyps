@@ -167,7 +167,6 @@ body.lv3 [data-min="4"] { display: none !important; }
   font-size: 12.5px;
   font-weight: 700;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 12px rgba(220, 20, 60, 0.3);
   flex: 0 0 auto;
 }
 .primary-btn:hover { filter: brightness(1.1); }
@@ -337,7 +336,6 @@ body[data-screen="editor"] input.editor-only { display: inline-block; }
   width: 84px;
   height: 84px;
   object-fit: contain;
-  filter: drop-shadow(0 8px 26px rgba(220, 20, 60, 0.2));
 }
 body.dark .landing-mark { filter: invert(1); }
 
@@ -401,7 +399,6 @@ body.dark .logo-img { filter: invert(1); }
   color: #fff;
   font-size: 16px;
   font-weight: 800;
-  box-shadow: 0 8px 30px rgba(220, 20, 60, 0.35);
   transition: all 0.15s ease;
 }
 .begin-btn .spark { color: #fff; }
@@ -666,6 +663,14 @@ body.dark .logo-img { filter: invert(1); }
   pointer-events: none;
   z-index: 3;
 }
+/* Adjust: warmth (soft-light colour) and vignette, placed over the picture
+   by app.js (adjustVeils), drawn the same way in the export */
+.adj-veil {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+}
+#adjWarm { mix-blend-mode: soft-light; }
 .cap-canvas {
   position: absolute;
   inset: 0;
@@ -1056,7 +1061,6 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   height: 8px;
   border-radius: 50%;
   background: var(--acc);
-  box-shadow: 0 0 6px rgba(220, 20, 60, 0.8);
 }
 .ms-state.work { animation: blink 1s ease-in-out infinite; }
 @keyframes blink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -1126,38 +1130,51 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
 
 .tl-inner { position: relative; min-width: 100%; width: max-content; padding: 0 20px; }
 
+/* The ruler, spaced the way CapCut spaces it: a time every ~70px or more,
+   centred on its second, a dot halfway between, and nothing else. */
 .ruler {
-  height: 22px;
+  height: 26px;
   position: relative;
   user-select: none;
   cursor: crosshair;
 }
-.ruler span {
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  color: var(--t2);
-}
 .rt {
   position: absolute;
-  bottom: 0;
-  height: 6px;
-  border-left: 1px solid var(--t2);
-  pointer-events: none;
-}
-.rt span {
-  position: absolute;
-  bottom: 8px;
-  left: 3px;
-  font-size: 9px;
+  top: 6px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--t2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  pointer-events: none;
+}
+.rdot {
+  position: absolute;
+  top: 12px;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  border-radius: 50%;
+  background: var(--t2);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.snap-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+  background: #e8c547;
+  z-index: 7;
+  pointer-events: none;
 }
 
 .track { position: relative; }
 .track-text {
-  height: 26px;
+  height: 32px;
   margin: 4px 0;
   border-radius: var(--rs);
   background: var(--bg1);
@@ -1166,7 +1183,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
 /* The main track is the spine, so it is the tallest and the only one with a
    solid ground rather than a tint. */
 .track-video {
-  height: 58px;
+  height: 64px;
   border-radius: var(--rs);
   background: var(--bg2);
   box-shadow: inset 0 0 0 1px var(--line);
@@ -1188,27 +1205,29 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   min-width: 26px;
   user-select: none;
 }
-.clip img { height: 100%; aspect-ratio: 1; object-fit: cover; opacity: 0.95; pointer-events: none; flex: 0 0 auto; }
-.clip .cname {
-  align-self: center;
-  padding: 0 7px;
-  font-size: 9.5px;
-  font-weight: 700;
-  color: var(--text);
+/* the frame strip: square pictures from inside the clip, edge to edge */
+.clip .cstrip { position: absolute; inset: 0; display: flex; overflow: hidden; pointer-events: none; background: #1b1c1a; }
+.clip .cstrip img { flex: 0 0 56px; width: 56px; height: 100%; object-fit: cover; display: block; }
+.clip .cname, .clip .cdur, .clip .cbadge {
+  position: absolute;
+  max-width: calc(100% - 12px);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(17, 18, 16, 0.72);
+  color: #edeae2;
+  font-size: 10px;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
 }
-.clip .cdur {
-  position: absolute;
-  bottom: 2px; right: 5px;
-  font-size: 8.5px;
-  color: var(--t1);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-.clip.sel { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); z-index: 3; }
+.clip .cname { top: 4px; left: 6px; }
+.clip .cbadge { bottom: 4px; left: 6px; }
+.clip .cdur { top: 4px; right: 6px; font-variant-numeric: tabular-nums; }
+.clip.sel .cname { left: 16px; }
+.clip.sel .cdur { right: 16px; }
+.clip.sel { border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); z-index: 3; }
 .clip.dragging { opacity: 0.75; z-index: 8; cursor: grabbing; }
 
 .handle {
@@ -1229,8 +1248,9 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   border-radius: 3px;
   background: #fff;
 }
-.handle.hl { left: 0; background: linear-gradient(90deg, var(--acc), transparent); }
-.handle.hr { right: 0; background: linear-gradient(-90deg, var(--acc), transparent); }
+/* solid grips, CapCut's shape in Senotel crimson: no fade, no halo */
+.handle.hl { left: 0; background: var(--acc); border-radius: 7px 0 0 7px; }
+.handle.hr { right: 0; background: var(--acc); border-radius: 0 7px 7px 0; }
 
 .tclip {
   position: absolute;
@@ -1252,7 +1272,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   min-width: 24px;
   user-select: none;
 }
-.tclip.sel { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); z-index: 3; }
+.tclip.sel { border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); z-index: 3; }
 
 .playhead {
   position: absolute;
@@ -1337,7 +1357,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
 }
 .oclip.sel {
   border-color: #d68a14;
-  box-shadow: 0 0 0 3px rgba(214, 138, 20, 0.22);
+  box-shadow: inset 0 0 0 1px #d68a14;
   z-index: 3;
 }
 
@@ -1374,7 +1394,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
 }
 .aclip.sel {
   border-color: #6d4cd6;
-  box-shadow: 0 0 0 3px rgba(109, 76, 214, 0.22);
+  box-shadow: inset 0 0 0 1px #6d4cd6;
   z-index: 3;
 }
 
@@ -1512,7 +1532,7 @@ body.dark .aclip { color: #b7a2f5; }
 .lib-item.pickable { cursor: pointer; }
 .lib-item.pickable:hover {
   border-color: var(--acc);
-  box-shadow: 0 0 0 3px var(--acc-soft);
+  box-shadow: inset 0 0 0 1px var(--acc);
 }
 
 /* ===================== SHEETS ===================== */
@@ -1648,7 +1668,7 @@ body.dark .about-logo { filter: invert(1); }
 }
 
 .set-input::placeholder { color: var(--t2); }
-.set-input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+.set-input:focus { outline: none; border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
 .set-soon {
   margin-top: 14px;
   text-align: center;
@@ -1777,7 +1797,13 @@ body.previewFs .stage-zone { position: static; }
   .stage-zone { padding: 8px 10px 2px; }
   /* A third of the screen for the picture, the rest for the work, the split
      CapCut uses on a phone */
-  .stage { min-height: clamp(190px, 34vh, 420px); }
+  /* CapCut's split on a phone: the picture takes a fixed share, the timeline
+     the rest (a third of the screen or more), so editing is never squeezed */
+  .stage-zone { flex: 0 0 auto; }
+  .stage { flex: 0 0 auto; height: clamp(210px, 40vh, 420px); min-height: 0; }
+  .tl-zone { flex: 1 0 auto; min-height: 230px; }
+  /* the library strip repeats Add and the Library button; on a phone that row belongs to the timeline */
+  .media-strip { display: none; }
   .transport { gap: 6px; padding-top: 6px; }
   .tcode { min-width: 36px; font-size: 11px; }
 
@@ -1806,6 +1832,7 @@ body.previewFs .stage-zone { position: static; }
    room to the preview; each comes back the moment something is put on it */
 @media (max-width: 1100px) {
   .track.empty { display: none; }
+  .track.empty.offer { display: block; }
 }
 
 /* On phones and tablets the transport rides on the bottom edge of the
@@ -2130,7 +2157,7 @@ body.previewFs .stage-zone { position: static; }
 }
 .mclip::before { content: "\266A"; font-size: 11px; color: var(--acc); }
 .mclip .mname { font-size: 10px; font-weight: 600; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; }
-.mclip.sel { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); color: var(--text); z-index: 3; }
+.mclip.sel { border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); color: var(--text); z-index: 3; }
 
 /* ===================== ADD MEDIA =====================
    One sheet for every way in. The device comes first and largest because it
@@ -2249,7 +2276,7 @@ body.previewFs .stage-zone { position: static; }
 .uclip .uname { font-size: 9.5px; font-weight: 700; pointer-events: none; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .uclip .awave { display: flex; align-items: center; gap: 1.5px; height: 60%; flex: 1 1 auto; overflow: hidden; pointer-events: none; opacity: 0.55; }
 .uclip .awave i { width: 1.5px; border-radius: 1px; background: currentColor; flex: 0 0 auto; }
-.uclip.sel { border-color: #2b7fb8; box-shadow: 0 0 0 3px rgba(43, 127, 184, 0.22); z-index: 3; }
+.uclip.sel { border-color: #2b7fb8; box-shadow: inset 0 0 0 1px #2b7fb8; z-index: 3; }
 body.dark .uclip { color: #7fb8e0; }
 
 /* An audio file in the strip and the library: it has no picture, so it shows
@@ -2318,7 +2345,7 @@ body.dark .uclip { color: #7fb8e0; }
   transition: border-color 0.15s ease;
 }
 .cap-tile:hover { border-color: var(--t2); }
-.cap-tile.selected { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft); color: var(--text); }
+.cap-tile.selected { border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); color: var(--text); }
 .cap-tile:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 /* a dark frame whatever the theme: captions are designed to sit on footage */
 .cap-tile-cv {
@@ -2549,3 +2576,106 @@ body.dark .uclip { color: #7fb8e0; }
 }
 .clip-title:hover { border-color: var(--line); }
 .clip-title:focus { outline: none; border-color: var(--acc); background: var(--bg2); }
+
+/* ===================== FONTS (fonts.js) =====================
+   The font button shows the chosen font in itself; the picker is a sheet of
+   names, each written in its own font, with search and groups. */
+.font-btn {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  min-width: 200px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: var(--rs);
+  background: var(--bg2); color: var(--text); text-align: left;
+}
+.font-btn:hover { border-color: var(--t2); }
+.font-btn-name { font-size: 17px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.font-btn-more { font-size: 11px; color: var(--t2); white-space: nowrap; }
+.fp-wrap {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.fp-sheet {
+  width: min(720px, 100%); max-height: min(78vh, 680px);
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px 16px;
+  background: var(--bg1); border: 1px solid var(--line); border-bottom: 0;
+  border-radius: var(--r) var(--r) 0 0;
+}
+@media (min-width: 761px) { .fp-wrap { align-items: center; } .fp-sheet { border-bottom: 1px solid var(--line); border-radius: var(--r); } }
+.fp-head { display: flex; align-items: baseline; gap: 10px; flex: 0 0 auto; }
+.fp-head h3 { font-size: 15px; font-weight: 700; }
+.fp-count { font-size: 11.5px; color: var(--t2); flex: 1; }
+.fp-close { border: none; background: none; color: var(--t1); font-size: 16px; padding: 4px 8px; }
+.fp-search {
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--rs);
+  background: var(--bg2); color: var(--text); font: inherit; font-size: 13px;
+}
+.fp-search:focus { outline: none; border-color: var(--acc); }
+.fp-cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; flex: 0 0 auto; }
+.fp-search { flex: 0 0 auto; }
+.fp-cats .chip { flex: 0 0 auto; }
+.fp-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px;
+  overflow-y: auto; overscroll-behavior: contain; padding-right: 2px;
+  flex: 1 1 auto; min-height: 0; align-content: start;
+}
+.fp-tile {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  min-height: 62px; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: var(--rs);
+  background: var(--bg2); color: var(--text); text-align: left;
+}
+.fp-tile:hover { border-color: var(--t2); }
+.fp-tile.selected { border-color: var(--acc); background: var(--bg3); }
+/* clipped sideways only: some display fonts reach far above and below their line */
+.fp-name { font-size: 19px; line-height: 1.45; padding: 1px 0; max-width: 100%; white-space: nowrap; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; }
+.fp-tile small { font-size: 10.5px; line-height: 1.35; color: var(--t2); }
+.fp-extra .fp-name { font-size: 15px; font-weight: 600; }
+.fp-none { grid-column: 1 / -1; color: var(--t2); font-size: 12.5px; padding: 18px 0; }
+@media (max-width: 760px) { .fp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fp-name { font-size: 17px; } }
+
+/* caption "Make it yours" */
+.cap-look { gap: 8px; }
+.look-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.look-row > span { min-width: 108px; font-size: 12px; color: var(--t1); }
+.look-row input[type="color"] { width: 34px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: var(--rs); background: var(--bg2); }
+.look-row input[type="range"] { flex: 1 1 120px; accent-color: var(--acc); }
+.look-row select { flex: 1 1 160px; }
+.look-row .ins-seg { flex: 1 1 260px; }
+.look-row output { font-size: 11px; color: var(--t2); min-width: 44px; }
+
+/* the text panel's tabs, as CapCut's */
+.ins-tabs { display: flex; gap: 2px; width: 100%; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.ins-tab {
+  flex: 0 0 auto; padding: 8px 12px; border: none; border-bottom: 2px solid transparent;
+  background: none; color: var(--t1); font-size: 12px; font-weight: 600;
+}
+.ins-tab.active { color: var(--text); border-bottom-color: var(--acc); }
+.ins-textarea {
+  width: min(320px, 100%); padding: 8px 11px; resize: vertical;
+  border: 1px solid var(--line); border-radius: var(--rs);
+  background: var(--bg2); color: var(--text); font: inherit; font-size: 13px; line-height: 1.4;
+}
+.ins-textarea:focus { outline: none; border-color: var(--acc); }
+.ins-row { display: flex; align-items: center; gap: 9px; }
+.tx-presets { display: grid; grid-template-columns: repeat(4, 64px); gap: 6px; }
+.tx-preset { padding: 0; border: 1px solid var(--line); border-radius: var(--rs); background: #2a2b29; overflow: hidden; line-height: 0; }
+.tx-preset canvas { width: 64px; height: 34px; display: block; }
+.tx-preset:hover { border-color: var(--t2); }
+@media (min-width: 761px) { .tx-presets { grid-template-columns: repeat(8, 64px); } }
+.adj-grid { display: flex; flex-direction: column; gap: 6px; }
+.adj-grid .ins-group label { min-width: 72px; }
+
+/* pinching a text on the picture: the browser must leave two fingers alone */
+.stage.text-on { touch-action: none; }
+#exportSheet .primary-btn { width: 100%; margin-top: 6px; }
+/* "+ Add text" / "+ Add audio" along an empty lane, as CapCut offers them */
+.lane-add {
+  position: absolute; left: 0; top: 1px; bottom: 1px;
+  display: flex; align-items: center; padding: 0 12px;
+  border: none; border-radius: 7px;
+  background: var(--bg2); color: var(--t1);
+  font-size: 12.5px; font-weight: 500; text-align: left;
+}
+.lane-add:hover { color: var(--text); background: var(--bg3); }
+.track-uaudio.offer, .track-text.offer { height: 34px; }

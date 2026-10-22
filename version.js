@@ -59,9 +59,19 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.29.1";
+  var VERSION = "0.30.0";
   var RELEASED = "2026-10-22";
-  var NOTES = "Double-tap the timeline to put its zoom back to normal. " +
+  var NOTES = "Fonts: 132 for captions and 166 for text, every one different, with a " +
+              "picker that shows each in its own letters. Text can be styled like CapCut: " +
+              "outline, background, shadow, glow, spacing, curve, rotation, 16 one-tap looks, " +
+              "and animations in, out and on a loop; drag it on the picture, pinch it bigger " +
+              "and turn it with two fingers. Captions can be changed piece by piece. Clips: " +
+              "Adjust (brightness, contrast, saturation, warmth, vignette), mirror, flip and " +
+              "rotate, freeze frame and replace. A line and a buzz when things snap together. " +
+              "Export settings: 720p to 2K, 24 to 60 frames a second, and quality. The " +
+              "timeline looks like CapCut's: frames along each clip, spaced times, more room " +
+              "on phones. No more glowing buttons. " +
+              "0.29.1: double-tap the timeline to put its zoom back to normal. " +
               "0.29.0: the timeline handles like CapCut: on a phone it only moves sideways " +
               "under your finger and glides when flicked, two fingers pinch it in and " +
               "out, and a clip dragged to the edge carries the timeline with it. On a " +

@@ -14,7 +14,7 @@
      · keywords    the word worth colouring in each caption
      · translate   Chrome's built-in translator on the device where it
                    exists, otherwise the AI Director
-     · fonts       30 caption fonts (free Google Fonts), and fonts you
+     · fonts       the caption and text libraries of fonts.js, and fonts you
                    upload, kept on this device
    Exposes window.SenotelCaptionTools.
    ═══════════════════════════════════════════════════════════ */
@@ -403,8 +403,15 @@
     ["Kanit", "600;700;800"], ["Prompt", "600;700;800"], ["Noto Sans", "700;800;900"],
     ["Black Ops One", "400"], ["Righteous", "400"]
   ];
+  /* fonts.js holds the full libraries (caption fonts and text fonts) and
+     fetches one family and weight at a time. The thirty above are the
+     fallback when it isn't loaded, as in the tests. */
+  var SF = global.SenotelFonts || null;
+  if (SF) FONTS = SF.ALL;
+
   var fontCssAdded = false;
   function loadFontCss() {
+    if (SF) return;   // fonts.js loads each font when it is first drawn
     if (fontCssAdded || typeof document === "undefined") return;
     fontCssAdded = true;
     var fam = FONTS.map(function (f) {
@@ -425,6 +432,14 @@
     var key = (weight || 400) + " " + family;
     if (fontState[key] === "ok") return Promise.resolve(true);
     if (fontState[key] && fontState[key].then) return fontState[key];
+    if (SF && SF.info(family)) {
+      fontState[key] = SF.load(family, weight).then(function (ok) {
+        fontState[key] = "ok";
+        if (api.onFont) try { api.onFont(); } catch (e) {}
+        return ok;
+      });
+      return fontState[key];
+    }
     loadFontCss();
     var p = document.fonts.load(key.replace(" ", " 48px \"") + "\"", "Ag").then(function (list) {
       fontState[key] = "ok";

@@ -272,7 +272,7 @@ body:not([data-screen="home"]) .lp-root * { animation-play-state: paused !import
    into a timeline, and at 91% it was invisible. */
 .lp-walk { z-index: 1; background: #111210cc; }
 .lp-workspace { transition: box-shadow .8s var(--ease); }
-.lp-workspace[data-phase="2"] { box-shadow: 18px 22px 0 -1px #111210,18px 22px 0 #55513f,0 0 80px #f33c460a; }
+.lp-workspace[data-phase="2"] { box-shadow: 18px 22px 0 -1px #111210,18px 22px 0 #55513f; }
 
 /* Masked type advances in reading order with native scrolling. No duplicate
    text layer, text scrambling or screen-reader-only replacement is needed. */
