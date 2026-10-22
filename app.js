@@ -2873,7 +2873,18 @@
       tel.style.left = t.start * S.pps + "px";
       tel.style.width = Math.max(t.dur * S.pps, 24) + "px";
       tel.textContent = "T  " + t.text;
-      tel.addEventListener("pointerdown", (e) => holdToDrag(e, (ev) => startTextDrag(ev, t)));
+      // a selected text stretches from either edge, as CapCut's do
+      if (S.sel && S.sel.type === "text" && S.sel.id === t.id) {
+        const hl = mk("div", "handle hl"), hr = mk("div", "handle hr");
+        tel.appendChild(hl);
+        tel.appendChild(hr);
+        hl.addEventListener("pointerdown", (ev) => startOverlayTrim(ev, t, "l", tel));
+        hr.addEventListener("pointerdown", (ev) => startOverlayTrim(ev, t, "r", tel));
+      }
+      tel.addEventListener("pointerdown", (e) => {
+        if (e.target.classList.contains("handle")) return;
+        holdToDrag(e, (ev) => startTextDrag(ev, t));
+      });
       tt.appendChild(tel);
     });
 
@@ -2907,6 +2918,8 @@
      it stopped dead on release and could scroll the whole editor up and
      down, which CapCut never does.) */
   const HOLD_MS = 280;
+  // one tap of the phone's vibration motor, wherever vClyps runs (platform.js haptic)
+  function buzz(kind) { try { if (window.SenotelPlatform && SenotelPlatform.haptic) SenotelPlatform.haptic(kind); } catch (e) {} }
   function holdToDrag(e, start) {
     if (e.pointerType !== "touch") { start(e); return; }
     const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
@@ -2929,7 +2942,7 @@
       };
       window.addEventListener("pointerup", release);
       window.addEventListener("pointercancel", release);
-      try { if (navigator.vibrate) navigator.vibrate(10); } catch (err) {}
+      buzz("medium");   // picked up
       start(e);   // picked up: the drag code takes the rest of the gesture
     }, HOLD_MS);
     const move = (ev) => {
@@ -3543,6 +3556,7 @@
     span(S.broll, (b) => b.dur);
     span(S.audio, (a) => audioDur(a));
     span(S.sfx, (x) => sfxDur(x.name));
+    if (S.music && S.music !== except) { const m = musicSpan(); marks.push(m.from, m.to); }
     return marks;
   }
 
@@ -3554,7 +3568,7 @@
     const line = $("snapLine");
     if (lastSnap == null) { line.classList.add("hidden"); shownSnap = null; return; }
     if (shownSnap == null || Math.abs(shownSnap - lastSnap) > 1e-6) {
-      try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+      buzz("light");
     }
     shownSnap = lastSnap;
     line.style.left = padL() + lastSnap * S.pps + "px";
@@ -3593,8 +3607,8 @@
   function startFreeDrag(e, item, kind, el) {
     e.preventDefault();
     e.stopPropagation();
-    const already = S.sel && S.sel.type === kind && S.sel.id === item.id;
-    S.sel = { type: kind, id: item.id };
+    const already = S.sel && S.sel.type === kind && (kind === "music" || S.sel.id === item.id);
+    S.sel = kind === "music" ? { type: "music" } : { type: kind, id: item.id };
     if (!already) {
       /* Selecting used to redraw the whole timeline, which DESTROYED the
          element this drag is holding — every later move then set `left` on a
@@ -3607,11 +3621,11 @@
          untouched, which is also the smoothest thing that can happen. An
          overlay does grow handles when selected, so it must redraw, and then
          take hold of the replacement. */
-      const track = kind === "broll" ? $("overlayTrack") : kind === "uaudio" ? $("uaudioTrack") : $("audioTrack");
-      // overlays and audio clips grow trim handles when selected, so they redraw
-      if (kind === "broll" || kind === "uaudio") {
+      const track = kind === "broll" ? $("overlayTrack") : kind === "uaudio" ? $("uaudioTrack") : kind === "music" ? $("musicTrack") : $("audioTrack");
+      // overlays, audio clips and the music grow trim handles when selected, so they redraw
+      if (kind === "broll" || kind === "uaudio" || kind === "music") {
         renderTimeline();
-        el = track.querySelector('[data-id="' + item.id + '"]') || el;
+        el = (kind === "music" ? track.querySelector(".mclip") : track.querySelector('[data-id="' + item.id + '"]')) || el;
       } else {
         track.querySelectorAll(".sel").forEach((n) => n.classList.remove("sel"));
         if (el) el.classList.add("sel");
@@ -3628,8 +3642,8 @@
     try { if (el && el.setPointerCapture && e.pointerId != null) el.setPointerCapture(e.pointerId); } catch (err) {}
 
     const startX = e.clientX;
-    const startAt = item.start;
-    const span = kind === "broll" ? item.dur : kind === "uaudio" ? audioDur(item) : sfxDur(item.name);
+    const startAt = kind === "music" ? musicSpan().from : item.start;
+    const span = kind === "broll" ? item.dur : kind === "uaudio" ? audioDur(item) : kind === "music" ? musicSpan().to - musicSpan().from : sfxDur(item.name);
     const limit = Math.max(0, total() - 0.05);
     let moved = false;
 
@@ -3639,6 +3653,7 @@
       moved = true;
       const raw = clamp(startAt + dx / S.pps, 0, limit);
       item.start = clamp(snapSpan(raw, span, item), 0, limit);
+      if (kind === "music") { item.end = item.start + span; syncMusic(); }   // moves as one piece
       if (el) el.style.left = item.start * S.pps + "px";
       syncOverlays();
       if (kind === "uaudio") syncAudioClips();   // its row is settled on release
@@ -3727,24 +3742,64 @@
     });
   }
 
-  /* One bar the length of the edit, because that is what the bed does: it
-     loops under everything. Tap to select it and set its level. */
+  /* The music is a clip like any other (0.30.1): it starts under the whole
+     edit, and can be held and moved, or trimmed from either end (the song
+     keeps its place under a left trim, as in CapCut). Tap to set its level. */
   function renderMusicTrack(mt) {
     if (!S.music) return;
     const on = S.sel && S.sel.type === "music";
+    const sp = musicSpan();
     const el = mk("div", "mclip" + (on ? " sel" : ""));
-    el.style.left = "0px";
-    el.style.width = Math.max(total() * S.pps, 60) + "px";
+    el.style.left = sp.from * S.pps + "px";
+    el.style.width = Math.max((sp.to - sp.from) * S.pps, 40) + "px";
     const name = mk("span", "mname", "");
     name.textContent = S.music.title;
     el.appendChild(name);
+    if (on) {
+      const hl = mk("div", "handle hl"), hr = mk("div", "handle hr");
+      el.appendChild(hl);
+      el.appendChild(hr);
+      hl.addEventListener("pointerdown", (ev) => startMusicTrim(ev, "l", el));
+      hr.addEventListener("pointerdown", (ev) => startMusicTrim(ev, "r", el));
+    }
     el.addEventListener("pointerdown", (ev) => {
+      if (ev.target.classList.contains("handle")) return;
       ev.stopPropagation();
-      S.sel = { type: "music" };
-      renderTimeline();
-      renderInspector();
+      holdToDrag(ev, (x) => startFreeDrag(x, S.music, "music", el));
     });
     mt.appendChild(el);
+  }
+
+  function startMusicTrim(e, side, el) {
+    e.preventDefault();
+    e.stopPropagation();
+    const m = S.music, sp0 = musicSpan(), x0 = e.clientX;
+    const move = (ev) => {
+      const d = (ev.clientX - x0) / S.pps;
+      if (side === "l") {
+        // no earlier than the song's own start
+        const from = clamp(snapPoint(sp0.from + d, m), Math.max(0, sp0.from - sp0.at), sp0.to - 0.5);
+        m.start = from;
+        m.in = Math.max(0, sp0.at + (from - sp0.from));
+        if (m.end == null) m.end = sp0.to;
+      } else {
+        m.end = clamp(snapPoint(sp0.to + d, m), sp0.from + 0.5, total());
+      }
+      const s = musicSpan();
+      el.style.left = s.from * S.pps + "px";
+      el.style.width = Math.max((s.to - s.from) * S.pps, 40) + "px";
+      syncMusic();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      hideSnap();
+      commit();
+      renderTimeline();
+      renderInspector();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   }
 
   function renderAudioTrack(at) {
@@ -4636,11 +4691,51 @@
       ins.appendChild(group("Align", chips([["left", "Left"], ["center", "Centre"], ["right", "Right"]], k.align, (v) => { t.align = v; })));
     }
 
-    if (textTab === "anim") {
-      ins.appendChild(group("In", chips(TEXT_ANIMS_IN, t.animIn || "none", (v) => { if (v === "none") delete t.animIn; else t.animIn = v; previewTextAnim(t, "in"); })));
-      ins.appendChild(group("Out", chips(TEXT_ANIMS_OUT, t.animOut || "none", (v) => { if (v === "none") delete t.animOut; else t.animOut = v; previewTextAnim(t, "out"); })));
-      ins.appendChild(group("Loop", chips(TEXT_ANIMS_LOOP, t.animLoop || "none", (v) => { if (v === "none") delete t.animLoop; else t.animLoop = v; previewTextAnim(t, "in"); })));
-      ins.appendChild(group("Length", slider(0.2, 2, 0.05, t.animLen || 0.5, (v) => { t.animLen = v; }, save, (v) => v.toFixed(2) + "s")));
+    if (textTab === "anim" && TA()) {
+      /* CapCut's layout: In, Out and Loop, each a grid of moving previews
+         of this very text's look. Tap one to use it and see it play. */
+      const lib = TA();
+      const KIND = { in: ["animIn", lib.IN], out: ["animOut", lib.OUT], loop: ["animLoop", lib.LOOP] };
+      const sub = mk("div", "ins-seg anim-kinds");
+      [["in", "In"], ["out", "Out"], ["loop", "Loop"]].forEach(([key, label]) => {
+        const field = KIND[key][0];
+        const b = mk("button", animKind === key ? "active" : "", label + (t[field] ? " •" : ""));
+        b.type = "button";
+        b.addEventListener("click", () => { animKind = key; renderInspector(); });
+        sub.appendChild(b);
+      });
+      ins.appendChild(sub);
+      const [field, list] = KIND[animKind];
+      const grid = mk("div", "anim-grid");
+      [["none", "None"]].concat(list).forEach(([id, label]) => {
+        const b = mk("button", "anim-tile" + ((t[field] || "none") === id ? " selected" : ""));
+        b.type = "button";
+        b.title = label;
+        if (id !== "none") {
+          const cv = document.createElement("canvas");
+          cv.dataset.anim = id;
+          b.appendChild(cv);
+        } else b.appendChild(mk("span", "anim-none", "None"));
+        b.appendChild(mk("span", "anim-name", label));
+        b.addEventListener("click", () => {
+          if (id === "none") delete t[field];
+          else {
+            t[field] = id;
+            if (animKind !== "loop" && !t.animLenSet) t.animLen = lib.lengthFor(id);
+          }
+          commit();
+          renderInspector();
+          syncOverlays();
+          if (id !== "none") previewTextAnim(t, animKind === "out" ? "out" : "in");
+        });
+        grid.appendChild(b);
+      });
+      ins.appendChild(grid);
+      if (animKind !== "loop") {
+        ins.appendChild(group("Length", slider(0.2, 2.5, 0.05, t.animLen || 0.5,
+          (v) => { t.animLen = v; t.animLenSet = true; }, save, (v) => v.toFixed(2) + "s")));
+      }
+      animateAnimTiles(t, animKind);
     }
 
     if (textTab === "place") {
@@ -4741,6 +4836,52 @@
      fingers pinch it bigger or smaller and turn it (snapping level within a
      few degrees). Hits come from where drawHeading last drew each text. */
   let textGestureUsed = false;
+
+  /* Alignment while a text is dragged, CapCut's guides: its centre lands on
+     the picture's centre lines, its edges on the safe margins (5% in from
+     each side), and its centre or edges on another text's. Whatever it
+     lands on is drawn as a line (textGuides, drawn by drawPreviewCaptions)
+     and the phone ticks once as it lands. x, y and the result are
+     fractions of the picture. */
+  let textGuides = null, guideKey = "";
+  function alignText(t, x, y, box) {
+    const me = textHits.get(t.id);
+    const hw = me ? me.w / 2 / box.w : 0, hh = me ? me.h / 2 / box.h : 0;
+    const tolX = 7 / box.w, tolY = 7 / box.h;
+    const xs = [[0.5, 0.5, "c"]], ys = [[0.5, 0.5, "c"]];   // [where my centre goes, where the line is]
+    xs.push([0.05 + hw, 0.05, "m"], [0.95 - hw, 0.95, "m"]);
+    ys.push([0.05 + hh, 0.05, "m"], [0.95 - hh, 0.95, "m"]);
+    textHits.forEach((h, id) => {
+      if (id === t.id) return;
+      const cx = (h.x - box.x) / box.w, cy = (h.y - box.y) / box.h, ow = h.w / 2 / box.w, oh = h.h / 2 / box.h;
+      xs.push([cx, cx, "t"], [cx - ow + hw, cx - ow, "t"], [cx + ow - hw, cx + ow, "t"]);
+      ys.push([cy, cy, "t"], [cy - oh + hh, cy - oh, "t"], [cy + oh - hh, cy + oh, "t"]);
+    });
+    const pick = (v, list, tol) => {
+      let best = null;
+      list.forEach((c) => { const d = Math.abs(c[0] - v); if (d < tol && (!best || d < best.d)) best = { d: d, to: c[0], line: c[1], kind: c[2] }; });
+      return best;
+    };
+    const bx = pick(x, xs, tolX), by = pick(y, ys, tolY);
+    textGuides = { v: bx ? [bx.line] : [], h: by ? [by.line] : [] };
+    const key = (bx ? bx.line.toFixed(3) : "") + "|" + (by ? by.line.toFixed(3) : "");
+    if (key !== guideKey && key !== "|") buzz("light");
+    guideKey = key;
+    return { x: bx ? bx.to : x, y: by ? by.to : y };
+  }
+  // the guides, over the picture, in the preview only
+  function drawTextGuides(ctx, box) {
+    if (!textGuides || (!textGuides.v.length && !textGuides.h.length)) return;
+    ctx.save();
+    ctx.strokeStyle = "#e8c547";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    textGuides.v.forEach((fx) => { const x = Math.round(box.x + fx * box.w) + 0.5; ctx.moveTo(x, box.y); ctx.lineTo(x, box.y + box.h); });
+    textGuides.h.forEach((fy) => { const y = Math.round(box.y + fy * box.h) + 0.5; ctx.moveTo(box.x, y); ctx.lineTo(box.x + box.w, y); });
+    ctx.stroke();
+    ctx.restore();
+  }
+
   (function textOnPicture() {
     const stage = $("stage");
     const pts = new Map();
@@ -4781,6 +4922,7 @@
         const box = pictureBox();
         const L = headingLayout(t, box.w, box.h);
         g = { t: t, box: box, cx0: L.cx / box.w, cy0: L.cy / box.h, moved: false };
+        guideKey = "";
       }
       pts.set(e.pointerId, p);
       try { stage.setPointerCapture(e.pointerId); } catch (err) {}
@@ -4798,22 +4940,21 @@
       const t = g.t, box = g.box;
       if (pts.size >= 2 && g.d0) {
         const tf = twoFinger();
+        textGuides = null;   // pinching: size and turn, no alignment lines
         t.size = clamp(g.size0 * (tf.d / g.d0), 10, 220);
         let rot = g.rot0 + ((tf.a - g.a0) * 180) / Math.PI;
         rot = ((rot + 540) % 360) - 180;
         if (Math.abs(rot) < 4) rot = 0;   // level is easy to land on
+        if (rot === 0 && (g.t.rotate || 0) !== 0) buzz("light");
         t.rotate = Math.round(rot);
         t.x = clamp(g.x0 + (tf.cx - g.c0.cx) / box.w, 0, 1);
         t.y = clamp(g.y0 + (tf.cy - g.c0.cy) / box.h, 0, 1);
       } else {
         const p = pts.get(e.pointerId), p0 = g.p0.get(e.pointerId);
         if (!p0) return;
-        let x = g.x0 + (p.x - p0.x) / box.w, y = g.y0 + (p.y - p0.y) / box.h;
-        // the centre lines are easy to land on, as in CapCut
-        if (Math.abs(x - 0.5) < 0.015) x = 0.5;
-        if (Math.abs(y - 0.5) < 0.015) y = 0.5;
-        t.x = clamp(x, 0, 1);
-        t.y = clamp(y, 0, 1);
+        const al = alignText(t, g.x0 + (p.x - p0.x) / box.w, g.y0 + (p.y - p0.y) / box.h, box);
+        t.x = clamp(al.x, 0, 1);
+        t.y = clamp(al.y, 0, 1);
       }
       g.moved = true;
       syncOverlays();
@@ -4829,6 +4970,8 @@
       }
       if (g.moved) { commit(); recordEdit("text-move", {}); if (textTab === "place") renderInspector(); }
       g = null;
+      textGuides = null;
+      syncOverlays();
     };
     stage.addEventListener("pointerup", end, true);
     stage.addEventListener("pointercancel", end, true);
@@ -5145,11 +5288,24 @@
     if (hits) hits.set(t.id, { x: f.x + L.cx, y: f.y + L.cy, w: blockW + pad * 2, h: blockH + pad * 2 + sag, rot: k.rotate });
     if (A.dx || A.dy) ctx.translate(A.dx * size, A.dy * size);
     if (k.rotate || A.r) ctx.rotate(((k.rotate + A.r) * Math.PI) / 180);
-    if (A.s !== 1) ctx.scale(A.s, A.s);
+    if (A.s !== 1 || A.sx !== 1 || A.sy !== 1) ctx.scale(A.s * A.sx, A.s * A.sy);
+    if (A.kx) ctx.transform(1, 0, A.kx, 1, 0, 0);
     ctx.globalAlpha *= clamp(k.opacity * A.a, 0, 1);
     // shadows are in device pixels and ignore the transform; scale them by hand
     const m = ctx.getTransform ? ctx.getTransform() : { a: 1, b: 0 };
     const px = Math.hypot(m.a, m.b) || 1;
+    const canBlur = "filter" in ctx;
+    if (A.blur > 0.005 && canBlur) ctx.filter = "blur(" + (A.blur * size * px / (window.devicePixelRatio > 1 ? Math.min(2, window.devicePixelRatio) : 1)).toFixed(1) + "px)";
+    // a wipe uncovers the text from one side (or the middle)
+    if (A.wipe && A.wipe.f < 1) {
+      const wx = -blockW / 2 - pad, wy = -blockH / 2 - pad - sag, ww = blockW + pad * 2, wh = blockH + pad * 2 + sag * 2;
+      const f = clamp(A.wipe.f, 0, 1);
+      ctx.beginPath();
+      if (A.wipe.dir === "y") ctx.rect(wx, wy + wh * (1 - f), ww, wh * f);
+      else if (A.wipe.dir === "c") ctx.rect(-ww * f / 2, wy, ww * f, wh);
+      else ctx.rect(wx, wy, ww * f, wh);
+      ctx.clip();
+    }
 
     if (k.boxOn) {
       const bw = blockW + pad * 2, bh = blockH + pad * 1.2 + sag;
@@ -5162,16 +5318,48 @@
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
     const xFor = (w) => (k.align === "left" ? -blockW / 2 : k.align === "right" ? blockW / 2 - w : -w / 2);
-    // one line, straight or bent, letter by letter when the spacing or the curve needs it
-    function line(str, y, w, op) {
+    /* Letter-by-letter animations need every letter's number in the whole
+       text and the number of its word, across the line breaks. */
+    const lineChars = lines.map((l) => Array.from(l));
+    const allChars = lineChars.reduce((n, cs) => n + cs.length, 0);
+    const wordOf = [];
+    let words = 0;
+    lineChars.forEach((cs) => {
+      let inWord = false;
+      cs.forEach((c) => {
+        if (/\s/.test(c)) { inWord = false; wordOf.push(Math.max(0, words - 1)); return; }
+        if (!inWord) { words++; inWord = true; }
+        wordOf.push(words - 1);
+      });
+    });
+    const each = A.letter || null;
+    const TAL = TA();
+    // draws one letter at (x, y) with what its animation says for it
+    function letterAt(c, x, y, gi, draw) {
+      if (!each) { draw(c, x, y); return; }
+      const q = TAL ? TAL.base() : { a: 1, dx: 0, dy: 0, s: 1, sx: 1, sy: 1, r: 0, kx: 0, blur: 0 };
+      each(q, gi, allChars, wordOf[gi] || 0, Math.max(1, words));
+      if (q.a <= 0.003) return;
+      ctx.save();
+      ctx.translate(x + q.dx * size, y + q.dy * size);
+      if (q.r) ctx.rotate((q.r * Math.PI) / 180);
+      if (q.s !== 1 || q.sx !== 1 || q.sy !== 1) ctx.scale(q.s * q.sx, q.s * q.sy);
+      if (q.kx) ctx.transform(1, 0, q.kx, 1, 0, 0);
+      if (q.a < 1) ctx.globalAlpha *= q.a;
+      if (q.blur > 0.005 && canBlur) ctx.filter = "blur(" + (q.blur * size * px / (window.devicePixelRatio > 1 ? Math.min(2, window.devicePixelRatio) : 1)).toFixed(1) + "px)";
+      draw(c, 0, 0);
+      ctx.restore();
+    }
+    // one line, straight or bent, letter by letter when the spacing, the curve or an animation needs it
+    function line(str, y, w, op, g0) {
       const draw = (s, x, yy) => (op === "stroke" ? ctx.strokeText(s, x, yy) : ctx.fillText(s, x, yy));
-      if (!bend && (nativeLS || !sp)) { ctx.textAlign = "left"; draw(str, xFor(w), y); return; }
+      if (!bend && !each && (nativeLS || !sp)) { ctx.textAlign = "left"; draw(str, xFor(w), y); return; }
       const chars = Array.from(str);
       const cw = chars.map((c) => ctx.measureText(c).width + (nativeLS ? 0 : sp));
       ctx.textAlign = "center";
       if (!bend) {
         let x = xFor(w);
-        chars.forEach((c, i) => { draw(c, x + cw[i] / 2, y); x += cw[i]; });
+        chars.forEach((c, i) => { letterAt(c, x + cw[i] / 2, y, g0 + i, draw); x += cw[i]; });
         return;
       }
       const R = w / Math.abs(bend), up = bend > 0;
@@ -5182,21 +5370,22 @@
         ctx.save();
         if (up) { ctx.translate(R * Math.sin(th), y + R - R * Math.cos(th)); ctx.rotate(th); }
         else { ctx.translate(R * Math.sin(th), y - R + R * Math.cos(th)); ctx.rotate(-th); }
-        draw(c, 0, 0);
+        letterAt(c, 0, 0, g0 + i, draw);
         ctx.restore();
       });
     }
     // the typewriter shows the first so many letters, each line where it will end up
-    const allChars = lines.reduce((n, l) => n + Array.from(l).length, 0);
     const showN = A.chars >= 1 ? Infinity : Math.floor(A.chars * allChars);
     function all(op) {
-      let left = showN;
+      let left = showN, g0 = 0;
       lines.forEach((l, i) => {
-        if (left <= 0) return;
-        const cs = Array.from(l);
-        const part = left >= cs.length ? l : cs.slice(0, left).join("");
+        const cs = lineChars[i];
+        if (left > 0) {
+          const part = left >= cs.length ? l : cs.slice(0, left).join("");
+          line(part, -blockH / 2 + lineH / 2 + i * lineH - (bend > 0 ? sag / 2 : bend < 0 ? -sag / 2 : 0), widths[i], op, g0);
+        }
         left -= cs.length;
-        line(part, -blockH / 2 + lineH / 2 + i * lineH - (bend > 0 ? sag / 2 : bend < 0 ? -sag / 2 : 0), widths[i], op);
+        g0 += cs.length;
       });
     }
     const stroked = k.strokeW > 0;
@@ -5229,6 +5418,7 @@
     if (hits && S.sel && S.sel.type === "text" && S.sel.id === t.id) {
       const fw = blockW + pad * 2, fh = blockH + pad * 2 + sag;
       ctx.globalAlpha = 1;
+      if (canBlur) ctx.filter = "none";
       ctx.shadowColor = "transparent";
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5 / (px / (window.devicePixelRatio > 1 ? Math.min(2, window.devicePixelRatio) : 1));
@@ -5265,49 +5455,64 @@
   }
 
   /* ─── Text animations (CapCut's In, Out and Loop) ───
-     Worked out per frame from the text's own clock, so the preview and the
-     export run them identically. Distances are in text heights. */
+     The library is text-anims.js; drawHeading applies what it says for each
+     frame, so the preview and the export run them identically. */
   let textTab = "text";
-  const TEXT_ANIMS_IN = [["none", "None"], ["fade", "Fade"], ["rise", "Rise"], ["drop", "Drop"], ["left", "Slide in"],
-    ["pop", "Pop"], ["zoom", "Zoom out"], ["spin", "Spin"], ["type", "Typewriter"]];
-  const TEXT_ANIMS_OUT = [["none", "None"], ["fade", "Fade"], ["rise", "Rise away"], ["drop", "Fall away"], ["right", "Slide out"],
-    ["shrink", "Shrink"], ["zoom", "Zoom in"], ["type", "Erase"]];
-  const TEXT_ANIMS_LOOP = [["none", "None"], ["pulse", "Pulse"], ["float", "Float"], ["swing", "Swing"], ["shake", "Shake"]];
+  let animKind = "in";   // which list the Animation tab shows
+  const TA = () => window.SenotelTextAnims || null;
   function textAnimAt(t, time) {
-    const o = { a: 1, dx: 0, dy: 0, s: 1, r: 0, chars: 1 };
-    if (time == null) return o;
-    const len = Math.max(0.05, Math.min(t.animLen || 0.5, t.dur / 2));
-    const pin = clamp((time - t.start) / len, 0, 1), pout = clamp((t.start + t.dur - time) / len, 0, 1);
-    const ein = 1 - Math.pow(1 - pin, 3), eout = 1 - Math.pow(1 - pout, 3);
-    const back = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
-    switch (t.animIn) {
-      case "fade": o.a *= ein; break;
-      case "rise": o.a *= ein; o.dy += (1 - ein) * 0.8; break;
-      case "drop": o.a *= ein; o.dy -= (1 - ein) * 0.8; break;
-      case "left": o.a *= ein; o.dx -= (1 - ein) * 2.5; break;
-      case "pop": o.s *= 0.4 + 0.6 * back(pin); o.a *= clamp(pin * 4, 0, 1); break;
-      case "zoom": o.s *= 1 + (1 - ein) * 0.9; o.a *= ein; break;
-      case "spin": o.r -= (1 - ein) * 120; o.s *= 0.5 + 0.5 * ein; o.a *= ein; break;
-      case "type": o.chars = Math.min(o.chars, pin); break;
-    }
-    switch (t.animOut) {
-      case "fade": o.a *= eout; break;
-      case "rise": o.a *= eout; o.dy -= (1 - eout) * 0.8; break;
-      case "drop": o.a *= eout; o.dy += (1 - eout) * 0.8; break;
-      case "right": o.a *= eout; o.dx += (1 - eout) * 2.5; break;
-      case "shrink": o.s *= 0.4 + 0.6 * eout; o.a *= eout; break;
-      case "zoom": o.s *= 1 + (1 - eout) * 0.9; o.a *= eout; break;
-      case "type": o.chars = Math.min(o.chars, pout); break;
-    }
-    const ph = time - t.start;
-    switch (t.animLoop) {
-      case "pulse": o.s *= 1 + 0.05 * Math.sin((ph / 0.9) * Math.PI * 2); break;
-      case "float": o.dy += 0.1 * Math.sin((ph / 1.6) * Math.PI * 2); break;
-      case "swing": o.r += 5 * Math.sin((ph / 1.4) * Math.PI * 2); break;
-      case "shake": o.r += 2.5 * Math.sin((ph / 0.16) * Math.PI * 2); o.dx += 0.03 * Math.sin((ph / 0.11) * Math.PI * 2); break;
-    }
-    return o;
+    const lib = TA();
+    if (!lib) return { a: 1, dx: 0, dy: 0, s: 1, sx: 1, sy: 1, r: 0, kx: 0, blur: 0, chars: 1 };
+    return lib.at(t, time);
   }
+
+  /* The Animation tab's tiles: each plays its animation on the selected
+     text's own look (font, colours, outline...), over and over, until the
+     tab closes. In: arrives, holds. Out: holds, leaves, gap. Loop: runs. */
+  let animTilesRaf = 0;
+  function animateAnimTiles(t, kind) {
+    cancelAnimationFrame(animTilesRaf);
+    const t0 = performance.now();
+    let last = 0;
+    const loop = (now) => {
+      const tiles = document.querySelectorAll("#inspector .anim-tile canvas");
+      if (!tiles.length) { animTilesRaf = 0; return; }
+      animTilesRaf = requestAnimationFrame(loop);
+      if (now - last < 33) return;   // 30 frames a second is plenty for a thumbnail
+      last = now;
+      const ph = (now - t0) / 1000;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      tiles.forEach((cv) => {
+        const w = cv.clientWidth || 72, h = cv.clientHeight || 44;
+        if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+        const ctx = cv.getContext("2d");
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = "#2a2b29";
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const id = cv.dataset.anim;
+        const sample = Object.assign({}, t, { id: -2, text: "Text", x: 0.5, y: 0.5, rotate: 0, curve: 0, align: "center",
+          size: (17 / h) * HEADING_REF_H, animIn: null, animOut: null, animLoop: null });
+        let time;
+        if (kind === "in") {
+          const len = TA().lengthFor(id);
+          Object.assign(sample, { animIn: id, animLen: len, start: 0, dur: 100 });
+          time = ph % (len + 1.1);
+        } else if (kind === "out") {
+          const len = TA().lengthFor(id), P = len + 1.2;
+          Object.assign(sample, { animOut: id, animLen: len, start: -100, dur: 100.5 + len });
+          time = ph % P;
+          if (time > 0.5 + len) return;   // gone: the gap before it plays again
+        } else {
+          Object.assign(sample, { animLoop: id, start: 0, dur: 100 });
+          time = ph;
+        }
+        drawHeading(ctx, sample, { x: 0, y: 0, w: w, h: h }, null, time);
+      });
+    };
+    animTilesRaf = requestAnimationFrame(loop);
+  }
+
   // plays the part of the text an animation just changed, then stops
   function previewTextAnim(t, which) {
     if (S.playing) return;
@@ -5693,6 +5898,7 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const box = pictureBox();
       drawTexts(ctx, box, S.time, textHits);
+      drawTextGuides(ctx, box);
       // headings on the picture can be pinched, so the browser must not take two fingers for itself
       $("stage").classList.toggle("text-on", textHits.size > 0);
       if (marked) drawWatermark(ctx, box);
@@ -6986,14 +7192,27 @@
     return g * norm;
   }
 
+  /* Where the music sits on the timeline. Like every other clip it can be
+     moved and trimmed (0.30.1): start and end in timeline seconds (no end =
+     to the end of the edit), and in, how far into the song it starts.
+     Older projects have none of these and play from 0 to the end, as before. */
+  function musicSpan() {
+    if (!S.music) return { from: 0, to: 0, at: 0 };
+    const end = total();
+    const from = clamp(S.music.start || 0, 0, end);
+    const to = S.music.end != null ? clamp(S.music.end, from, end) : end;
+    return { from: from, to: to, at: S.music.in || 0 };
+  }
+
   function musicFade(t) {
     if (!S.music) return 1;
     const fi = typeof S.music.fadeIn === "number" ? S.music.fadeIn : 0.3;
     const fo = typeof S.music.fadeOut === "number" ? S.music.fadeOut : 1.5;
-    const end = total();
+    const sp = musicSpan();
+    if (t < sp.from || t > sp.to) return 0;
     let k = 1;
-    if (fi > 0 && t < fi) k *= clamp(t / fi, 0, 1);
-    if (fo > 0 && t > end - fo) k *= clamp((end - t) / fo, 0, 1);
+    if (fi > 0 && t - sp.from < fi) k *= clamp((t - sp.from) / fi, 0, 1);
+    if (fo > 0 && t > sp.to - fo) k *= clamp((sp.to - t) / fo, 0, 1);
     return k;
   }
 
@@ -7093,7 +7312,10 @@
     if (!musicEl || !S.music || !musicEl.getAttribute("src")) return;
     const dur = musicEl.duration || S.music.duration || 0;
     if (!dur || !isFinite(dur)) return;
-    const want = S.time % dur;
+    const sp = musicSpan();
+    // outside its clip the music is silent: hold it still until the playhead comes back
+    if (S.time < sp.from || S.time >= sp.to) { if (!musicEl.paused) musicEl.pause(); return; }
+    const want = (S.time - sp.from + sp.at) % dur;
     if (S.playing) {
       if (Math.abs(musicEl.currentTime - want) > 0.3) {
         try { musicEl.currentTime = want; } catch (e) {}
@@ -7569,7 +7791,9 @@
         mg.gain.setValueAtTime(curve[0], 0);
         mg.gain.setValueCurveAtTime(curve, 0, Math.max(STEP, len));
         ms.connect(mg); mg.connect(bus);
-        ms.start(0); ms.stop(len);
+        // where the music clip sits, and how far into the song it starts (musicSpan)
+        const span = musicSpan();
+        ms.start(span.from, (span.at % mbuf.duration) || 0); ms.stop(Math.max(span.from + 0.01, span.to));
       } catch (e) {
         toast("The music couldn't be loaded, so it is missing from this export. Check your connection", 6000);
       }

@@ -19,6 +19,8 @@
    window.SenotelNative before they load. Each member is optional:
      save(blob, name)  → Promise; saves or shares the file natively
      signIns           → true when the shell opens sign-in windows itself
+     haptic(kind)      → a tap on the phone's vibration motor, "light" or
+                         "medium" (snapping, picking a clip up)
    Without it, everything below falls back to what the web view can do.
    Exposes window.SenotelPlatform.
    ═══════════════════════════════════════════════════════════ */
@@ -95,6 +97,43 @@
     throw new Error("This app's view can't save files. Open vClyps in Chrome or Safari to save it.");
   }
 
+  /* A short tap of the vibration motor, the "tick" CapCut gives when
+     something snaps. In order: the app shell's own; Capacitor's Haptics
+     plugin; the web Vibration API (Android Chrome, the Play Store app),
+     long enough to feel, since many phones' motors can't spin up for less
+     than ~20 ms; and on an iPhone, where Safari has no Vibration API, the
+     one tap iOS 18 does allow a page: flipping a switch control, which the
+     Taptic Engine answers. Older iPhones get nothing, silently. */
+  let tapSwitch = null;
+  function haptic(kind) {
+    const strong = kind === "medium";
+    const n = native();
+    try { if (n && typeof n.haptic === "function") { n.haptic(kind || "light"); return true; } } catch (e) {}
+    try {
+      const H = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.Haptics;
+      if (H && typeof H.impact === "function") { H.impact({ style: strong ? "MEDIUM" : "LIGHT" }); return true; }
+    } catch (e) {}
+    const nav = global.navigator || {};
+    try { if (typeof nav.vibrate === "function" && nav.vibrate(strong ? 35 : 22)) return true; } catch (e) {}
+    const doc = global.document;
+    if (!doc || !/iPhone|iPad|iPod/.test(String(nav.userAgent || ""))) return false;
+    try {
+      if (!tapSwitch) {
+        tapSwitch = doc.createElement("label");
+        tapSwitch.setAttribute("aria-hidden", "true");
+        tapSwitch.style.cssText = "position:fixed;left:-200px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none";
+        const box = doc.createElement("input");
+        box.type = "checkbox";
+        box.setAttribute("switch", "");
+        box.tabIndex = -1;
+        tapSwitch.appendChild(box);
+        doc.body.appendChild(tapSwitch);
+      }
+      tapSwitch.click();
+      return true;
+    } catch (e) { return false; }
+  }
+
   // a direct link still works where downloads do; elsewhere the tap must call save()
   const linksDownload = () => !native() && !embedded();
   const signInsWork = () => { const n = native(); return n ? n.signIns === true : !embedded(); };
@@ -106,6 +145,7 @@
     save: save,
     linksDownload: linksDownload,
     signInsWork: signInsWork,
+    haptic: haptic,
     // exported for the tests
     _embedded: embedded
   };

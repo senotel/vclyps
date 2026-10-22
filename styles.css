@@ -2679,3 +2679,20 @@ body.dark .uclip { color: #7fb8e0; }
 }
 .lane-add:hover { color: var(--text); background: var(--bg3); }
 .track-uaudio.offer, .track-text.offer { height: 34px; }
+/* Text → Animation: In / Out / Loop, a grid of moving previews */
+.anim-kinds { width: min(320px, 100%); }
+.anim-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px;
+  width: 100%; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; padding: 2px;
+}
+.anim-tile {
+  display: flex; flex-direction: column; gap: 3px; align-items: stretch; padding: 0 0 5px;
+  border: 1px solid var(--line); border-radius: var(--rs); background: var(--bg2); color: var(--t1); overflow: hidden;
+}
+.anim-tile canvas, .anim-none { display: block; width: 100%; height: 44px; background: #2a2b29; }
+.anim-none { display: flex; align-items: center; justify-content: center; font-size: 11px; color: #a5a298; }
+.anim-name { font-size: 10.5px; line-height: 1.25; padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.anim-tile:hover { border-color: var(--t2); }
+.anim-tile.selected { border-color: var(--acc); color: var(--text); }
+/* the music clip moves and trims like the others: a swipe still scrolls the timeline, a hold picks it up */
+.mclip { touch-action: pan-x; cursor: grab; }

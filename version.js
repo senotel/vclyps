@@ -59,9 +59,14 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.30.0";
+  var VERSION = "0.31.0";
   var RELEASED = "2026-10-22";
-  var NOTES = "Fonts: 132 for captions and 166 for text, every one different, with a " +
+  var NOTES = "99 text animations: 40 ways in, 34 ways out and 25 loops, many of them " +
+              "letter by letter or word by word, each shown moving in its own preview. " +
+              "Lines show when a text lines up with the middle, the edges or another text. " +
+              "The music moves and trims like any clip, and texts stretch from their edges " +
+              "on the timeline. The snap tick now works on more phones, iPhones included. " +
+              "0.30.0: fonts: 132 for captions and 166 for text, every one different, with a " +
               "picker that shows each in its own letters. Text can be styled like CapCut: " +
               "outline, background, shadow, glow, spacing, curve, rotation, 16 one-tap looks, " +
               "and animations in, out and on a loop; drag it on the picture, pinch it bigger " +
