@@ -53,7 +53,7 @@
   var NO_SPACE = { zh: 1, ja: 1, th: 1, lo: 1, km: 1, my: 1, bo: 1, yue: 1 };
   // Of those, the ones that never put a space even between phrases.
   var NEVER_SPACE = { zh: 1, ja: 1, yue: 1 };
-  var RTL_RE = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
+  var RTL_RE = /[֐-ࣿיִ-﷿ﹰ-]/;
 
   /* Codes the browser's segmenter and translator know. Whisper's "jw" is
      ISO's "jv"; Cantonese segments as Chinese. */

@@ -604,28 +604,13 @@ body.dark .logo-img { filter: invert(1); }
   height: 100%;
   object-fit: contain;
 }
-/* The picture fills the box the layout gives it and never sizes the box
-   itself: a tall phone video would otherwise stretch the preview to its own
-   height whenever the editor has room to scroll. */
-#pv, #pi { position: absolute; inset: 0; }
-/* A layout (split screen, screen and face) is drawn here from #pv, which
-   keeps playing underneath at opacity 0. Under b-roll, veil and captions. */
+/* The players fill the stage and play there, but are never seen: since
+   0.32.0 every frame of the picture is drawn onto the layout canvas by
+   renderPicture (app.js), exactly as the export draws it. They stay laid
+   out (opacity 0, not display: none) because some browsers stop decoding a
+   video that isn't in the page. */
+#pv, #pi, #pvT, .broll-layer { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
 .layout-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
-
-/* B-roll overlay. Positioned in px by app.js against the picture box (not the
-   stage), same as headings — so it lands identically in the window, fullscreen
-   and the export. z-index sits above the video but below text and captions. */
-.broll-layer {
-  position: absolute;
-  object-fit: cover;
-  pointer-events: none;
-  z-index: 2;
-  border-radius: 0;
-}
-.broll-layer.inset {
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
-}
 
 /* ABOVE the fade veil (z-index 3). The veil and this layer used to share a
    z-index, and the veil comes later in the DOM — so it painted over the hook.
@@ -663,14 +648,6 @@ body.dark .logo-img { filter: invert(1); }
   pointer-events: none;
   z-index: 3;
 }
-/* Adjust: warmth (soft-light colour) and vignette, placed over the picture
-   by app.js (adjustVeils), drawn the same way in the export */
-.adj-veil {
-  position: absolute;
-  pointer-events: none;
-  z-index: 1;
-}
-#adjWarm { mix-blend-mode: soft-light; }
 .cap-canvas {
   position: absolute;
   inset: 0;
@@ -2697,3 +2674,58 @@ body.dark .uclip { color: #7fb8e0; }
 /* the music clip moves and trims like the others: a swipe still scrolls the timeline, a hold picks it up */
 .mclip { touch-action: pan-x; cursor: grab; }
 .tclip.dragging { opacity: 0.8; z-index: 8; cursor: grabbing; }
+/* Trim handles sit OUTSIDE a selected clip's edges, as CapCut's do, so the
+   clip's whole body stays free to hold and move however short it is. (Inside,
+   two 13px grips covered a short text completely: holding it trimmed it.) */
+.clip.sel, .tclip.sel, .oclip.sel, .uclip.sel, .mclip.sel { overflow: visible; z-index: 5; }
+.oclip.sel > :not(.handle), .uclip.sel > :not(.handle), .mclip.sel > :not(.handle) { max-width: 100%; overflow: hidden; }
+.sel > .handle { width: 16px; }
+.sel > .handle.hl { left: -17px; border-radius: 7px 0 0 7px; }
+.sel > .handle.hr { right: -17px; border-radius: 0 7px 7px 0; }
+.tclip .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; pointer-events: none; }
+/* Effects lane: teal, so it never reads as a clip, a sound or a text */
+.track-effect { height: 30px; margin: 4px 0 3px; border-radius: var(--rs); background: var(--bg1); box-shadow: inset 0 0 0 1px var(--line); }
+.eclip {
+  position: absolute; top: 1px; bottom: 1px; min-width: 26px;
+  display: flex; align-items: center; padding: 0 8px;
+  border-radius: 7px; border: 1px solid #1aa39a; background: rgba(26, 163, 154, 0.18); color: #0f6f68;
+  font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden;
+  cursor: grab; touch-action: pan-x; user-select: none;
+}
+body.dark .eclip { color: #6fd8cf; }
+.eclip .ename { overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.eclip.sel { border-color: #1aa39a; box-shadow: inset 0 0 0 1px #1aa39a; overflow: visible; z-index: 5; }
+.fx-grid { max-height: 52vh; }
+@media (max-width: 1100px) { .track-effect.empty { display: none; } }
+
+/* Stickers sheet */
+.stk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.stk-tile {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--rs); background: var(--bg2);
+  font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif; font-size: 30px; line-height: 1;
+}
+.stk-tile:hover { border-color: var(--t2); }
+.stk-shape { background: #2a2b29; }
+.stk-shape canvas { width: 100%; height: 100%; display: block; }
+#stickerSheet .fp-search { width: 100%; margin-bottom: 8px; }
+
+/* Voiceover: the count-in and the take, over the picture */
+.voice-rec {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 8;
+  display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 14px;
+  border-radius: var(--r); background: rgba(17, 18, 16, 0.86); color: #edeae2;
+}
+.voice-count { font-size: 28px; font-weight: 800; min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.voice-live { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.voice-dot { width: 10px; height: 10px; border-radius: 50%; background: #dc143c; animation: blink 1s ease-in-out infinite; }
+.voice-stop { padding: 7px 14px; }
+
+/* real waveforms on sound clips and the music */
+.uclip .wave { position: absolute; left: 0; bottom: 3px; pointer-events: none; }
+.mclip .mwave { position: absolute; left: 0; right: 0; bottom: 1px; height: 18px; display: flex; overflow: hidden; pointer-events: none; opacity: 0.9; }
+.mclip { position: absolute; }
+.ins-select { padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--rs); background: var(--bg2); color: var(--text); font: inherit; font-size: 12.5px; }
+/* On a computer the settings panel scrolls inside itself, so a long one
+   (transitions, effects, animations) never squeezes the preview to a strip */
+@media (min-width: 761px) { .inspector { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; } }

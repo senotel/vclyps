@@ -206,8 +206,9 @@
     };
   }
 
-  /* One frame. len is how long an In or an Out takes (t.animLen, at most
-     half the text's time on screen). Returns the whole-text change plus:
+  /* One frame. An In takes t.animInLen seconds, an Out t.animOutLen (both
+     fall back to t.animLen), a loop runs at t.animLoopSpeed. Returns the
+     whole-text change plus:
        chars   share of letters shown (typewriter, erase)
        wipe    {dir: "x"|"y"|"c", f} how much is uncovered
        letter(q, i, n, w, nw)  changes letter i of n, in word w of nw */
@@ -215,13 +216,20 @@
     var o = base();
     o.chars = 1;
     if (time == null) return o;
-    var len = Math.max(0.05, Math.min(t.animLen || 0.5, t.dur / 2));
-    var pin = clamp((time - t.start) / len, 0, 1), pout = clamp((t.start + t.dur - time) / len, 0, 1);
+    // In and Out each have their own length (animInLen, animOutLen; animLen
+    // is the shared one from 0.30/0.31); together they never take more than
+    // the text's time on screen
+    var both = t.animIn && t.animOut;
+    var cap = both ? t.dur / 2 : t.dur;
+    var lenIn = Math.max(0.05, Math.min(t.animInLen || t.animLen || 0.5, cap));
+    var lenOut = Math.max(0.05, Math.min(t.animOutLen || t.animLen || 0.5, cap));
+    var pin = clamp((time - t.start) / lenIn, 0, 1), pout = clamp((t.start + t.dur - time) / lenOut, 0, 1);
     if (t.animIn) apply(o, IN_BY[t.animIn], pin, false);
     if (t.animOut) apply(o, OUT_BY[t.animOut], pout, true);
     var loop = t.animLoop && LOOPS[t.animLoop];
     if (loop) {
-      loop(o, time - t.start);
+      // a loop's speed: 1 = as designed, 0.25 slow to 3 fast
+      loop(o, (time - t.start) * clamp(t.animLoopSpeed || 1, 0.1, 5));
       if (o.each) {
         var each = o.each, prev = o.letter;
         delete o.each;

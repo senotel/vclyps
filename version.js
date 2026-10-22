@@ -59,9 +59,17 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.31.1";
+  var VERSION = "0.32.0";
   var RELEASED = "2026-10-22";
-  var NOTES = "Texts move on the timeline on phones again: hold one, then drag. " +
+  var NOTES = "57 transitions that really mix two clips (slides, pushes, wipes, zooms, spins, " +
+              "glitches, 3D flips), each with its own length and a moving preview. Clip animations " +
+              "in, out and on a loop. Video effects on their own lane: shake, VHS, old film, glitch, " +
+              "light leaks, snow and 33 in all. Stickers: emoji and drawn shapes. Record a voiceover. " +
+              "Crop a clip, or show it whole on a blurred or coloured background. Overlays move, " +
+              "pinch, turn, fade and blend. Real waveforms on sounds and music. Text animations have " +
+              "their own In and Out lengths and a loop speed. The preview now shows exactly the " +
+              "exported frame. Trim handles sit outside a clip, so short clips are easy to hold. " +
+              "0.31.1: texts move on the timeline on phones again: hold one, then drag. " +
               "0.31.0: 99 text animations: 40 ways in, 34 ways out and 25 loops, many of them " +
               "letter by letter or word by word, each shown moving in its own preview. " +
               "Lines show when a text lines up with the middle, the edges or another text. " +
