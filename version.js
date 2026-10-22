@@ -59,9 +59,10 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.29.0";
+  var VERSION = "0.29.1";
   var RELEASED = "2026-10-22";
-  var NOTES = "The timeline handles like CapCut: on a phone it only moves sideways " +
+  var NOTES = "Double-tap the timeline to put its zoom back to normal. " +
+              "0.29.0: the timeline handles like CapCut: on a phone it only moves sideways " +
               "under your finger and glides when flicked, two fingers pinch it in and " +
               "out, and a clip dragged to the edge carries the timeline with it. On a " +
               "computer the wheel moves along it, Ctrl or Cmd with the wheel zooms, " +

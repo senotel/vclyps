@@ -2934,6 +2934,37 @@
     sc.addEventListener("touchcancel", end);
   })();
 
+  /* Double-tap the timeline (double-click with a mouse) to put the zoom back
+     to normal, the way CapCut does after a pinch went too far. Only clean
+     taps count: a swipe or a hold never does. */
+  const PPS_DEFAULT = 24;
+  (function doubleTapToResetZoom() {
+    const sc = $("tlScroll");
+    let down = null, lastTap = null;
+    sc.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "touch" || e.target.closest(".handle")) { down = null; return; }
+      down = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId };
+    });
+    sc.addEventListener("pointercancel", () => { down = null; lastTap = null; });
+    sc.addEventListener("pointerup", (e) => {
+      if (!down || e.pointerId !== down.id || pinching) { down = null; return; }
+      const still = Math.hypot(e.clientX - down.x, e.clientY - down.y) < 10 && e.timeStamp - down.t < 250;
+      down = null;
+      if (!still) { lastTap = null; return; }
+      if (lastTap && e.timeStamp - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+        lastTap = null;
+        zoomTimeline(PPS_DEFAULT);
+        return;
+      }
+      lastTap = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+    });
+    sc.addEventListener("dblclick", (e) => {
+      if (e.target.closest(".handle")) return;
+      e.preventDefault();
+      zoomTimeline(PPS_DEFAULT);
+    });
+  })();
+
   $("tlScroll").addEventListener("wheel", (e) => {
     const sc = $("tlScroll");
     if (e.ctrlKey || e.metaKey) {
