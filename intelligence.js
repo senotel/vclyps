@@ -1260,8 +1260,46 @@
     return window.SenotelPlatform.save(blob, "vclyps-training-data.json");
   }
 
+  /* Clearing is never final in one step. The records are first set aside
+     under DS_KEY + "-cleared" (with when), and only then removed, so a
+     clear made by mistake can be undone with restoreDataset(). If they
+     cannot be set aside (storage full), nothing is cleared at all. A later
+     clear replaces the set-aside copy, so only the most recent clear can be
+     restored. The app asks for a typed confirmation before calling this. */
+  const DS_CLEARED = DS_KEY + "-cleared";
   function clearDataset() {
+    const data = localStorage.getItem(DS_KEY) || "[]";
+    const n = datasetCount();
+    if (!n) return { ok: true, cleared: 0 };
+    try {
+      localStorage.setItem(DS_CLEARED, JSON.stringify({ at: new Date().toISOString(), n: n, data: data }));
+    } catch (e) {
+      return { ok: false, cleared: 0, reason: "There isn't room on this device to keep a copy you could restore, so nothing was deleted. Download the data first, then clear it." };
+    }
     localStorage.removeItem(DS_KEY);
+    return { ok: true, cleared: n };
+  }
+
+  // What the last clear set aside: { at, n } or null.
+  function clearedInfo() {
+    try {
+      const c = JSON.parse(localStorage.getItem(DS_CLEARED) || "null");
+      return c && c.n ? { at: c.at, n: c.n } : null;
+    } catch (e) { return null; }
+  }
+
+  /* Puts the set-aside records back, oldest first, ahead of anything
+     recorded since the clear. Returns how many came back. */
+  function restoreDataset() {
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem(DS_CLEARED) || "null"); } catch (e) { c = null; }
+    if (!c || !c.data) return 0;
+    let back = [], now = [];
+    try { back = JSON.parse(c.data) || []; } catch (e) { back = []; }
+    try { now = JSON.parse(localStorage.getItem(DS_KEY) || "[]") || []; } catch (e) { now = []; }
+    try { localStorage.setItem(DS_KEY, JSON.stringify(back.concat(now))); } catch (e) { return 0; }
+    localStorage.removeItem(DS_CLEARED);
+    return back.length;
   }
 
   window.IntelligenceEngine = {
@@ -1274,6 +1312,8 @@
     datasetCount: datasetCount,
     exportDataset: exportDataset,
     clearDataset: clearDataset,
+    clearedInfo: clearedInfo,
+    restoreDataset: restoreDataset,
     hasGemini: () => !!PROXY_URL || !!getKey(),
     // media.js needs the same worker for b-roll search; one source of truth
     proxy: () => PROXY_URL

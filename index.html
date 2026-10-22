@@ -242,46 +242,8 @@
         </div>
       </div>
 
-      <!-- BRAND. Kept on this device and used by every project: the logo as a
-           watermark, the colours as the defaults for title cards and lower
-           thirds (app.js BRAND). -->
-      <div class="set-group">
-        <label>Your brand
-          <span class="set-note">Your logo goes on every video you export, and your colours become the starting colours for title cards and lower thirds. Kept on this device.</span>
-        </label>
-        <div class="brand-row">
-          <div class="brand-logo" id="brandLogoBox"><img id="brandLogoImg" alt="Your logo" class="hidden" /><span id="brandLogoNone">No logo</span></div>
-          <div class="set-row">
-            <button class="secondary-btn" id="brandLogoPick">Choose a logo</button>
-            <button class="ghost-btn hidden" id="brandLogoClear">Remove</button>
-          </div>
-          <input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
-        </div>
-        <div class="brand-row">
-          <span class="brand-label">Logo on videos</span>
-          <div class="ins-seg" id="brandMarkSeg">
-            <button data-m="off" class="active">Off</button>
-            <button data-m="tl">Top left</button>
-            <button data-m="tr">Top right</button>
-            <button data-m="br">Bottom right</button>
-          </div>
-        </div>
-        <div class="brand-row">
-          <label class="brand-color"><input type="color" id="brandMain" value="#111210" /> <span>Card colour</span></label>
-          <label class="brand-color"><input type="color" id="brandAccent" value="#dc143c" /> <span>Accent</span></label>
-          <label class="brand-color"><input type="color" id="brandText" value="#edeae2" /> <span>Text</span></label>
-        </div>
-      </div>
-
-      <div class="set-group">
-        <label>Vision-1.0 training data
-          <span class="set-note">Every AI edit is saved on this device as structured training data for Senotel's own future editing model. <strong id="dsCount">0 examples</strong> collected so far.</span>
-        </label>
-        <div class="set-row">
-          <button class="secondary-btn" id="dsExport">Download dataset</button>
-          <button class="ghost-btn" id="dsClear">Clear</button>
-        </div>
-      </div>
+      <!-- The brand logo and the training data are NOT here: both are the
+           owner's, and live behind the admin passphrase (owner, 2026-10-21). -->
 
       <div class="set-group">
         <label>Notify me when it's ready
@@ -302,7 +264,7 @@
            undo for it — the history goes with everything else. -->
       <div class="set-group">
         <label>Start a new video
-          <span class="set-note">Clears this project completely: footage, timeline, overlays, sounds and captions, plus the saved session. <strong>This cannot be undone.</strong> Your settings, theme and training data are kept.</span>
+          <span class="set-note">Clears this project completely: footage, timeline, overlays, sounds and captions, plus the saved session. <strong>This cannot be undone.</strong> Your settings and theme are kept.</span>
         </label>
         <div class="set-row">
           <button class="ghost-btn danger-btn" id="resetProject">Start a new video</button>
@@ -337,10 +299,10 @@
   <section class="screen" id="screen-admin">
     <div class="page-wrap">
       <p class="page-eyebrow">Senotel</p>
-      <h2 class="page-title">Training data</h2>
+      <h2 class="page-title">Admin</h2>
 
       <div class="admin-lock" id="adminLock">
-        <p class="set-note">This panel is for the people building vClyps. It reads the training data stored in this browser.</p>
+        <p class="set-note">This panel is for the people building vClyps: the training data stored in this browser, and the brand.</p>
         <div class="set-row">
           <input type="password" class="set-input" id="adminPass" placeholder="Passphrase" autocomplete="off" />
           <button class="secondary-btn" id="adminGo">Open</button>
@@ -356,6 +318,35 @@
           <button class="ghost-btn danger-btn" id="adminClear">Clear all</button>
         </div>
         <div class="admin-list" id="adminList"></div>
+
+        <!-- BRAND. The logo as a watermark on exports made on this device,
+             and the colours title cards and lower thirds start from
+             (app.js BRAND). Owner-only, so it lives here. -->
+        <div class="set-group admin-brand">
+          <label>Brand
+            <span class="set-note">The logo is drawn on every video exported on this device; the colours are where new title cards and lower thirds start. Saved in this browser only.</span>
+          </label>
+          <div class="brand-row">
+            <div class="brand-logo" id="brandLogoBox"><img id="brandLogoImg" alt="Brand logo" class="hidden" /><span id="brandLogoNone">No logo</span></div>
+            <div class="set-row">
+              <button class="secondary-btn" id="brandLogoPick">Choose a logo</button>
+              <button class="ghost-btn hidden" id="brandLogoClear">Remove</button>
+            </div>
+            <input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+          </div>
+          <span class="brand-label">Logo on videos</span>
+          <div class="brand-grid" id="brandMarkSeg" role="group" aria-label="Logo on videos">
+            <button data-m="off" class="active">Off</button>
+            <button data-m="tl">Top left</button>
+            <button data-m="tr">Top right</button>
+            <button data-m="br">Bottom right</button>
+          </div>
+          <div class="brand-colors">
+            <label class="brand-color"><input type="color" id="brandMain" value="#111210" /> <span>Card</span></label>
+            <label class="brand-color"><input type="color" id="brandAccent" value="#dc143c" /> <span>Accent</span></label>
+            <label class="brand-color"><input type="color" id="brandText" value="#edeae2" /> <span>Text</span></label>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -512,7 +503,7 @@
         <span class="tl-hint" id="tlHint">Tap a clip to edit it · drag to reorder · pull the edges to trim</span>
         <div class="tl-zoom" data-min="2">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="range" id="zoomSlider" min="8" max="60" value="24" aria-label="Timeline zoom" />
+          <input type="range" id="zoomSlider" min="4" max="160" value="24" aria-label="Timeline zoom" />
         </div>
       </div>
       <div class="tl-scroll" id="tlScroll">
@@ -973,6 +964,7 @@
   <script defer src="audio-out.js"></script>
   <script defer src="notifications.js"></script>
   <script defer src="render-clock.js"></script>
+  <script defer src="export-fast.js"></script>
   <script defer src="app.js"></script>
   <script defer src="landing-world.js"></script>
   <script defer src="landing.js"></script>

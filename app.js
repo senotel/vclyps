@@ -1512,9 +1512,9 @@
       ? "<filter><effect><name>Time Remap</name><effectid>timeremap</effectid><effectcategory>motion</effectcategory><effecttype>motion</effecttype><mediatype>video</mediatype>" +
         "<parameter><parameterid>speed</parameterid><name>speed</name><value>" + Math.round(sp * 100) + "</value></parameter></effect></filter>"
       : "";
-    const item = (m, start, end, inS, outS, sp, track) => {
+    const item = (m, start, end, inS, outS, sp, track, label) => {
       const id = "clipitem-" + (++itemSeq);
-      return '<clipitem id="' + id + '"><name>' + xmlEsc(m.name || id) + "</name><duration>" + fr(m.duration || (outS - inS)) + "</duration>" + rate +
+      return '<clipitem id="' + id + '"><name>' + xmlEsc(label || m.name || id) + "</name><duration>" + fr(m.duration || (outS - inS)) + "</duration>" + rate +
         "<start>" + start + "</start><end>" + end + "</end><in>" + fr(inS) + "</in><out>" + fr(outS) + "</out>" +
         fileRef(m) + (track === "video" ? speedFx(sp) : "") + "</clipitem>";
     };
@@ -1526,8 +1526,8 @@
       const start = fr(at), end = fr(at + len);
       at += len;
       if (!m || end <= start) return;
-      vItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "video"));
-      if (m.type === "video" && !c.muted) aItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "audio"));
+      vItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "video", c.name));
+      if (m.type === "video" && !c.muted) aItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "audio", c.name));
     });
     S.audio.forEach((a) => {
       const m = mediaById(a.mediaId);
@@ -2571,7 +2571,8 @@
       }
       const nm = document.createElement("span");
       nm.className = "cname";
-      nm.textContent = m ? m.name : "clip";
+      // a clip can be given its own name (inspector → Name); otherwise its file's
+      nm.textContent = c.name || (m ? m.name : "clip");
       cel.appendChild(nm);
       const du = document.createElement("span");
       du.className = "cdur";
@@ -2626,20 +2627,19 @@
     updatePlayheadUI();
   }
 
-  /* On a touchscreen a finger on a clip means one of three things. A swipe
-     scrolls, as it does everywhere else on a phone: sideways along the
-     timeline, up and down through the editor. Holding still for a moment picks
-     the clip up to move it, as in CapCut. A quick tap selects, as before.
-     Without this a phone could only scroll the timeline from the thin gaps
-     between clips, because every clip took the swipe as a drag. A mouse goes
-     straight through. */
+  /* On a touchscreen a finger on a clip means one of three things, as in
+     CapCut. A swipe scrolls the timeline sideways, and only sideways: the
+     browser does it (touch-action: pan-x), with its own momentum, so a flick
+     glides on. Holding still for a moment picks the clip up to move it, and
+     from then on the finger belongs to the drag (touchLocked stops the
+     browser scrolling under it). A quick tap selects. A mouse goes straight
+     through to the drag. (Until 2026-10-22 the swipe was done by hand here:
+     it stopped dead on release and could scroll the whole editor up and
+     down, which CapCut never does.) */
   const HOLD_MS = 280;
   function holdToDrag(e, start) {
     if (e.pointerType !== "touch") { start(e); return; }
-    e.preventDefault();
-    const sc = $("tlScroll"), page = $("screen-editor");
     const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
-    const s0 = sc.scrollLeft, p0 = page.scrollTop;
     let mode = "wait";
     const finish = () => {
       clearTimeout(timer);
@@ -2648,8 +2648,17 @@
       window.removeEventListener("pointercancel", up);
     };
     const timer = setTimeout(() => {
-      if (mode !== "wait") return;
+      if (mode !== "wait" || pinching) return;
       finish();
+      touchLocked = true;
+      const release = (ev) => {
+        if (ev.pointerId !== id) return;
+        touchLocked = false;
+        window.removeEventListener("pointerup", release);
+        window.removeEventListener("pointercancel", release);
+      };
+      window.addEventListener("pointerup", release);
+      window.addEventListener("pointercancel", release);
       try { if (navigator.vibrate) navigator.vibrate(10); } catch (err) {}
       start(e);   // picked up: the drag code takes the rest of the gesture
     }, HOLD_MS);
@@ -2657,15 +2666,15 @@
       if (ev.pointerId !== id) return;
       const dx = ev.clientX - x0, dy = ev.clientY - y0;
       if (mode === "wait" && Math.max(Math.abs(dx), Math.abs(dy)) > 6) {
+        // a swipe: the browser scrolls the timeline; nothing more to do here
+        mode = "swipe";
         clearTimeout(timer);
-        mode = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
-        if (mode === "x" && S.playing) pause();
+        if (S.playing) pause();
       }
-      if (mode === "x") sc.scrollLeft = s0 - dx;
-      else if (mode === "y") page.scrollTop = p0 - dy;
     };
     const up = (ev) => {
       if (ev.pointerId !== id) return;
+      // pointercancel is the browser taking the gesture over to scroll
       const tap = mode === "wait" && ev.type === "pointerup";
       finish();
       if (!tap) return;
@@ -2688,22 +2697,30 @@
     const startX = e.clientX;
     let moved = false;
     const origIdx = S.clips.indexOf(clip);
+    // how far the clip has travelled: the finger, plus any scrolling done under it
+    const sc = $("tlScroll"), s0 = sc.scrollLeft;
+    let lastX = startX;
+    const travel = () => lastX - startX + (sc.scrollLeft - s0);
+    const place = () => { if (moved) cel.style.transform = "translateX(" + travel() + "px)"; };
+    const edge = edgeScroller(place);
 
     const move = (ev) => {
-      const dx = ev.clientX - startX;
-      if (!moved && Math.abs(dx) > 8) { moved = true; cel.classList.add("dragging"); }
-      if (moved) cel.style.transform = "translateX(" + dx + "px)";
+      lastX = ev.clientX;
+      if (!moved && Math.abs(lastX - startX) > 8) { moved = true; cel.classList.add("dragging"); }
+      if (moved) { place(); edge.at(ev.clientX); }
     };
     const up = (ev) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      edge.stop();
       if (!moved) {
         S.sel = { type: "clip", id: clip.id };
         renderTimeline();
         renderInspector();
         return;
       }
-      const dx = ev.clientX - startX;
+      lastX = ev.clientX;
+      const dx = travel();
       const center = parseFloat(cel.style.left) + cel.offsetWidth / 2 + dx;
       // find which slot the dragged center falls into
       let acc = 0, newIdx = S.clips.length - 1;
@@ -2763,18 +2780,25 @@
     const startX = e.clientX;
     const oStart = t.start;
     let moved = false;
+    const sc = $("tlScroll"), s0 = sc.scrollLeft;
+    let lastX = startX;
+    const apply = () => {
+      if (!moved) return;
+      const dx = lastX - startX + (sc.scrollLeft - s0);
+      t.start = clamp(oStart + dx / S.pps, 0, Math.max(0, total() - 0.3));
+      renderTimeline();
+    };
+    const edge = edgeScroller(apply);
 
     const move = (ev) => {
-      const dx = ev.clientX - startX;
-      if (!moved && Math.abs(dx) > 6) moved = true;
-      if (moved) {
-        t.start = clamp(oStart + dx / S.pps, 0, Math.max(0, total() - 0.3));
-        renderTimeline();
-      }
+      lastX = ev.clientX;
+      if (!moved && Math.abs(lastX - startX) > 6) moved = true;
+      if (moved) { apply(); edge.at(ev.clientX); }
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      edge.stop();
       if (moved) commit();
       S.sel = { type: "text", id: t.id };
       renderTimeline();
@@ -2811,9 +2835,11 @@
   (function dragToScrub() {
     const sc = $("tlScroll");
     let down = false, x0 = 0, s0 = 0, moved = false;
+    let touch = false;
     sc.addEventListener("pointerdown", (e) => {
       if (e.target.closest(".clip, .tclip, .oclip, .aclip, .uclip, .mclip, .clip-add, .handle, .ruler")) return;
       down = true; moved = false; x0 = e.clientX; s0 = sc.scrollLeft;
+      touch = e.pointerType === "touch";
     });
     window.addEventListener("pointermove", (e) => {
       if (!down) return;
@@ -2821,8 +2847,11 @@
       if (!moved && Math.abs(dx) < 3) return;
       moved = true;
       if (S.playing) pause();
-      sc.scrollLeft = s0 - dx;
+      // a finger is scrolled by the browser itself, with momentum; only a mouse is moved here
+      if (!touch) sc.scrollLeft = s0 - dx;
     });
+    // the browser took a touch over to scroll it: that was a swipe, not a tap
+    window.addEventListener("pointercancel", () => { down = false; });
     window.addEventListener("pointerup", () => {
       /* A tap on empty timeline deselects — the same gesture that means
          "nothing here" everywhere else in the app. */
@@ -2853,6 +2882,98 @@
     S.pps = +$("zoomSlider").value;
     renderTimeline();
   });
+
+  /* One way to zoom, for every gesture that zooms (the slider, a pinch, Ctrl
+     or Cmd with the wheel or +/-): the playhead stays where it is and the
+     timeline grows or shrinks around it, as in CapCut. */
+  const PPS_MIN = 4, PPS_MAX = 160;
+  function zoomTimeline(pps) {
+    const next = clamp(pps, PPS_MIN, PPS_MAX);
+    if (Math.abs(next - S.pps) < 0.01) return;
+    S.pps = next;
+    $("zoomSlider").value = String(Math.round(next));
+    renderTimeline();   // ends in updatePlayheadUI, which re-centres on the playhead
+  }
+
+  /* ═══════════ TOUCH AND WHEEL, THE CAPCUT WAY (2026-10-22) ═══════════
+     The owner: "when i move the timeline, it doesnt move up or down" in
+     CapCut. Here a swipe on the timeline used to scroll the whole editor up
+     and down as well, and a swipe that began on a clip moved the timeline by
+     hand, stopping dead the moment the finger lifted. Now:
+       · the timeline takes sideways swipes ONLY (touch-action: pan-x in
+         styles.css), everywhere on it, clips included, and the browser's own
+         scrolling carries it, momentum and all;
+       · pressing and holding a clip still picks it up (holdToDrag): from
+         that moment the finger belongs to the drag (touchLocked below stops
+         the browser from scrolling as well);
+       · two fingers pinch the timeline in and out;
+       · with a mouse, the wheel scrolls the timeline sideways and Ctrl or Cmd
+         with the wheel (or a trackpad pinch) zooms it. */
+  let touchLocked = false, pinching = false;
+  $("tlScroll").addEventListener("touchmove", (e) => {
+    if (touchLocked || pinching) e.preventDefault();
+  }, { passive: false });
+
+  (function pinchToZoom() {
+    const sc = $("tlScroll");
+    let d0 = 0, p0 = 0;
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    sc.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 2) return;
+      pinching = true;
+      d0 = dist(e.touches) || 1;
+      p0 = S.pps;
+      if (S.playing) pause();
+    }, { passive: true });
+    sc.addEventListener("touchmove", (e) => {
+      if (!pinching || e.touches.length !== 2) return;
+      zoomTimeline(p0 * (dist(e.touches) / d0));
+    }, { passive: true });
+    const end = (e) => { if (pinching && e.touches.length < 2) pinching = false; };
+    sc.addEventListener("touchend", end);
+    sc.addEventListener("touchcancel", end);
+  })();
+
+  $("tlScroll").addEventListener("wheel", (e) => {
+    const sc = $("tlScroll");
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      zoomTimeline(S.pps * Math.exp(-e.deltaY * 0.0025));
+      return;
+    }
+    // an ordinary wheel turn moves along the timeline, not up the page
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      if (S.playing) pause();
+      sc.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    }
+  }, { passive: false });
+
+  /* While a clip is being dragged, holding it near either edge of the
+     timeline scrolls the timeline that way, faster the closer it gets, so a
+     clip can be carried anywhere (CapCut does the same). onScroll lets the
+     drag keep the clip under the finger as the timeline moves. */
+  function edgeScroller(onScroll) {
+    const sc = $("tlScroll");
+    let x = null, raf = 0;
+    const tick = () => {
+      raf = 0;
+      if (x == null) return;
+      const r = sc.getBoundingClientRect(), zone = 48;
+      let v = 0;
+      if (x < r.left + zone) v = -((r.left + zone - x) / zone) * 14;
+      else if (x > r.right - zone) v = ((x - (r.right - zone)) / zone) * 14;
+      if (!v) return;
+      const before = sc.scrollLeft;
+      sc.scrollLeft = before + v;
+      if (sc.scrollLeft !== before) onScroll();
+      raf = requestAnimationFrame(tick);
+    };
+    return {
+      at(clientX) { x = clientX; if (!raf) raf = requestAnimationFrame(tick); },
+      stop() { x = null; if (raf) cancelAnimationFrame(raf); raf = 0; }
+    };
+  }
 
   /* ═══════════ OVERLAY + AUDIO TRACKS ═══════════
 
@@ -3833,7 +3954,25 @@
       const m = mediaById(c.mediaId);
       const isVid = m && m.type === "video";
 
-      ins.appendChild(mk("span", "ins-title", "<em>" + (isVid ? "▶" : "▣") + "</em>" + (m ? m.name : "clip")));
+      ins.appendChild(mk("span", "ins-title", "<em>" + (isVid ? "▶" : "▣") + "</em>" + escHtml(c.name || (m ? m.name : "clip"))));
+
+      /* Rename: the clip's own name, shown on the timeline and carried into
+         the Premiere/DaVinci file. Empty goes back to the file's name. */
+      const nameIn = document.createElement("input");
+      nameIn.type = "text";
+      nameIn.maxLength = 60;
+      nameIn.value = c.name || "";
+      nameIn.placeholder = m ? m.name : "Clip name";
+      nameIn.setAttribute("aria-label", "Clip name");
+      nameIn.addEventListener("input", () => {
+        const v = nameIn.value.replace(/\s+/g, " ").trim();
+        if (v) c.name = v; else delete c.name;
+        renderTimeline();
+      });
+      nameIn.addEventListener("change", () => { commit(); recordEdit("rename-clip", { named: !!c.name }); });
+      nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter") nameIn.blur(); });
+      ins.appendChild(group("Name", nameIn));
+
       ins.appendChild(group("Look", filterChips(() => c.filter, (k) => { c.filter = k; })));
 
       if (isVid) {
@@ -4630,6 +4769,8 @@
   }
 
   function frameTick(ts) {
+    // the fast export owns S.time while it renders; the preview sits still
+    if (EXP.fast) { lastTs = ts; return; }
     const dt = Math.min((ts - lastTs) / 1000, 0.1);
     lastTs = ts;
     if (S.playing) {
@@ -5390,9 +5531,24 @@
     f.clips.forEach((c, i) => {
       const row = mk("div", "snd-row mus-row clip-row" + (c.made ? " made" : ""));
       const meta = mk("div", "mus-meta");
-      const title = mk("span", "snd-name", "");
-      title.textContent = (i + 1) + ". " + c.title;
-      meta.appendChild(title);
+      /* The title is the clip's name, and it can be changed right here:
+         it names the project (and so the exported file) when the clip is
+         made. */
+      const head = mk("div", "clip-name-row");
+      head.appendChild(mk("span", "clip-num", (i + 1) + "."));
+      const title = document.createElement("input");
+      title.type = "text";
+      title.className = "clip-title";
+      title.maxLength = 80;
+      title.value = c.title;
+      title.setAttribute("aria-label", "Name of clip " + (i + 1));
+      title.addEventListener("change", () => {
+        const v = title.value.replace(/\s+/g, " ").trim();
+        if (v) { c.title = v; saveSession(); } else title.value = c.title;
+      });
+      title.addEventListener("keydown", (e) => { if (e.key === "Enter") title.blur(); });
+      head.appendChild(title);
+      meta.appendChild(head);
       const when = mk("span", "mus-by", "");
       when.textContent = clipLabel(c);
       meta.appendChild(when);
@@ -5453,7 +5609,11 @@
       prompt: direction, media: [item],
       range: { mediaId: item.id, start: c.start, end: c.end },
       target: Math.round(c.end - c.start),
-      onDone: () => { c.made = true; }
+      onDone: () => {
+        c.made = true;
+        // the clip's name becomes the project's, and so the exported file's
+        if (c.title) { $("projectName").value = c.title; $("projectName").dispatchEvent(new Event("input")); saveSession(); }
+      }
     });
   }
   applyFindMode();
@@ -6056,9 +6216,362 @@
     if (!S.clips.length) { toast("The timeline is empty. Add clips or generate an edit first"); return; }
     if (typeof MediaRecorder === "undefined") { toast("This browser can't record video. Try Chrome or Edge"); return; }
     const picked = pickMime();
+    // the fast export first; it hands over to the real-time one if it can't run here
+    if (window.SenotelFastExport) { startFastExport(picked); return; }
     if (!picked) { toast("This browser can't record video. Try Chrome or Edge"); return; }
     startExport(picked);
   });
+
+  /* ═══════════ FAST EXPORT (export-fast.js) ═══════════
+     Every frame rendered as fast as the device can, by drawExportFrame (the
+     same drawing as the real-time export), and encoded by the device's video
+     encoder; the sound mixed offline by renderMixOffline (the same rules as
+     the live mix). 1080p, usually several times faster than real time, and it
+     keeps going in a background tab. If this device lacks any part of it,
+     or something fails, the real-time export runs instead, so an export
+     never simply fails because the fast path did. */
+  const FAST_FPS = 30;
+
+  function fastSize() {
+    const s = exportSize();
+    const k = 1080 / Math.min(s.w, s.h);       // 1080 on the short side
+    // encoders want even sizes
+    return { w: Math.round((s.w * k) / 2) * 2, h: Math.round((s.h * k) / 2) * 2 };
+  }
+
+  async function startFastExport(picked) {
+    if (EXP.active || EXP.starting) return;
+    const F = window.SenotelFastExport;
+    const size = fastSize();
+    let sup = null;
+    try { sup = await F.supported(size.w, size.h, FAST_FPS); } catch (e) { sup = { ok: false, why: (e && e.message) || "check failed" }; }
+    if (window.SenotelDiag) window.SenotelDiag.last.fastExport = sup.ok ? "yes" : "no: " + sup.why;
+    if (!sup.ok) {
+      if (!picked) { toast("This browser can't export video. Try Chrome or Edge"); return; }
+      startExport(picked);
+      return;
+    }
+    const run = ++EXP.run;
+    if (window.SenotelNotices) SenotelNotices.dismiss("doneCard");
+    EXP.starting = true;
+    EXP.cancelled = false;
+    EXP.fast = true;
+    stayAwake("export");
+    pause();
+    const sources = new Map();
+    const stillHere = () => run === EXP.run && !EXP.cancelled;
+    try {
+      $("exportOverlay").classList.remove("hidden");
+      $("expTitle").textContent = "Exporting “" + ($("projectName").value.trim() || "Untitled") + "”…";
+      $("expBar").style.width = "0%";
+      $("expPct").textContent = "0%";
+      $("expStatus").textContent = "getting ready…";
+      await captionFontReady();
+      await soundsReady();
+      if (!stillHere()) return;
+
+      $("expStatus").textContent = "mixing the sound…";
+      const audio = await renderMixOffline();
+      if (!stillHere()) return;
+
+      EXP.canvas = document.createElement("canvas");
+      EXP.canvas.width = size.w;
+      EXP.canvas.height = size.h;
+      EXP.vertical = size.h > size.w;
+      EXP.ctx = EXP.canvas.getContext("2d");
+      EXP.active = true;
+      EXP.starting = false;
+
+      const sourceFor = (m) => {
+        if (!sources.has(m.id)) sources.set(m.id, F.frameSource(m));
+        return sources.get(m.id);
+      };
+      const len = total();
+      const blob = await F.encode({
+        canvas: EXP.canvas,
+        fps: FAST_FPS,
+        duration: len,
+        audio: audio,
+        cancelled: () => !stillHere(),
+        renderFrame: async (t) => {
+          S.time = Math.min(t, Math.max(0, len - 0.001));
+          const src = { main: null, broll: null };
+          const info = clipAt(S.time);
+          if (info) {
+            const m = mediaById(info.clip.mediaId);
+            if (m) {
+              const s = await sourceFor(m);
+              src.main = await s.frameAt(info.clip.in + info.offset * (info.clip.speed || 1));
+            }
+          }
+          const b = brollAt(S.time);
+          if (b) {
+            const bm = mediaById(b.mediaId);
+            if (bm) {
+              const s = await sourceFor(bm);
+              // an overlay loops, as it does in the preview
+              const local = S.time - b.start;
+              src.broll = await s.frameAt(bm.type === "video" && bm.duration ? local % bm.duration : 0);
+            }
+          }
+          drawExportFrame(src);
+        },
+        onProgress: (done, all, perSec) => {
+          const pct = Math.min(100, Math.round((done / all) * 100));
+          $("expBar").style.width = pct + "%";
+          $("expPct").textContent = pct + "%";
+          const x = perSec / FAST_FPS;
+          $("expStatus").textContent = "rendering at " + Math.min(size.w, size.h) + "p" +
+            (x >= 1.05 ? ", " + x.toFixed(1) + "x faster than real time" : x > 0 ? ", " + Math.round(x * 100) + "% of real time" : "");
+        }
+      });
+      if (!stillHere() || !blob) return;
+      $("expStatus").textContent = "saving file…";
+      EXP.active = false;
+      deliverExport(blob, "mp4");
+      if (window.SenotelDiag) window.SenotelDiag.last.fastExport = "done: " + size.w + "x" + size.h + ", " + Math.round(blob.size / 1048576) + " MB";
+    } catch (e) {
+      console.warn("fast export failed", e);
+      if (window.SenotelDiag) window.SenotelDiag.last.fastExport = "failed: " + ((e && e.message) || e);
+      if (stillHere()) {
+        // hand over to the real-time export rather than leave nothing
+        endFast(sources);
+        if (picked) {
+          toast("The fast export stopped (" + ((e && e.message) || "an error") + "). Exporting the standard way instead", 6000);
+          startExport(picked);
+        } else {
+          toast("Couldn't export: " + ((e && e.message) || "an error"), 6000);
+        }
+        return;
+      }
+    } finally {
+      if (EXP.fast) endFast(sources);
+    }
+  }
+
+  function endFast(sources) {
+    sources.forEach((p) => { Promise.resolve(p).then((s) => s && s.close()).catch(() => {}); });
+    sources.clear();
+    EXP.fast = false;
+    EXP.active = false;
+    EXP.starting = false;
+    letItSleep("export");
+    $("exportOverlay").classList.add("hidden");
+    S.time = 0;
+    syncNow();
+  }
+
+  /* ── the mix, offline ─────────────────────────────────────────────────
+     The same sound the live graph makes (ensureAudioGraph, mixMusic), built
+     in an OfflineAudioContext so it renders in a fraction of real time:
+       pass 1  the speech stage: each clip's own sound (pitch kept at any
+               speed, as the preview does), the audio clips that are speech,
+               and the swear-word silences.
+       duck    the live ducker run over pass 1's level, 60 times a second,
+               exactly as mixMusic does every frame.
+       pass 2  speech + bleep + music (volume × loudness match × fades × duck)
+               + the other audio clips + sound effects, through the same
+               ceiling as the master bus. */
+  async function renderMixOffline() {
+    const F = window.SenotelFastExport;
+    const SR = F.AUDIO_RATE;
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const len = total();
+    const frames = Math.max(1, Math.ceil(len * SR));
+    const audioCache = new Map();
+    const soundOf = async (m, from, to) => {
+      const key = m.id + (m.duration > 480 ? ":" + from.toFixed(2) + "-" + to.toFixed(2) : "");
+      if (!audioCache.has(key)) audioCache.set(key, F.audioOf(m, from, to).catch(() => null));
+      return audioCache.get(key);
+    };
+    const edge = 0.008;   // a few milliseconds of fade at every cut, so no clicks
+
+    // Place [from, to] of a sound at timeline `at`, at `speed`, with `gain(t)`.
+    async function place(ctx, dest, m, from, to, at, speed, level) {
+      const a = await soundOf(m, from, to);
+      if (!a || !a.buffer) return;
+      const buf = a.buffer, r = buf.sampleRate;
+      const s0 = Math.max(0, Math.round((from - a.startsAt) * r));
+      const s1 = Math.min(buf.length, Math.round((to - a.startsAt) * r));
+      if (s1 - s0 < 2) return;
+      const chans = [];
+      for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c).subarray(s0, s1));
+      const outCh = F.stretch(chans, speed || 1);
+      const seg = ctx.createBuffer(outCh.length, outCh[0].length, r);
+      outCh.forEach((d, c) => seg.getChannelData(c).set(d));
+      const src = ctx.createBufferSource();
+      src.buffer = seg;
+      const g = ctx.createGain();
+      const d = seg.duration;
+      level(g.gain, at, d, edge);
+      src.connect(g);
+      g.connect(dest);
+      src.start(at);
+      src.stop(at + d + 0.01);
+    }
+    const flat = (v) => (p, at, d, e) => {
+      p.setValueAtTime(0, at);
+      p.linearRampToValueAtTime(v, at + Math.min(e, d / 2));
+      p.setValueAtTime(v, Math.max(at, at + d - e));
+      p.linearRampToValueAtTime(0, at + d);
+    };
+    const clipLevel = (a) => (p, at, d, e) => {
+      // an audio clip's volume and fades (audioLevel), with the edge ramps
+      const steps = Math.max(2, Math.ceil(d * 50));
+      for (let i = 0; i <= steps; i++) {
+        const t = a.start + (i / steps) * d;
+        let v = audioLevel(a, t);
+        if (i === 0 || i === steps) v = 0;
+        p.linearRampToValueAtTime(v, at + (i / steps) * d);
+      }
+    };
+    const isSpeech = (m) => !!(m && (m.fromVideo || m.type === "video"));
+
+    // ── pass 1: the speech stage ──
+    const p1 = new Ctx(2, frames, SR);
+    const speech = p1.createGain();
+    speech.connect(p1.destination);
+    let at = 0;
+    for (const c of S.clips) {
+      const m = mediaById(c.mediaId);
+      const d = dispDur(c);
+      if (m && m.type === "video" && !c.muted && (c.volume == null || c.volume > 0)) {
+        await place(p1, speech, m, c.in, c.out, at, c.speed || 1, flat(c.volume == null ? 1 : c.volume));
+      }
+      at += d;
+    }
+    for (const a of S.audio) {
+      const m = mediaById(a.mediaId);
+      if (m && isSpeech(m)) await place(p1, speech, m, a.in, a.out, a.start, a.speed || 1, clipLevel(a));
+    }
+    // the bleep's silences (no lead here: nothing is late offline)
+    const C = global_SenotelCaptions();
+    const isBad = capMatcher(S.capLang);
+    let spans = [];
+    if (S.capOpts.censor === "bleep" && S.captions.length && C && isBad) {
+      C.bleepSpans(S.captions, isBad).slice().sort((x, y) => x[0] - y[0]).forEach((s) => {
+        const last = spans[spans.length - 1];
+        if (last && s[0] <= last[1]) last[1] = Math.max(last[1], s[1]); else spans.push([s[0], s[1]]);
+      });
+      spans.forEach(([a, b]) => {
+        speech.gain.setValueAtTime(1, Math.max(0, a - 0.004));
+        speech.gain.linearRampToValueAtTime(0, a);
+        speech.gain.setValueAtTime(0, b);
+        speech.gain.linearRampToValueAtTime(1, b + 0.004);
+      });
+    }
+    const speechBuf = await p1.startRendering();
+
+    // ── the duck, as mixMusic computes it live ──
+    const STEP = 1 / 60;
+    const steps = Math.max(2, Math.ceil(len / STEP) + 1);
+    const curve = new Float32Array(steps);
+    if (S.music) {
+      const L = speechBuf.getChannelData(0), R = speechBuf.numberOfChannels > 1 ? speechBuf.getChannelData(1) : L;
+      let duckV = 1, held = 0;
+      const ducking = S.music.duck !== false;
+      for (let i = 0; i < steps; i++) {
+        const t = i * STEP;
+        // RMS over the 1024 samples before t, what the analyser would hold
+        const end = Math.min(L.length, Math.round(t * SR)), begin = Math.max(0, end - 1024);
+        let s = 0;
+        for (let k = begin; k < end; k++) { const v = (L[k] + R[k]) / 2; s += v * v; }
+        const rms = end > begin ? Math.sqrt(s / (end - begin)) : 0;
+        if (ducking && rms > DUCK_ON) held = DUCK_HOLD; else held = Math.max(0, held - STEP);
+        const want = ducking && held > 0 ? DUCK_TO : 1;
+        const tau = want < duckV ? 0.08 : 0.45;
+        duckV += (want - duckV) * (1 - Math.exp(-STEP / tau));
+        curve[i] = clamp(musicBase(), 0, 1) * musicFade(Math.min(t, len)) * duckV;
+      }
+    }
+
+    // ── pass 2: everything, through the ceiling ──
+    const p2 = new Ctx(2, frames, SR);
+    const bus = p2.createGain();
+    const lim = p2.createDynamicsCompressor();
+    lim.threshold.value = -1.5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15;
+    const trim = p2.createGain();
+    trim.gain.value = 1 / CEILING_MAKEUP;
+    bus.connect(lim); lim.connect(trim); trim.connect(p2.destination);
+
+    const sp = p2.createBufferSource();
+    sp.buffer = speechBuf;
+    sp.connect(bus);
+    sp.start(0);
+
+    if (spans.length) {
+      const osc = p2.createOscillator();
+      osc.frequency.value = 1000;
+      const bg = p2.createGain();
+      bg.gain.value = 0;
+      spans.forEach(([a, b]) => {
+        bg.gain.setValueAtTime(0, Math.max(0, a - 0.004));
+        bg.gain.linearRampToValueAtTime(0.2, a);
+        bg.gain.setValueAtTime(0.2, b);
+        bg.gain.linearRampToValueAtTime(0, b + 0.004);
+      });
+      osc.connect(bg); bg.connect(bus);
+      osc.start(0); osc.stop(len);
+    }
+
+    if (S.music && S.music.url) {
+      try {
+        const bytes = await (await fetch(S.music.url)).arrayBuffer();
+        const mbuf = await new Promise((res, rej) => { const pr = p2.decodeAudioData(bytes, res, rej); if (pr && pr.then) pr.then(res, rej); });
+        const ms = p2.createBufferSource();
+        ms.buffer = mbuf;
+        ms.loop = true;     // the bed loops under a long edit, as the preview's does
+        const mg = p2.createGain();
+        mg.gain.setValueAtTime(curve[0], 0);
+        mg.gain.setValueCurveAtTime(curve, 0, Math.max(STEP, len));
+        ms.connect(mg); mg.connect(bus);
+        ms.start(0); ms.stop(len);
+      } catch (e) {
+        toast("The music couldn't be loaded, so it is missing from this export. Check your connection", 6000);
+      }
+    }
+
+    for (const a of S.audio) {
+      const m = mediaById(a.mediaId);
+      if (m && !isSpeech(m)) await place(p2, bus, m, a.in, a.out, a.start, a.speed || 1, clipLevel(a));
+    }
+
+    const e = sfxEngine();
+    if (e) {
+      S.sfx.forEach((s) => {
+        if (s.start > len) return;     // one on the very last frame still plays, as in the real-time export
+        e.play(s.name, { ctx: p2, dest: bus, speaker: false, when: Math.max(0.0001, s.start), gain: typeof s.gain === "number" ? s.gain : 1 });
+      });
+    }
+    return p2.startRendering();
+  }
+
+  /* The finished file, however it was made: offered to save, kept for
+     Settings, announced, and recorded as an approved edit. */
+  function deliverExport(blob, ext) {
+    letItSleep("export");
+    EXP.starting = false;
+    EXP.suspended = false;
+    $("exportOverlay").classList.add("hidden");
+    if (!blob || !blob.size) { toast("Export produced no data. Try again"); return; }
+    const safeName = ($("projectName").value.trim() || "vclyps-export")
+      .replace(/[^\p{L}\p{N} ()._,'&+-]+/gu, "-")
+      .replace(/\s+/g, " ")
+      .replace(/^[.\s-]+|[.\s-]+$/g, "")
+      .slice(0, 80) || "vclyps-export";
+    const fileName = safeName + "." + ext;
+    offerExport(blob, fileName);
+    idbPut("last-export", { blob, name: fileName }).catch(() => {});
+    if (!document.hidden) $("doneDownload").click();
+    notifyDone("Your video is ready", fileName + " is ready to save. You can also find it in Settings.", "export");
+    if (window.IntelligenceEngine) {
+      IntelligenceEngine.record({
+        kind: "export-approved", format: S.format, vertical: S.vertical,
+        clips: S.clips, texts: S.texts,
+        sfx: S.sfx, music: S.music, audio: S.audio
+      });
+    }
+  }
 
   /* The caption font has to be on the device before the first frame is
      drawn, or the opening captions export in the fallback font. Four
@@ -6256,7 +6769,13 @@
     if (ts - EXP.stallTs > 8000) abortExport("The video stopped responding. Try exporting with this tab visible.");
   }
 
-  function drawExportFrame() {
+  /* src: the pictures to draw, when they do not come from the preview's own
+     elements. The fast export (renderFast) decodes frames itself and passes
+     { main: {el, w, h}, broll: {el, w, h} }; the real-time export passes
+     nothing and draws #pv/#pi and #pvB/#piB as they play. Everything else
+     (looks, layouts, transitions, texts, captions, the logo) is this one
+     function either way, so the two exports cannot look different. */
+  function drawExportFrame(src) {
     const ctx = EXP.ctx, W = EXP.canvas.width, H = EXP.canvas.height;
     ctx.filter = "none";
     ctx.fillStyle = "#000";
@@ -6266,9 +6785,10 @@
     if (info) {
       const m = mediaById(info.clip.mediaId);
       const isVid = m && m.type === "video";
-      const elm = isVid ? pv : pi;
-      const vw = isVid ? pv.videoWidth : pi.naturalWidth;
-      const vh = isVid ? pv.videoHeight : pi.naturalHeight;
+      const given = src ? src.main : null;
+      const elm = given ? given.el : isVid ? pv : pi;
+      const vw = given ? given.w : isVid ? pv.videoWidth : pi.naturalWidth;
+      const vh = given ? given.h : isVid ? pv.videoHeight : pi.naturalHeight;
       if (vw && vh) {
         // ALWAYS fill the frame. This used to letterbox for anything that
         // wasn't a Short, which is what produced a picture floating in black.
@@ -6317,9 +6837,10 @@
     const bb = brollAt(S.time);
     if (bb) {
       const bm = mediaById(bb.mediaId);
-      const bel = bm && bm.type === "video" ? pvB : piB;
-      const bw = bm && bm.type === "video" ? pvB.videoWidth : piB.naturalWidth;
-      const bh = bm && bm.type === "video" ? pvB.videoHeight : piB.naturalHeight;
+      const bg = src ? src.broll : null;
+      const bel = bg ? bg.el : bm && bm.type === "video" ? pvB : piB;
+      const bw = bg ? bg.w : bm && bm.type === "video" ? pvB.videoWidth : piB.naturalWidth;
+      const bh = bg ? bg.h : bm && bm.type === "video" ? pvB.videoHeight : piB.naturalHeight;
       if (bm && bw && bh) {
         const r = brollRect(bb, { x: 0, y: 0, w: W, h: H });
         const sc = Math.max(r.w / bw, r.h / bh);      // cover the rect, crop the rest
@@ -6387,6 +6908,7 @@
       global_SenotelCaptions().drawCaptions(ctx, S.captions, S.time, capDrawOpts(null));
     }
 
+    if (src) return;   // the fast export reports its own progress
     const pct = total() ? Math.min(100, Math.round((S.time / total()) * 100)) : 0;
     $("expBar").style.width = pct + "%";
     $("expPct").textContent = pct + "%";
@@ -6447,35 +6969,11 @@
     if (EXP.cancelled) { EXP.chunks = []; return; }
     const blob = new Blob(EXP.chunks, { type: (EXP.rec && EXP.rec.mimeType) || "video/webm" });
     EXP.chunks = [];
-    if (!blob.size) { toast("Export produced no data. Try again"); return; }
-    // Strip characters Windows/macOS reject in filenames — a project called
-    // "Trip 3/4: Rome?" produced a download the OS silently refused to save.
-    // A project name goes straight into a filename, so keep only characters an
-    // OS will actually accept: "Trip 3/4: Rome?" produced a download Windows
-    // silently refused. A whitelist (rather than banning \ / : * ? " < > |)
-    // also drops control characters for free, while \p{L}\p{N} keeps accented
-    // and non-Latin names intact instead of mangling them to hyphens.
-    const safeName = ($("projectName").value.trim() || "vclyps-export")
-      .replace(/[^\p{L}\p{N} ()._,'&+-]+/gu, "-")
-      .replace(/\s+/g, " ")
-      .replace(/^[.\s-]+|[.\s-]+$/g, "")
-      .slice(0, 80) || "vclyps-export";
-    const fileName = safeName + "." + EXP.ext;
-    offerExport(blob, fileName);
-    // Hidden-tab downloads may be blocked. Keep a real Save action and retain
-    // the latest file locally so notification clicks can recover it after reload.
-    idbPut("last-export", { blob, name: fileName }).catch(() => {});
-    if (!document.hidden) $("doneDownload").click();
-    notifyDone("Your video is ready", fileName + " is ready to save. You can also find it in Settings.", "export");
-    // an export means the user approved this edit — gold-standard training data
-    if (window.IntelligenceEngine) {
-      IntelligenceEngine.record({
-        kind: "export-approved", format: S.format, vertical: S.vertical,
-        clips: S.clips, texts: S.texts,
-        // what was kept, moved or added by hand is how the model learns sound
-        sfx: S.sfx, music: S.music, audio: S.audio
-      });
-    }
+    /* deliverExport (with the fast export): the file name is a whitelist of
+       characters every OS accepts ("Trip 3/4: Rome?" was silently refused by
+       Windows), the file is kept for Settings, and an export is recorded as
+       an approved edit, the best training data there is. */
+    deliverExport(blob, EXP.ext);
   }
 
   $("expCancel").addEventListener("click", () => {
@@ -6516,6 +7014,9 @@
   $("sheetBackdrop").addEventListener("click", (e) => {
     if (e.target === $("sheetBackdrop")) closeSheets();
   });
+
+  // each training-data Clear button's Restore refresher (guardDatasetClear)
+  const guardRefreshers = [];
 
   /* ═══════════ ADMIN ═══════════
 
@@ -6568,13 +7069,90 @@
     $("adminExport").addEventListener("click", () => {
       if (window.IntelligenceEngine) IntelligenceEngine.exportDataset().catch((e) => toast(e.message));
     });
-    $("adminClear").addEventListener("click", () => {
-      if (!window.IntelligenceEngine) return;
-      IntelligenceEngine.clearDataset();
-      renderAdmin();
-      toast("Training data cleared");
-    });
+    guardDatasetClear($("adminClear"), () => { renderAdmin(); guardRefreshers.forEach((f) => f()); });
   })();
+
+  /* ═══════════ CLEARING THE TRAINING DATA ═══════════
+     It used to go on one click (owner, 2026-10-21: "imagine it was a
+     million"). Now, wherever a Clear button for it sits (Settings and the
+     admin panel):
+       1. the button only OPENS a panel under it, which says how many
+          examples will go, offers a download first, and
+       2. deletes only after "delete" is typed into it, then
+       3. the cleared records are set aside on the device (intelligence.js
+          clearDataset), and a Restore button brings them back until the
+          next clear.
+     Typing, not a second tap: two taps can happen by accident, a word
+     cannot. */
+  function guardDatasetClear(btn, after) {
+    if (!btn) return;
+    const row = btn.parentNode;
+    const panel = mk("div", "ds-guard hidden");
+    const msg = mk("p", "ds-guard-msg");
+    const backup = mk("button", "secondary-btn", "Download a copy first");
+    const label = mk("label", "ds-guard-label", "<span>Type <strong>delete</strong> to confirm</span>");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("autocapitalize", "off");
+    label.appendChild(input);
+    const go = mk("button", "ghost-btn danger-btn", "Delete");
+    go.disabled = true;
+    const cancel = mk("button", "ghost-btn", "Cancel");
+    const acts = mk("div", "set-row");
+    [go, cancel].forEach((b) => acts.appendChild(b));
+    [msg, backup, label, acts].forEach((x) => panel.appendChild(x));
+    row.after(panel);
+    const restore = mk("button", "ghost-btn hidden", "Restore");
+    row.appendChild(restore);
+
+    const E = () => window.IntelligenceEngine;
+    const refreshRestore = () => {
+      const c = E() && E().clearedInfo ? E().clearedInfo() : null;
+      restore.classList.toggle("hidden", !c);
+      if (c) restore.textContent = "Restore " + c.n + (c.n === 1 ? " cleared example" : " cleared examples");
+    };
+    const close = () => { panel.classList.add("hidden"); input.value = ""; go.disabled = true; btn.disabled = false; };
+
+    btn.addEventListener("click", () => {
+      const n = E() ? E().datasetCount() : 0;
+      if (!n) { toast("There's no training data to clear"); return; }
+      msg.innerHTML = "This deletes <strong>" + n.toLocaleString() + (n === 1 ? " example" : " examples") +
+        "</strong> of training data from this device. Download a copy first if you might want it.";
+      go.textContent = "Delete " + n.toLocaleString() + (n === 1 ? " example" : " examples");
+      panel.classList.remove("hidden");
+      btn.disabled = true;
+      input.value = "";
+      go.disabled = true;
+      input.focus();
+    });
+    input.addEventListener("input", () => { go.disabled = input.value.trim().toLowerCase() !== "delete"; });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) go.click(); if (e.key === "Escape") close(); });
+    backup.addEventListener("click", () => { if (E()) E().exportDataset().catch((e) => toast(e.message)); });
+    cancel.addEventListener("click", close);
+    go.addEventListener("click", () => {
+      if (go.disabled || !E()) return;
+      const r = E().clearDataset();
+      close();
+      if (!r.ok) { toast(r.reason, 7000); return; }
+      refreshRestore();
+      refreshSettings();
+      if (after) after();
+      toast(r.cleared + (r.cleared === 1 ? " example" : " examples") + " cleared. Restore brings them back", 6000);
+    });
+    restore.addEventListener("click", () => {
+      const back = E() && E().restoreDataset ? E().restoreDataset() : 0;
+      refreshRestore();
+      refreshSettings();
+      if (after) after();
+      toast(back ? back + (back === 1 ? " example" : " examples") + " restored" : "Couldn't restore the data");
+    });
+    refreshRestore();
+    // the other Clear button may have changed things: stay in step when shown
+    $("settingsBtn").addEventListener("click", () => { close(); refreshRestore(); });
+    guardRefreshers.push(refreshRestore);
+  }
 
   function renderAdmin() {
     if (!adminOpen) return;
@@ -6653,6 +7231,25 @@
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
     else if (e.key === "s" && !e.ctrlKey && !e.metaKey) { splitAtPlayhead(); }
+    /* CapCut's desktop keys (2026-10-22): Ctrl/Cmd+B splits, Ctrl/Cmd +/-
+       zooms the timeline, the arrows step a frame (a second with Shift),
+       Home and End jump to the ends. */
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); splitAtPlayhead(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) { e.preventDefault(); zoomTimeline(S.pps * 1.25); }
+    else if ((e.ctrlKey || e.metaKey) && e.key === "-") { e.preventDefault(); zoomTimeline(S.pps / 1.25); }
+    else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      if (S.playing) pause();
+      const step = e.shiftKey ? 1 : 1 / 30;
+      S.time = clamp(S.time + (e.key === "ArrowLeft" ? -step : step), 0, total());
+      syncNow();
+    }
+    else if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      if (S.playing) pause();
+      S.time = e.key === "Home" ? 0 : total();
+      syncNow();
+    }
   });
 
   /* ═══════════ SETTINGS: theme, director key, dataset ═══════════ */
@@ -6729,17 +7326,13 @@
     // and prints to the console on load, so support can still identify an exact
     // build — it just doesn't clutter the panel.
     if (V) $("aboutVersion").textContent = "Version " + V.version;
-    const n = window.IntelligenceEngine ? IntelligenceEngine.datasetCount() : 0;
-    $("dsCount").textContent = n + (n === 1 ? " example" : " examples");
   }
   $("settingsBtn").addEventListener("click", () => {
     refreshSettings();
     go(() => showScreen("settings"));
   });
-  $("dsExport").addEventListener("click", () => { if (window.IntelligenceEngine) IntelligenceEngine.exportDataset().catch((e) => toast(e.message)); });
-  $("dsClear").addEventListener("click", () => {
-    if (window.IntelligenceEngine) { IntelligenceEngine.clearDataset(); refreshSettings(); toast("Training data cleared"); }
-  });
+  /* The training data is the owner's: downloading and clearing it are in the
+     admin panel only (owner, 2026-10-21), never in Settings. */
 
   /* ═══════════ SESSION PERSISTENCE ═══════════
      Phones discard background tabs under memory pressure, so switching apps

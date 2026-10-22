@@ -59,9 +59,18 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.27.1";
-  var RELEASED = "2026-10-21";
-  var NOTES = "vClyps is now by Senotel. 0.27.0: Tidy: remove pauses, filler words and bad takes, or cut words straight " +
+  var VERSION = "0.29.0";
+  var RELEASED = "2026-10-22";
+  var NOTES = "The timeline handles like CapCut: on a phone it only moves sideways " +
+              "under your finger and glides when flicked, two fingers pinch it in and " +
+              "out, and a clip dragged to the edge carries the timeline with it. On a " +
+              "computer the wheel moves along it, Ctrl or Cmd with the wheel zooms, " +
+              "Ctrl+B splits and the arrows step a frame. Clips can be renamed. " +
+              "0.28.0: faster export: videos now export at 1080p, faster than real time, " +
+              "through the device's own video encoder, and keep going in a background " +
+              "tab. The old export is still there for devices that can't. Earlier: " +
+              "clearing training data asks you to type delete and can be undone; " +
+              "vClyps is now by Senotel; 0.27.0: Tidy: remove pauses, filler words and bad takes, or cut words straight " +
               "from the transcript. Post: a title, description and hashtags written " +
               "from what is said, plus captions as .srt and the edit for Premiere or " +
               "DaVinci. Lower thirds, title cards (also as their own intro or outro " +

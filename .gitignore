@@ -4,6 +4,11 @@
 # up along with everything else.
 .claude/
 
+# Everything the live app does not need: HANDOFF, tests, research, serve.js,
+# worker.js (it goes to Cloudflare, never GitHub). The repo is public and is
+# the website, so none of it may be pushed.
+NO UPLOAD/
+
 # OS clutter that appears on its own
 Thumbs.db
 desktop.ini
@@ -13,7 +18,3 @@ desktop.ini
 *.log
 *.tmp
 node_modules/
-
-# NOTE: HANDOFF.md is deliberately NOT ignored — it is the only memory between
-# chats and belongs in the repo. It does describe the architecture and worker
-# setup, so ignore it here if the repo is ever made public and that matters.

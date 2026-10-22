@@ -1116,6 +1116,12 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   overflow-x: auto;
   overflow-y: hidden;
   padding: 8px 0 12px;
+  /* A finger on the timeline moves it sideways and never the page up and
+     down (CapCut, owner 2026-10-22); two fingers are a pinch app.js turns
+     into zoom; and a swipe that reaches the end stops there instead of
+     going "back" in the browser. */
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
 }
 
 .tl-inner { position: relative; min-width: 100%; width: max-content; padding: 0 20px; }
@@ -1178,7 +1184,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   display: flex;
   align-items: stretch;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   min-width: 26px;
   user-select: none;
 }
@@ -1242,7 +1248,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   overflow: hidden;
   white-space: nowrap;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   min-width: 24px;
   user-select: none;
 }
@@ -1302,7 +1308,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   overflow: hidden;
   white-space: nowrap;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   user-select: none;
 }
 
@@ -2234,7 +2240,7 @@ body.previewFs .stage-zone { position: static; }
   overflow: hidden;
   white-space: nowrap;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   user-select: none;
   background: rgba(43, 127, 184, 0.14);
   border: 1px solid rgba(43, 127, 184, 0.5);
@@ -2510,3 +2516,36 @@ body.dark .uclip { color: #7fb8e0; }
 .brand-color input[type="color"] { width: 34px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: var(--rs); background: none; cursor: pointer; }
 #brandMarkSeg { flex-wrap: wrap; max-width: 100%; }
 #brandMarkSeg button { flex: 1 1 auto; white-space: nowrap; }
+
+/* Clearing training data: a panel with a typed confirmation (app.js guardDatasetClear) */
+.ds-guard { margin-top: 12px; padding: 14px; border: 1px solid var(--danger); border-radius: var(--rs); background: var(--acc-soft); display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.ds-guard-msg { font-size: 13px; line-height: 1.5; color: var(--text); }
+.ds-guard-label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--t1); }
+.ds-guard-label input { height: 38px; width: min(220px, 100%); padding: 0 10px; border: 1px solid var(--line); border-radius: var(--rs); background: var(--bg2); color: var(--text); font-family: inherit; font-size: 13px; }
+.ds-guard-label input:focus { outline: none; border-color: var(--danger); }
+.ds-guard .danger-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Admin → Brand (moved from Settings, 0.27.3). A 2x2 grid for the logo
+   corner: four options never wrap into a ragged second row. */
+.admin-brand { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.admin-brand .brand-row { margin-top: 0; }
+.brand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; max-width: 360px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--rs); }
+.brand-grid button { border: none; background: transparent; color: var(--t1); font-size: 12px; font-weight: 700; padding: 9px 10px; border-radius: var(--rs); }
+.brand-grid button:hover:not(.active) { color: var(--text); background: var(--bg3); }
+.brand-grid button.active { background: var(--acc); color: #fff; }
+.brand-grid button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.brand-colors { display: grid; grid-template-columns: repeat(3, max-content); gap: 10px 18px; }
+
+/* Found clips: the name is editable in place (renderClips). Reads as the
+   title it replaced until it is touched. */
+.clip-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.clip-num { font-size: 13px; font-weight: 600; color: var(--t2); flex: 0 0 auto; }
+.clip-title {
+  flex: 1 1 auto; min-width: 0;
+  padding: 3px 6px; margin-left: -6px;
+  border: 1px solid transparent; border-radius: var(--rs);
+  background: transparent; color: var(--text);
+  font: inherit; font-size: 13px; font-weight: 600;
+}
+.clip-title:hover { border-color: var(--line); }
+.clip-title:focus { outline: none; border-color: var(--acc); background: var(--bg2); }

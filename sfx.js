@@ -199,7 +199,9 @@
      this from a click handler once and scheduling behaves normally after. */
   function unlock(ctx) {
     ctx = ctx || context();
-    if (ctx && ctx.state === "suspended" && ctx.resume) { try { ctx.resume(); } catch (e) {} }
+    // an offline context (the fast export's mix) is started by rendering, not resumed
+    var offline = global.OfflineAudioContext && ctx instanceof global.OfflineAudioContext;
+    if (ctx && !offline && ctx.state === "suspended" && ctx.resume) { try { ctx.resume(); } catch (e) {} }
     return ctx;
   }
 
