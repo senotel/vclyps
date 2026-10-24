@@ -247,10 +247,35 @@
   /* What changes with the mode: the label, the Business row (the brief the
      Director works from) and Find clips, which is an entertainment tool for
      long recordings. */
+  /* On a phone the brief folds behind a Brief button once it is filled in:
+     four fields above the picture squeezed the timeline off the screen
+     (0.34.1). It opens by itself while the product is still blank, and
+     folds away when Edit is pressed. A wider screen always shows it. */
+  let briefOpen = null;   // null = decide from whether the brief is filled in
+  const narrow = () => window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+  function showBrief() {
+    const biz = S.mode === "business";
+    const open = biz && (!narrow() || (briefOpen === null ? !S.brief.name : briefOpen));
+    $("bizRow").classList.toggle("hidden", !open);
+    $("briefChip").classList.toggle("hidden", !biz || !narrow());
+    $("briefChip").setAttribute("aria-pressed", open ? "true" : "false");
+  }
+  $("briefChip").addEventListener("click", () => {
+    briefOpen = $("bizRow").classList.contains("hidden");
+    showBrief();
+    if (briefOpen) $("bizName").focus();
+  });
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(max-width: 760px)");
+    if (mq.addEventListener) mq.addEventListener("change", showBrief);
+  }
+  // the edit's summary is one line on a phone; a tap shows the rest
+  $("aiStatus").addEventListener("click", () => $("aiStatus").classList.toggle("open"));
+
   function applyModeUI() {
     const biz = S.mode === "business";
     $("fmtLabel").textContent = biz ? "Business" : "Entertainment";
-    $("bizRow").classList.toggle("hidden", !biz);
+    showBrief();
     $("findChip").classList.toggle("hidden", biz);
     if (biz && S.find.on) $("findChip").click();
     $("bizName").value = S.brief.name || "";
@@ -3263,6 +3288,13 @@
       down = false;
     });
   })();
+
+  /* A finger on the timeline while it plays pauses it, as CapCut does. The
+     playing timeline re-centres on the playhead every frame, so without this
+     a swipe was fought back on every frame and nothing could be reached until
+     the video was paused by hand (owner, 2026-10-24). */
+  $("tlScroll").addEventListener("pointerdown", () => { if (S.playing) pause(); }, { passive: true });
+  $("tlScroll").addEventListener("touchstart", () => { if (S.playing) pause(); }, { passive: true });
 
   /* Scroll position IS the playhead position. One listener closes the loop, so
      a flick, a trackpad, a scrollbar and the drag above all scrub identically. */
@@ -7602,6 +7634,7 @@
     if (S.find.on) { runFind(); return; }
     /* Audio files are not footage: the Director cuts pictures, and a sound
        file handed to it as a "source" would be planned as a black clip. */
+    if (S.mode === "business" && narrow()) { briefOpen = false; showBrief(); }
     runEdit({ prompt: $("semiPrompt").value.trim(), media: S.media.filter((m) => m.type !== "audio") });
   });
 

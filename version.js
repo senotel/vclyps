@@ -60,9 +60,14 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.34.0";
+  var VERSION = "0.34.1";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: Business mode (first version). Pick Business on the New project screen, add " +
+  var NOTES = "Fixed on phones: after an edit the timeline was squeezed off the screen and could " +
+              "not be scrolled, and it could not be moved while the video played. The timeline now " +
+              "scrolls up and down through its tracks, the picture makes room for it, touching the " +
+              "timeline pauses the video (as in CapCut), the edit's summary is one line (tap for " +
+              "more) and the Business brief folds behind a Brief button. 0.34.0: " +
+              "New: Business mode (first version). Pick Business on the New project screen, add " +
               "your product footage, fill in the product, what it does, how it should end and the " +
               "tone, and press Edit. vClyps plans a launch-style video: a hook, the reveal, two or " +
               "three highlights shown in your footage, animated titles and feature labels, music and " +

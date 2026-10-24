@@ -1101,11 +1101,13 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   overflow-x: auto;
   overflow-y: hidden;
   padding: 8px 0 12px;
-  /* A finger on the timeline moves it sideways and never the page up and
-     down (CapCut, owner 2026-10-22); two fingers are a pinch app.js turns
-     into zoom; and a swipe that reaches the end stops there instead of
-     going "back" in the browser. */
-  touch-action: pan-x;
+  /* A sideways swipe moves along time and never drifts up or down (the
+     browser locks a swipe to the way it started; the editor page itself
+     never scrolls, CapCut, owner 2026-10-22). An up-or-down swipe moves
+     through the tracks (0.34.1: they used to be cut off on phones). Two
+     fingers are a pinch app.js turns into zoom, and a swipe that reaches
+     the end stops there instead of going "back" in the browser. */
+  touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
 }
 
@@ -1182,7 +1184,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   display: flex;
   align-items: stretch;
   cursor: grab;
-  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
+  touch-action: pan-x pan-y;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   min-width: 26px;
   user-select: none;
 }
@@ -1249,7 +1251,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   overflow: hidden;
   white-space: nowrap;
   cursor: grab;
-  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
+  touch-action: pan-x pan-y;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   min-width: 24px;
   user-select: none;
 }
@@ -1309,7 +1311,7 @@ body.previewFs .fs-exit:active { transform: scale(0.92); }
   overflow: hidden;
   white-space: nowrap;
   cursor: grab;
-  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
+  touch-action: pan-x pan-y;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   user-select: none;
 }
 
@@ -1759,7 +1761,10 @@ body.dark .about-logo { filter: invert(1); }
   .ai-bar { margin: 8px 10px 0; }
   .fmt-row { margin: 8px 10px 0; }
   .find-row { margin: 8px 10px 0; }
-  .ai-status { margin: 6px 10px 0; }
+  /* The edit's summary is one line on a phone (tap it for the rest): at full
+     length it took 90px from the timeline after every edit (0.34.1) */
+  .ai-status { margin: 6px 10px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .ai-status.open { white-space: normal; max-height: 30vh; overflow-y: auto; }
   .stage-zone { padding: 8px 10px 2px; }
   /* A third of the screen for the picture, the rest for the work, the split
      CapCut uses on a phone */
@@ -2202,7 +2207,7 @@ body.dark .about-logo { filter: invert(1); }
   overflow: hidden;
   white-space: nowrap;
   cursor: grab;
-  touch-action: pan-x;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
+  touch-action: pan-x pan-y;   /* swipes scroll the timeline; a hold picks the clip up (holdToDrag) */
   user-select: none;
   background: rgba(43, 127, 184, 0.14);
   border: 1px solid rgba(43, 127, 184, 0.5);
@@ -2630,7 +2635,7 @@ body.dark .uclip { color: #7fb8e0; }
 .anim-tile:hover { border-color: var(--t2); }
 .anim-tile.selected { border-color: var(--acc); color: var(--text); }
 /* the music clip moves and trims like the others: a swipe still scrolls the timeline, a hold picks it up */
-.mclip { touch-action: pan-x; cursor: grab; }
+.mclip { touch-action: pan-x pan-y; cursor: grab; }
 .tclip.dragging { opacity: 0.8; z-index: 8; cursor: grabbing; }
 /* Trim handles sit OUTSIDE a selected clip's edges, as CapCut's do, so the
    clip's whole body stays free to hold and move however short it is. (Inside,
@@ -2648,7 +2653,7 @@ body.dark .uclip { color: #7fb8e0; }
   display: flex; align-items: center; padding: 0 8px;
   border-radius: 7px; border: 1px solid #1aa39a; background: rgba(26, 163, 154, 0.18); color: #0f6f68;
   font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden;
-  cursor: grab; touch-action: pan-x; user-select: none;
+  cursor: grab; touch-action: pan-x pan-y; user-select: none;
 }
 body.dark .eclip { color: #6fd8cf; }
 .eclip .ename { overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
@@ -2839,9 +2844,18 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
 #screen-editor .ai-bar { margin: 8px 12px 0; }
 #screen-editor .fmt-row { margin: 6px 12px 0; }
 @media (max-width: 760px) {
-  #screen-editor .stage-zone { flex: 0 0 auto; }
-  #screen-editor .stage { height: clamp(190px, 36vh, 420px); }
-  #screen-editor .tl-zone { flex: 1 1 auto; max-height: none; }
+  /* 0.34.1: the picture gives up height before the timeline does, down to
+     150px, so an edit's extra rows (summary, Business brief) never push the
+     timeline under the tool bar */
+  #screen-editor .stage-zone { flex: 0 1 auto; min-height: 0; }
+  #screen-editor .stage { height: clamp(150px, 36vh, 420px); flex: 0 1 auto; min-height: 150px; }
+  #screen-editor .tl-zone { flex: 1 1 0; min-height: 190px; max-height: none; overflow: hidden; }
+  /* The timeline scrolls BOTH ways: sideways along time, up and down through
+     its tracks. The browser locks each swipe to the way it started, so a
+     sideways swipe never drifts up or down (owner, 2026-10-22). The ruler
+     stays pinned at the top while the tracks move under it. */
+  #screen-editor .tl-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; touch-action: pan-x pan-y; overscroll-behavior: contain; }
+  #screen-editor .ruler { position: sticky; top: 0; z-index: 4; background: var(--bg0); }
   .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 }
 /* play stays dead centre: the right-hand buttons fit their third */
