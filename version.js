@@ -60,9 +60,12 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.47.0";
+  var VERSION = "0.48.0";
   var RELEASED = "2026-10-25";
-  var NOTES = "New: Remove background, as CapCut's Cutout, on a clip or an overlay: Auto finds the " +
+  var NOTES = "New: Text to speech, in a text's tools after Animation as in CapCut: 14 natural " +
+              "English voices (tap one to hear it), a speed, and Add voice, which reads the text aloud " +
+              "onto the audio track where the text starts; the music steps back under it. Made on your " +
+              "device (the first time downloads the voices, about 90 MB, once). 0.47.0: New: Remove background, as CapCut's Cutout, on a clip or an overlay: Auto finds the " +
               "person and removes everything behind them, no green screen needed, with an Edge " +
               "slider. Put the person on an overlay to stand them in front of another video. Runs on " +
               "your device (the first time it downloads its 16 MB model). 0.46.0: New: Tracking for texts, stickers and overlays, as in CapCut. Select one, tap " +

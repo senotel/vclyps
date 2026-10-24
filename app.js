@@ -4531,7 +4531,7 @@
       el.src = m.url;
       el.preservesPitch = true;   // a sped-up clip keeps the voice's pitch, as the video does
       // a video's own sound is speech: it goes through the bleep's speech stage
-      v = { el: el, gain: null, failed: false, url: m.url, speech: !!(m.fromVideo || m.type === "video") };
+      v = { el: el, gain: null, failed: false, url: m.url, speech: !!(m.fromVideo || m.type === "video" || m.fromTts) };
       voices.set(a.id, v);
     }
     if (!v.gain && !v.failed) routeVoice(v);
@@ -5071,6 +5071,8 @@
       const list = [tp("edit", "Edit", ICON.rename, "text"), tp("font", "Font", ICON.font, "font")];
       if (heading) list.push(tp("style", "Style", ICON.style, "style"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"),
         tool("tracking", "Tracking", ICON.track, (box) => trackItemPanel(box, t)));
+      // ccl15: after Animation, where CapCut has it
+      list.push(tool("tts", "Text to speech", ICON.voice, (box) => ttsPanel(box, t)));
       // ccl2: copy this text's whole look, paste it on another (or on every text)
       list.push(act("copystyle", "Copy style", ICON.copyStyle, () => copyTextStyle(t)));
       if (styleClip) {
@@ -6607,6 +6609,113 @@
       renderInspector();
       syncOverlays();
     }
+  }
+
+  /* ═══════════ TEXT TO SPEECH (ccl15, 0.48.0) ═══════════
+     CapCut's Text to speech, in the text bar after Animation: voice tiles
+     (a tap plays a short sample), a speed, and Add voice, which reads the
+     text aloud and puts the voice on the audio track where the text starts.
+     The voices are Kokoro (Apache-2.0), made on the device in a worker
+     (tts-worker.js); the first time downloads them (about 90 MB, once). The
+     voice counts as speech, so the music steps back under it. */
+  const TTS_VOICES = [["af_heart", "Heart", "F"], ["af_bella", "Bella", "F"], ["af_nicole", "Nicole", "F"], ["af_sarah", "Sarah", "F"],
+    ["af_nova", "Nova", "F"], ["af_sky", "Sky", "F"], ["af_river", "River", "F"], ["am_michael", "Michael", "M"], ["am_adam", "Adam", "M"],
+    ["am_eric", "Eric", "M"], ["am_liam", "Liam", "M"], ["am_onyx", "Onyx", "M"], ["am_puck", "Puck", "M"], ["am_fenrir", "Fenrir", "M"]];
+  let ttsWorker = null, ttsSeq = 0, ttsVoice = "af_heart", ttsSpeed = 1;
+  const ttsState = { ready: false, p: 0, busy: null, error: null };
+  const ttsWaits = new Map();
+  function ttsW() {
+    if (ttsWorker) return ttsWorker;
+    ttsWorker = new Worker("tts-worker.js", { type: "module" });
+    ttsWorker.onmessage = (e) => {
+      const m = e.data || {};
+      if (m.type === "progress") { ttsState.p = m.p; if (activeTool === "tts") throttledPanel(); }
+      else if (m.type === "ready") { ttsState.ready = true; if (activeTool === "tts") renderInspector(); }
+      else if (m.type === "audio" || m.type === "error") {
+        if (m.type === "error" && m.id == null) { ttsState.error = m.message; if (activeTool === "tts") renderInspector(); return; }
+        const w = ttsWaits.get(m.id);
+        ttsWaits.delete(m.id);
+        if (w) { if (m.type === "audio") w.res(m.samples); else w.rej(new Error(m.message)); }
+      }
+    };
+    ttsWorker.postMessage({ type: "load" });
+    return ttsWorker;
+  }
+  let panelTimer = 0;
+  function throttledPanel() { if (!panelTimer) panelTimer = setTimeout(() => { panelTimer = 0; renderInspector(); }, 400); }
+  function ttsSpeak(text, voice, speed) {
+    const id = ++ttsSeq;
+    return new Promise((res, rej) => { ttsWaits.set(id, { res: res, rej: rej }); ttsW().postMessage({ type: "speak", id: id, text: text, voice: voice, speed: speed }); });
+  }
+  const ttsWav = (samples) => (window.SenotelDenoise ? SenotelDenoise.wav([samples], 24000) : null);
+  let ttsSample = null;
+  async function playVoiceSample(v) {
+    try {
+      ttsState.busy = "sample";
+      renderInspector();
+      const name = (TTS_VOICES.find((x) => x[0] === v) || [])[1] || "";
+      const s = await ttsSpeak("Hi, I'm " + name + ". This is how I sound.", v, ttsSpeed);
+      if (ttsSample) { ttsSample.pause(); URL.revokeObjectURL(ttsSample.src); }
+      ttsSample = new Audio(URL.createObjectURL(ttsWav(s)));
+      ttsSample.play().catch(() => {});
+    } catch (e) { toast("That voice could not be played: " + e.message); }
+    ttsState.busy = null;
+    renderInspector();
+  }
+  async function addSpokenText(t) {
+    const text = String(t.text || "").trim();
+    if (!text) { toast("Write the text first"); return; }
+    ttsState.busy = "speak";
+    renderInspector();
+    try {
+      const s = await ttsSpeak(text, ttsVoice, ttsSpeed);
+      const name = (TTS_VOICES.find((x) => x[0] === ttsVoice) || [])[1] || "Voice";
+      const before = S.media.length;
+      addFiles([new File([ttsWav(s)], name + " - " + text.slice(0, 24) + ".wav", { type: "audio/wav" })], "library");
+      if (S.media.length === before) throw new Error("not added");
+      const m = S.media[S.media.length - 1];
+      m.fromTts = { voice: ttsVoice, text: text, textId: t.id };
+      await mediaDuration(m);
+      const a = addAudioClip(m, { at: t.start, quiet: true });
+      if (a) { toast("The voice is on the audio track, starting with the text"); recordEdit("tts", { voice: ttsVoice, words: text.split(/\s+/).length }); }
+    } catch (e) {
+      toast("The text could not be read aloud: " + e.message, 6000);
+    }
+    ttsState.busy = null;
+    renderInspector();
+  }
+  function ttsPanel(box, t) {
+    ttsW();
+    if (!ttsState.ready) {
+      box.appendChild(mk("p", "panel-note", ttsState.error ? "The voices could not be downloaded: " + ttsState.error
+        : "Natural voices, made on your device. Downloading them, once (about 90 MB): " + Math.round(ttsState.p * 100) + "%"));
+      const bar = mk("div", "mask-bar");
+      bar.appendChild(mk("i", ""));
+      bar.firstChild.style.width = Math.round(ttsState.p * 100) + "%";
+      box.appendChild(bar);
+      return;
+    }
+    const grid = mk("div", "voice-grid");
+    TTS_VOICES.forEach(([id, label, g]) => {
+      const b = mk("button", "voice-tile" + (ttsVoice === id ? " selected" : ""));
+      b.type = "button";
+      b.innerHTML = I(VOICE_GROUP_ICON.Character);
+      b.appendChild(mk("span", "", label));
+      b.title = (g === "F" ? "Female" : "Male") + " voice";
+      b.addEventListener("click", () => { ttsVoice = id; playVoiceSample(id); });
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+    box.appendChild(group("Speed", slider(0.7, 1.3, 0.05, ttsSpeed, (v) => { ttsSpeed = v; }, () => {}, (v) => v.toFixed(2) + "×")));
+    const go = mk("button", "mask-act on", ICON.voice);
+    go.type = "button";
+    go.disabled = !!ttsState.busy;
+    go.appendChild(mk("span", "", ttsState.busy === "speak" ? "Making the voice…" : ttsState.busy === "sample" ? "Playing a sample…" : "Add voice"));
+    go.addEventListener("click", () => addSpokenText(t));
+    const row = mk("div", "mask-top");
+    row.appendChild(go);
+    box.appendChild(row);
+    box.appendChild(mk("p", "panel-note", "Tap a voice to hear it. Add voice reads this text aloud onto the audio track, where the text starts."));
   }
 
   /* ═══════════ REMOVE BACKGROUND (ccl16, 0.47.0) ═══════════
@@ -11542,7 +11651,7 @@
         p.linearRampToValueAtTime(v, at + (i / steps) * d);
       }
     };
-    const isSpeech = (m) => !!(m && (m.fromVideo || m.type === "video"));
+    const isSpeech = (m) => !!(m && (m.fromVideo || m.type === "video" || m.fromTts));   // ccl15: a spoken text ducks the music too
     /* A clip's level across its transitions (ccl1): it rises over the window
        of the transition into it and falls over the one out of it, with the
        same equal-power curves as the preview's mixBlend, plus the few
