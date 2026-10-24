@@ -4762,6 +4762,9 @@
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // ccl11 chroma key: a person's outline in front of a screen
+    chroma: I('<rect x="2.5" y="3.5" width="19" height="17" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M6.5 20.5a5.5 5.5 0 0 1 11 0"/>'),
+    picker: I('<path d="M14.5 4.5l5 5"/><path d="M17 2.5a2.1 2.1 0 0 1 3 3l-2 2-3-3z"/><path d="M15 7.5L6 16.5 4.5 21 9 19.5l9-9"/>'),
     // ccl10 reverse: an arrow turning back on itself
     reverse: I('<polyline points="3 4 3 10 9 10"/><path d="M5.2 15a8 8 0 1 0 1.9-8.3L3 10"/>'),
     // ccl9 voice effects: a microphone with a wave beside it
@@ -5052,6 +5055,7 @@
         tool("mask", "Mask", ICON.mask, (box) => maskPanel(box, b, false)),
         tool("opacity", "Opacity", ICON.opacity, (box) => box.appendChild(group("Opacity", slider(0, 1, 0.01, b.opacity == null ? 1 : b.opacity, (v) => { b.opacity = v; syncOverlays(); }, () => commit(), pct)))),
         tool("blend", "Blend", ICON.blend, (box) => box.appendChild(group("Blend", chipsRow(BLENDS, b.blend || "normal", (v) => { if (v === "normal") delete b.blend; else b.blend = v; })))),
+        tool("chroma", "Chroma key", ICON.chroma, (box) => chromaPanel(box, b)),
         tool("timing", "Timing", ICON.timing, (box) => {
           box.appendChild(group("Length", slider(0.3, 12, 0.1, b.dur, (v) => { b.dur = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => v.toFixed(1) + "s")));
           box.appendChild(group("Starts at", slider(0, Math.max(0.1, total()), 0.05, Math.min(b.start, total()), (v) => { b.start = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => fmt(v))));
@@ -6557,6 +6561,89 @@
       syncOverlays();
     }
   }
+
+  /* ═══════════ CHROMA KEY (ccl11, 0.42.0) ═══════════
+     CapCut's Chroma key, in the overlay bar after Blend: pick the colour by
+     tapping it on the picture (or let Auto find a green or blue screen),
+     then Strength, Edge and Spill. The key itself is chroma.js, applied in
+     drawBroll, so the preview and the export are the same. */
+  let chromaPicking = false;
+  function overlayStill(b) {
+    const m = mediaById(b.mediaId);
+    if (!m) return null;
+    const src = previewSrc(b, 0);
+    return src && src.el ? src.el : null;
+  }
+  function chromaPanel(box, b) {
+    const C = window.SenotelChroma;
+    if (!C) return;
+    const k = b.chroma;
+    const row = mk("div", "mask-top");
+    const pick = mk("button", "mask-act" + (chromaPicking ? " on" : ""), ICON.picker);
+    pick.type = "button";
+    pick.appendChild(mk("span", "", chromaPicking ? "Tap the colour" : "Pick colour"));
+    pick.addEventListener("click", () => {
+      chromaPicking = !chromaPicking;
+      $("stage").classList.toggle("picking", chromaPicking);
+      if (chromaPicking) toast("Tap the colour to remove on the picture");
+      syncOverlays(); renderInspector();
+    });
+    row.appendChild(pick);
+    const auto = mk("button", "mask-act", ICON.chroma);
+    auto.type = "button";
+    auto.appendChild(mk("span", "", "Auto"));
+    auto.addEventListener("click", () => {
+      const el = overlayStill(b);
+      const found = el ? C.detect(el) : null;
+      if (!found) { toast("No green or blue screen found: pick the colour instead"); return; }
+      b.chroma = Object.assign({ strength: 0.5, soft: 0.3, spill: 0.5 }, b.chroma || {}, { color: found });
+      commit(); syncOverlays(); renderInspector();
+      recordEdit("chroma", { auto: true });
+    });
+    row.appendChild(auto);
+    if (k && k.color) {
+      const sw = mk("span", "chroma-swatch");
+      sw.style.background = k.color;
+      row.appendChild(sw);
+      const off = mk("button", "mask-act", ICON.close);
+      off.type = "button";
+      off.appendChild(mk("span", "", "Off"));
+      off.addEventListener("click", () => { delete b.chroma; commit(); syncOverlays(); renderInspector(); });
+      row.appendChild(off);
+    }
+    box.appendChild(row);
+    if (k && k.color) {
+      const live = (key) => (v) => { k[key] = v; syncOverlays(); };
+      const pc = (v) => Math.round(v * 100) + "%";
+      box.appendChild(group("Strength", slider(0, 1, 0.01, k.strength == null ? 0.5 : k.strength, live("strength"), () => commit(), pc)));
+      box.appendChild(group("Edge", slider(0, 1, 0.01, k.soft == null ? 0.3 : k.soft, live("soft"), () => commit(), pc)));
+      box.appendChild(group("Spill", slider(0, 1, 0.01, k.spill == null ? 0.5 : k.spill, live("spill"), () => commit(), pc)));
+    } else {
+      const el = overlayStill(b);
+      const found = el ? C.detect(el) : null;
+      box.appendChild(mk("p", "panel-note", found ? "This overlay has a " + (C.hex(found)[1] >= C.hex(found)[2] ? "green" : "blue") + " screen: tap Auto to remove it."
+        : "Tap Pick colour, then tap the colour to remove on the picture."));
+    }
+  }
+  // the tap that picks the colour: read from the preview, where the overlay shows unkeyed while picking
+  $("stage").addEventListener("pointerdown", (e) => {
+    if (!chromaPicking) return;
+    const b = S.sel && S.sel.type === "broll" ? brollById(S.sel.id) : null;
+    e.preventDefault();
+    e.stopPropagation();
+    chromaPicking = false;
+    $("stage").classList.remove("picking");
+    if (!b) { renderInspector(); return; }
+    const cv = $("layoutCanvas"), r = cv.getBoundingClientRect();
+    try {
+      const px = cv.getContext("2d").getImageData(Math.round(((e.clientX - r.left) / r.width) * cv.width), Math.round(((e.clientY - r.top) / r.height) * cv.height), 1, 1).data;
+      b.chroma = Object.assign({ strength: 0.5, soft: 0.3, spill: 0.5 }, b.chroma || {}, { color: SenotelChroma.toHex(px[0], px[1], px[2]) });
+      commit();
+      recordEdit("chroma", { auto: false });
+    } catch (err) { toast("That colour could not be read"); }
+    syncOverlays();
+    renderInspector();
+  }, true);
 
   /* ═══════════ VOICE EFFECTS (ccl9, 0.40.0) ═══════════
      CapCut's Voice effects, in the clip bar after Volume and in an audio
@@ -8443,9 +8530,11 @@
     const sc = Math.max(g.w / src.w, g.h / src.h), dw = src.w * sc, dh = src.h * sc;
     const mcx = (m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
     const dx = dw > g.w + 1 ? clamp(g.w / 2 - mcx * dw, g.w - dw, 0) : (g.w - dw) / 2;
-    if (b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) {
+    const keyed = b.chroma && b.chroma.color && window.SenotelChroma && !chromaPicking;
+    if ((b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) || keyed) {
       /* ccl8: an overlay's mask is cut on its own small canvas, so only the
-         overlay is masked and the picture under it stays whole */
+         overlay is masked and the picture under it stays whole; ccl11: its
+         chroma key is applied there first */
       const ow = Math.max(1, Math.round(g.w)), oh = Math.max(1, Math.round(g.h));
       if (!brollMaskCv) brollMaskCv = document.createElement("canvas");
       if (brollMaskCv.width !== ow) brollMaskCv.width = ow;
@@ -8455,7 +8544,15 @@
       ox.globalCompositeOperation = "source-over";
       ox.clearRect(0, 0, ow, oh);
       try { ox.drawImage(src.el, dx, (g.h - dh) / 2, dw, dh); } catch (e) {}
-      SenotelMasks.apply(ox, b.mask, ow, oh);
+      if (keyed) {
+        const out = SenotelChroma.key(brollMaskCv, b.chroma);
+        if (out !== brollMaskCv) {
+          ox.globalCompositeOperation = "copy";
+          ox.drawImage(out, 0, 0);
+          ox.globalCompositeOperation = "source-over";
+        }
+      }
+      if (b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) SenotelMasks.apply(ox, b.mask, ow, oh);
       try { ctx.drawImage(brollMaskCv, -g.w / 2, -g.h / 2, g.w, g.h); } catch (e) {}
     } else {
       try { ctx.drawImage(src.el, -g.w / 2 + dx, -g.h / 2 + (g.h - dh) / 2, dw, dh); } catch (e) {}

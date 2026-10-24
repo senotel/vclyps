@@ -2988,3 +2988,6 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
 .voice-tile svg { width: 22px; height: 22px; color: var(--t1); }
 .voice-tile.selected { border-color: var(--acc); background: var(--acc-soft); color: var(--acc); }
 .voice-tile.selected svg { color: var(--acc); }
+/* ccl11 (0.42.0): chroma key */
+.chroma-swatch { align-self: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); }
+.stage.picking { cursor: crosshair; touch-action: none; }
