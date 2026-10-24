@@ -2907,3 +2907,11 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
 
 /* ccl8 (0.38.0): the mask is set on the picture with one or two fingers */
 .stage.mask-on { touch-action: none; }
+
+/* 0.38.1: a tool's panel pulls down to its title bar (and back up), so the timeline stays usable */
+.panel-head { touch-action: none; cursor: grab; }
+.panel-grab { position: absolute; top: 5px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--bg3); pointer-events: none; }
+#inspector.inspector { transition: transform 0.18s ease; }
+#inspector.inspector.min { overflow: hidden; box-shadow: none; }
+#inspector.inspector.min .panel-body { display: none; }
+#inspector.inspector.min .panel-head { border-bottom: 0; }

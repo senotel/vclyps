@@ -5017,6 +5017,46 @@
     bar.appendChild(strip);
   }
 
+  /* A tool's panel can be pulled down to its title bar and back up, so the
+     timeline and the play row underneath stay usable while the tool is
+     still open (a mask keeps its handles on the picture). Tapping the title
+     bar of a pulled-down panel opens it again. */
+  let panelMin = false, panelMinTool = null;
+  function setPanelMin(on, toolId) {
+    panelMin = on;
+    panelMinTool = on ? toolId : null;
+    const ins = $("inspector");
+    ins.style.transform = "";
+    ins.classList.toggle("min", on);
+    document.body.classList.toggle("panel-min", on);
+  }
+  function panelDrag(head, ins, toolId) {
+    let start = null;
+    head.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      start = { y: e.clientY, t: e.timeStamp };
+      try { head.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    head.addEventListener("pointermove", (e) => {
+      if (!start || panelMin) return;
+      const dy = Math.max(0, e.clientY - start.y);
+      ins.style.transition = "none";
+      ins.style.transform = dy ? "translateY(" + dy + "px)" : "";
+    });
+    const end = (e) => {
+      if (!start) return;
+      const dy = e.clientY - start.y;
+      const flick = e.timeStamp - start.t < 250 && Math.abs(dy) > 20;
+      start = null;
+      ins.style.transition = "";
+      if (!panelMin && (dy > 60 || (flick && dy > 0))) setPanelMin(true, toolId);
+      else if (panelMin && (dy < -20 || Math.abs(dy) < 8)) setPanelMin(false);
+      else ins.style.transform = "";
+    };
+    head.addEventListener("pointerup", end);
+    head.addEventListener("pointercancel", end);
+  }
+
   function renderInspector() {
     const key = selKey();
     if (key !== lastSelKey) {
@@ -5034,13 +5074,19 @@
       activeTool = null;
       ins.classList.add("hidden");
       document.body.classList.remove("panel-open");
+      if (panelMin) setPanelMin(false);
       return;
     }
     ins.classList.remove("hidden");
     document.body.classList.add("panel-open");
+    if (panelMin && panelMinTool !== t.id) panelMin = false;
+    ins.classList.toggle("min", panelMin);
+    document.body.classList.toggle("panel-min", panelMin);
     const head = mk("div", "panel-head");
     head.appendChild(mk("span", "panel-title", ""));
     head.firstChild.textContent = t.label;
+    head.appendChild(mk("span", "panel-grab"));
+    panelDrag(head, ins, t.id);
     const done = mk("button", "panel-done", ICON.check);
     done.type = "button";
     done.setAttribute("aria-label", "Done");

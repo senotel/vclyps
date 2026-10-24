@@ -60,9 +60,11 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.38.0";
+  var VERSION = "0.38.1";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: Mask, the CapCut way. Select a clip or an overlay, tap Mask and pick Line, Mirror, " +
+  var NOTES = "Fixed: a tool's panel can now be pulled down by its title bar, so the timeline and " +
+              "play row are usable while the tool stays open (the mask keeps its outline on the " +
+              "picture). Tap the title bar to bring the panel back. 0.38.0: New: Mask, the CapCut way. Select a clip or an overlay, tap Mask and pick Line, Mirror, " +
               "Circle, Rectangle, Heart or Star; set its size, width, turn, soft edge and corners, " +
               "or Invert it to cut the shape out. On a clip, drag on the picture to move the mask " +
               "and use two fingers to make it bigger or smaller and turn it. 0.37.0: " +
