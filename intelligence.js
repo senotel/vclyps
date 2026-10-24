@@ -108,6 +108,8 @@
     id: "vision-1",
     label: "Vision-1.0",
     available: () => !!(window.SenotelVision && window.SenotelRetention && window.SenotelVision.enabled()),
+    // Vision-1.0 learned entertainment edits only; business mode goes to the cloud Directors
+    handles: (req) => req.mode !== "business",
     plan: async (req) => window.SenotelVision.plan(req)
   };
 
@@ -319,6 +321,49 @@
 
   const RETENTION_RULES_LEAN = "RETENTION: open on speech, no greeting · something new every few seconds; cut repetition, preamble, tangents and dead air · keep the main question open until near the end · strongest payoff last · END ON THE PAYOFF: nothing after it · never cut between a setup and its punchline.";
 
+  /* ───────── Business mode (0.34.0) ─────────
+     A product video (launch, promo, ad, feature), not an entertainment short.
+     The method is /brag's (latent-spaces/brag, the 2026-10-23 launch video):
+     hook, reveal, two or three highlights, an end card; short; every claim
+     grounded in what the creator gave us; text held long enough to read; the
+     product in use beats a description of it. The creator's brief (product,
+     what it does, call to action, tone) comes from the Business row. */
+  const BIZ_TONES = {
+    polished: "TONE polished: serious and premium. 3-4 beats with long holds. Entrances: blur, fade, l-blur, w-rise. 2-3 quiet sounds. Music calm and steady.",
+    bold: "TONE bold: punchy and loud. 4-6 beats, some under 2 seconds. Entrances: pop, w-pop, rise, l-pop, zoom. Sounds on most visible changes. Music upbeat and driving.",
+    cinematic: "TONE cinematic: trailer-scale. 4-5 beats, big short statements, slow reveals. Entrances: blur, l-blur, wipe, unfold, grow. 2-3 big sounds (the reveal, the end). Music epic or dark cinematic.",
+    clean: "TONE clean: feature cards, corporate but not boring. 4-6 beats, one capability each, each named in a lower third. Entrances: rise, left, wipe, fade. A light sound per feature. Music light and positive."
+  };
+
+  function bizTone(req) {
+    const b = req.brief || {};
+    return BIZ_TONES[b.tone] ? b.tone : "polished";
+  }
+
+  function bizBriefLine(req) {
+    const b = req.brief || {};
+    const parts = [];
+    if (b.name) parts.push("product: \"" + String(b.name).slice(0, 60) + "\"");
+    if (b.what) parts.push("what it does: \"" + String(b.what).slice(0, 200) + "\"");
+    if (b.cta) parts.push("call to action: \"" + String(b.cta).slice(0, 60) + "\"");
+    return "THE CREATOR'S BRIEF: " + (parts.length ? parts.join(" · ") : "(none given: work out the product and its claim from the footage and the direction)") + ".";
+  }
+
+  const BIZ_RULES = [
+    "MODE: BUSINESS. This is a product video (a launch, promo, ad or feature video), NOT an entertainment short. After one viewing, a stranger must know what the product is, who it is for, and what to do next.",
+    "SHAPE: hook (2-3s: the most impressive TRUE claim, or the product doing its thing) → reveal (2-4s: the product named and shown) → 2-3 highlights (each ONE capability, shown in the footage: the product in use beats someone describing it) → the end card (added after the footage, see endCard). Adapt it; it is a starting shape, not a template.",
+    "GROUNDED: every name, number, feature and claim on screen comes from the brief, the transcript or what is visible in the footage. Never invent statistics, prices, customers, testimonials, awards or features. Tone, framing and connective lines are yours to write.",
+    "SPECIFIC: use the creator's own words. Banned: generic marketing language such as 'streamline your workflow', 'revolutionize', 'game-changer', 'next level', 'seamless', 'unlock', 'supercharge', 'all-in-one solution'.",
+    "READABLE: pace comes from cuts and motion, never from pulling text away early. Every line stays fully on screen at least 0.5s + 0.3s per word (a 1-3 word label at least 0.8s, a sentence at least 1.2s). At most one new line every 2 seconds.",
+    "SHOW THE THING: open on the product or its result whenever the footage has it, never on a logo, a greeting or a title over nothing. Prefer moments where something visibly happens (a tap, a screen changing, the product working)."
+  ].join("\n");
+
+  const BIZ_RULES_LEAN = "MODE: BUSINESS, a product video, not entertainment: a stranger must learn what it is, who it is for and what to do next. SHAPE: hook 2-3s (the strongest TRUE claim or the product working) → reveal 2-4s → 2-3 highlights, one capability each, shown in use → end card (endCard). GROUNDED: every name, number and claim from the brief, transcript or footage; never invent stats, prices, testimonials. No generic marketing words (streamline, revolutionize, seamless, game-changer). Each line on screen ≥ 0.5s + 0.3s per word.";
+
+  // the in/out animation ids the Director may name (text-anims.js), checked in normalize()
+  const BIZ_IN = ["fade", "rise", "drop", "left", "right-in", "pop", "zoom", "grow", "blur", "wipe", "wipeup", "unfold", "type", "l-fade", "l-rise", "l-blur", "l-pop", "w-rise", "w-pop"];
+  const BIZ_OUT = ["fade", "rise", "drop", "blur", "wipe", "shrink", "zoom", "l-fade", "l-blur", "w-rise"];
+
   function structureText(lean) {
     const X = R();
     if (!X) return "";
@@ -340,6 +385,12 @@
      payoff needs and the payoff (findings RQ6). Completion falls with length
      and watch-time rankers correct for it, so padding buys nothing (E17, E59). */
   function lengthLine(req) {
+    if (req.mode === "business" && !req.target) {
+      return "TARGET LENGTH: 15-25 seconds of footage before the end card (18-22 is the sweet spot); longer only when the creator speaks to camera and every extra beat is a new capability or proof." +
+        " Format: " + (req.format || "auto") + ". USER DIRECTION (satisfy first): " +
+        (req.prompt ? '"' + req.prompt + '"' : "(none: make the clearest, most convincing product video the footage allows).") +
+        rangeLine(req);
+    }
     return "TARGET LENGTH: " + (req.target
       ? "aim close to " + req.target + " seconds, but finishing the story beats hitting a number."
       : "as long as the story needs and not a second more: the shortest length that keeps the hook, the context the payoff needs, and the payoff, with every extra beat adding something new. Most single-story shorts land at 30-90s; go to 180s only when each added minute brings new payoffs.") +
@@ -435,8 +486,76 @@
     ].join("\n");
   }
 
+  // PASS 1, business mode: plan the product video
+  function bizStoryBrief(req, lean) {
+    const L = [];
+    L.push("You are the vClyps AI DIRECTOR: a launch-film editor who makes products look as good as they are. This is STEP 1 of 2: design the VIDEO. Do NOT choose final timestamps yet.");
+    L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN product name and call to action are the content and are wanted.");
+    L.push("You receive transcripts with timestamps, audio/motion stats, and keyframe images so you can SEE the footage. Study it first: what the product is, what it does on screen, and its single strongest moment.");
+    L.push(bizBriefLine(req));
+    L.push(lean ? BIZ_RULES_LEAN : BIZ_RULES);
+    L.push(BIZ_TONES[bizTone(req)]);
+    L.push("THINK IN THIS ORDER. (1) KIND: launch, promo, feature, testimonial or explainer. (2) The ONE claim the video proves, from the brief or the footage. (3) HOOK: the moment or line that earns the next 20 seconds. (4) BEATS: reveal and 2-3 highlights, each a different capability, the strongest last. Beats may come from anywhere in the footage, in any order.");
+    L.push(lengthLine(req));
+    const music = musicBrief(req, lean);
+    if (music) L.push(music + (lean ? "" : "\n· In business mode, music nearly always helps: choose by the tone, and level \"forward\" when nobody talks."));
+    L.push("Respond with ONLY this compact JSON. List beats IN FINAL PLAYBACK ORDER; from/to are rough source-time regions (refined in step 2). 'claim' is the one claim the video proves (10 words or fewer); 'payoffAt' the SOURCE second where the footage proves it best:");
+    const shape = {
+      story: "one-sentence summary of the video",
+      genre: "launch|promo|feature|testimonial|explainer",
+      band: "micro|short|standard",
+      hook: "the on-screen hook line for 0s, 8 words or fewer, grounded in the brief or footage",
+      hookType: "result|claim|number|visual|problem",
+      claim: "the claim the video proves",
+      payoffAt: 0.0,
+      beats: [{ beat: "hook|reveal|highlight|proof", says: "what this beat shows", mediaId: exampleId(req), from: 0.0, to: 4.0 }],
+      look: "none|cinematic|vivid|warm|cool|noir|vintage|dreamy"
+    };
+    if (wantsMusic(req)) shape.music = { use: true, query: "mood + genre, 2-3 words", level: "under|forward", why: "10 words or fewer" };
+    shape.confidence = 0.9;
+    L.push(JSON.stringify(shape));
+    return L.join("\n");
+  }
+
+  // PASS 2, business mode: cut it, title it, end it
+  function bizEditBrief(req, story, lean) {
+    const L = [];
+    L.push("You are the vClyps AI DIRECTOR. This is STEP 2 of 2: EXECUTE the locked product video below into a precise edit using the transcript timestamps.");
+    L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN product name and call to action are the content and are wanted.");
+    L.push("LOCKED PLAN (keep the beats and their order): " + JSON.stringify(story));
+    L.push(bizBriefLine(req));
+    L.push(lean ? BIZ_RULES_LEAN : BIZ_RULES);
+    L.push(BIZ_TONES[bizTone(req)]);
+    L.push("HARD RULES: never cut mid-sentence when someone speaks (cut on sentence boundaries) · keep the locked beat order · footage with no speech may be cut anywhere, on a visible change · never keep a clip only for movement.");
+    L.push(lengthLine(req));
+    L.push("Turn each beat into precise kept clips. Every 'reason' names the beat it serves, 12 words or fewer.");
+    L.push("TEXTS (this is where a product video lives): the hook line at 0.1s is REQUIRED. Then one short line or label per highlight, timed to the footage that shows it. Each text: 'in' = its entrance, one of " + BIZ_IN.join(", ") + "; 'out' = its exit (optional), one of " + BIZ_OUT.join(", ") + ". Vary the entrances across the video, never the same one on every line. 'style': leave it out for a title; \"lower\" for a feature label in the lower third, with 'sub' as its optional second line. dur follows the READABLE rule. A landed line stays still. No questions you do not answer, no emoji.");
+    L.push("END CARD: endCard is added AFTER the footage as its own clip: 'text' = the product name, 'sub' = the call to action from the brief (or, if none, what it does in 8 words or fewer), 'dur' 2.5-4 seconds. Do NOT put the end card in texts.");
+    L.push("EFFECTS: a punch-in on the reveal or the strongest highlight, at most one every ~8 seconds; slow-mo or speed-up only where the motion itself is the point.");
+    L.push("BROLL: usually none; the product's own footage is the point. At most 1 photo or video item, only if the footage lacks a picture of something the brief names. Never reaction GIFs.");
+    const sound = soundBrief(req, lean);
+    if (sound) L.push(sound + "\nIN BUSINESS MODE: 2-5 sounds in the whole video, each on a visible action (a tap, a screen changing, a label arriving, the reveal). Nothing comic.");
+    L.push("Respond with ONLY this compact JSON, short enough to finish completely:");
+    const shape = {
+      editPlan: [{ mediaId: exampleId(req), in: 0.0, out: 3.2, beat: "hook|reveal|highlight|proof", reason: "brief" }],
+      texts: [
+        { text: "hook line", start: 0.1, dur: 2.4, pos: "center", size: 44, in: "blur" },
+        { text: "Feature name", sub: "what it does", style: "lower", start: 6.0, dur: 2.2, in: "rise", out: "fade" }
+      ],
+      endCard: { text: "Product name", sub: "call to action", dur: 3 },
+      broll: [],
+      effects: [{ clip: 1, type: "punch-in" }]
+    };
+    if (sound) shape.sfx = [{ sound: sfxName(req, "whoosh"), clip: 1, at: "cut", why: "the reveal" }];
+    shape.reasoning = ["≤3 brief decisions"];
+    shape.confidence = 0.95;
+    L.push(JSON.stringify(shape));
+    return L.join("\n");
+  }
+
   // PASS 1 — understand the footage and design the story (no exact cuts yet)
   function storyBrief(req, lean) {
+    if (req.mode === "business") return bizStoryBrief(req, lean);
     const L = [];
     L.push("You are the vClyps AI DIRECTOR: an Oscar-winning editor + viral short-form strategist. This is STEP 1 of 2 — design the STORY. Do NOT choose final timestamps yet.");
     L.push(BRANDING_RULE);
@@ -487,6 +606,7 @@
 
   // PASS 2 — execute the locked story into precise cuts + captions
   function editBrief(req, story, lean) {
+    if (req.mode === "business") return bizEditBrief(req, story, lean);
     const L = [];
     L.push("You are the vClyps AI DIRECTOR. This is STEP 2 of 2 — EXECUTE the locked story below into a precise edit using the transcript timestamps.");
     L.push(BRANDING_RULE);
@@ -1004,7 +1124,9 @@
   function brandingGuard(req) {
     const providers = /\b(?:gemini|google|veo|groq|mistral|vclyps|vevris|senotel|openai|chatgpt)\b/ig;
     const source = (req.media || []).flatMap((m) => (m.transcript || []).map((t) => t.text || "")).join(" ").toLowerCase();
-    const topic = source + " " + String(req.prompt || "").toLowerCase();
+    const b = req.brief || {};
+    const topic = source + " " + String(req.prompt || "").toLowerCase() + " " +
+      [b.name, b.what, b.cta].filter(Boolean).join(" ").toLowerCase();
     return (value, caption) => {
       const text = String(value || "");
       const names = text.match(providers);
@@ -1054,14 +1176,30 @@
     });
     if (!clips.length) return null;
 
-    const normText = (t, defPos, defSize) => ({
-      text: String(t.text).slice(0, 90),
-      start: Math.max(0, +t.start || 0),
-      dur: clamp(+t.dur || 2, 0.4, 15),
-      pos: ["top", "center", "bottom"].includes(t.pos) ? t.pos : defPos,
-      size: clamp(+t.size || defSize, 14, 88),
-      color: "#ffffff"
-    });
+    const normText = (t, defPos, defSize) => {
+      const n = {
+        text: String(t.text).slice(0, 90),
+        start: Math.max(0, +t.start || 0),
+        dur: clamp(+t.dur || 2, 0.4, 15),
+        pos: ["top", "center", "bottom"].includes(t.pos) ? t.pos : defPos,
+        size: clamp(+t.size || defSize, 14, 88),
+        color: "#ffffff"
+      };
+      /* Business mode's titles (0.34.0): an entrance and exit from the text
+         library, and a lower third for a feature label. Only ids it offered. */
+      if (BIZ_IN.indexOf(t.in) >= 0) { n.animIn = t.in; n.animInLen = /^[lw]-/.test(t.in) ? 0.8 : 0.5; }
+      if (BIZ_OUT.indexOf(t.out) >= 0) { n.animOut = t.out; n.animOutLen = 0.35; }
+      if (t.style === "lower") {
+        n.style = "lower";
+        if (t.sub) n.sub = String(t.sub).slice(0, 80);
+      }
+      if (req.mode === "business") {
+        // the READABLE floor: 0.5s + 0.3s a word, whatever the model wrote
+        const words = (n.text + " " + (n.sub || "")).trim().split(/\s+/).length;
+        n.dur = Math.max(n.dur, Math.min(6, 0.5 + 0.3 * words) + (n.animInLen || 0));
+      }
+      return n;
+    };
     const norm = (arr, defPos, defSize) => (Array.isArray(arr) ? arr : [])
       .filter((t) => t && t.text)
       .slice(0, 80)
@@ -1176,6 +1314,7 @@
       effects: effects,
       music: normMusic(plan.music, req, brandSafe),
       story: storySummary,
+      endCard: normEndCard(plan.endCard, req, brandSafe),
       confidence: typeof plan.confidence === "number" ? clamp(plan.confidence, 0, 1) : null,
       reasons: Array.isArray(plan.reasoning) ? plan.reasoning.slice(0, 6).map(String) : [],
       raw: plan // full director output — becomes training data
@@ -1183,6 +1322,20 @@
     // the Director's clip index → clip, for retentionOf(); not data, so not enumerable
     Object.defineProperty(result, "clipFor", { value: clipFor, enumerable: false });
     return result;
+  }
+
+  /* Business mode's end card: the product name and the call to action, added
+     after the footage as its own clip by app.js. The brief wins over the
+     model for both lines, because they are the creator's words. */
+  function normEndCard(e, req, brandSafe) {
+    if (req.mode !== "business") return null;
+    const b = req.brief || {};
+    e = e && typeof e === "object" ? e : {};
+    const text = String(b.name || e.text || "").replace(/\s+/g, " ").trim().slice(0, 40);
+    if (!text || !brandSafe(text)) return null;
+    let sub = String(b.cta || e.sub || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (sub && !brandSafe(sub)) sub = "";
+    return { text: text, sub: sub, dur: clamp(+e.dur || 3, 2.5, 4) };
   }
 
   /* The music brief, validated. null means no decision was asked for, or none
@@ -1207,7 +1360,7 @@
   async function plan(req) {
     for (const p of ORDER) {
       let ok = false;
-      try { ok = p.available(); } catch (e) { ok = false; }
+      try { ok = p.available() && (!p.handles || p.handles(req)); } catch (e) { ok = false; }
       /* Every provider reports, not just Gemini. With a chain, a silent
          fallback is worse than no fallback: you cannot tell a working
          redundancy from a broken one, and "why is this edit worse today"

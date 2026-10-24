@@ -382,6 +382,20 @@
             <span class="mode-desc">Finds the story, cuts around it, captions and hooks it</span>
             <span class="mode-best">Best for Instagram Reels, YouTube Shorts and TikTok</span>
           </button>
+          <!-- BUSINESS (0.34.0): a product video planned the /brag way: hook,
+               reveal, highlights, an end card. First version. -->
+          <button class="mode-card" data-mode="business">
+            <span class="mode-ico">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2.5" y="7" width="19" height="13" rx="1.5"></rect>
+                <path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7"></path>
+                <path d="M2.5 12.5h19"></path>
+              </svg>
+            </span>
+            <span class="mode-name">Business</span>
+            <span class="mode-desc">Turns your product footage into a launch video: hook, reveal, highlights and an end card</span>
+            <span class="mode-best">Best for product launches, ads and LinkedIn</span>
+          </button>
       </div>
     </div>
   </section>
@@ -400,7 +414,7 @@
          old Shorts/Recap/Film/Story chips are gone. Other modes are chosen on
          the mode screen, not here. -->
     <div class="fmt-row">
-      <span class="fmt-label">Entertainment</span>
+      <span class="fmt-label" id="fmtLabel">Entertainment</span>
       <span class="fmt-spacer"></span>
       <button class="chip hidden" id="clipsChip" title="The clips found in your video">Clips</button>
       <button class="chip" id="findChip" aria-pressed="false" title="Find the best short clips in a long video">Find clips</button>
@@ -445,6 +459,32 @@
         </label>
       </span>
       <span class="find-src" id="findSrc"></span>
+    </div>
+
+    <!-- BUSINESS: the brief. Every name and claim the Director puts on screen
+         comes from here, the footage, or what is said in it. -->
+    <div class="find-row biz-row hidden" id="bizRow">
+      <label class="find-field biz-field">
+        <span>Product</span>
+        <input id="bizName" type="text" maxlength="60" placeholder="Its name" autocomplete="off" />
+      </label>
+      <label class="find-field biz-field biz-wide">
+        <span>What it does</span>
+        <input id="bizWhat" type="text" maxlength="200" placeholder="One line, in your words" autocomplete="off" />
+      </label>
+      <label class="find-field biz-field">
+        <span>Ends with</span>
+        <input id="bizCta" type="text" maxlength="60" placeholder="e.g. Try it free" autocomplete="off" />
+      </label>
+      <label class="find-field">
+        <span>Tone</span>
+        <select id="bizTone">
+          <option value="polished">Polished</option>
+          <option value="bold">Bold</option>
+          <option value="cinematic">Cinematic</option>
+          <option value="clean">Clean feature cards</option>
+        </select>
+      </label>
     </div>
 
     <div class="ai-status hidden" id="aiStatus"></div>

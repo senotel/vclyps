@@ -779,6 +779,14 @@
     return {
       prompt: opts.prompt || "",
       format: fmt,
+      // "business" plans a product video (intelligence.js, 0.34.0); anything else is entertainment
+      mode: opts.mode === "business" ? "business" : "entertainment",
+      brief: opts.mode === "business" && opts.brief ? {
+        name: String(opts.brief.name || "").slice(0, 60),
+        what: String(opts.brief.what || "").slice(0, 200),
+        cta: String(opts.brief.cta || "").slice(0, 60),
+        tone: String(opts.brief.tone || "polished")
+      } : null,
       target: opts.target || intent.explicitLen || null, // no target → the story decides the length
       sfx: soundLibrary(),
       // {available, chosen}: app.js knows whether the creator already picked a track
@@ -861,7 +869,9 @@
        worst opening a short can have — build one from what the speaker actually
        said. Prefer a line carrying hook wording, else the opening line. */
     if (!texts.length) {
-      const line = bestHookLine(media);
+      // a product video opens on the creator's own claim before anything said in it
+      const b = ai.brief || null;
+      const line = (b && (b.what || b.name)) || bestHookLine(media);
       if (line) {
         texts.push({ text: line, start: 0.1, dur: 2.2, pos: "top", size: 40, color: "#ffffff" });
       }
@@ -923,6 +933,7 @@
     return {
       clips: clips, texts: texts, broll: broll,
       sfx: sfx, music: ai.music || null,
+      endCard: ai.endCard || null,
       summary: summary, vertical: fmt === "short",
       retention: retention
     };
@@ -1562,11 +1573,13 @@
     // 1) Intelligence Layer first (Vision-1.0 → Gemini, when available)
     if (window.IntelligenceEngine) {
       try {
-        const ai = await IntelligenceEngine.plan(buildRequest(opts, fmt, intent, media));
+        const req = buildRequest(opts, fmt, intent, media);
+        const ai = await IntelligenceEngine.plan(req);
         if (ai) {
+          if (req.brief) ai.brief = req.brief;
           const g = materialize(ai, intent, fmt, media);
           IntelligenceEngine.record({
-            kind: "plan", provider: ai.provider, prompt: opts.prompt || "", format: fmt,
+            kind: "plan", provider: ai.provider, prompt: opts.prompt || "", format: fmt, mode: req.mode,
             media: mediaMeta(media), clips: g.clips, texts: g.texts,
             sfx: g.sfx, music: g.music, retention: g.retention || null,
             director: ai.raw || null, confidence: ai.confidence, summary: g.summary

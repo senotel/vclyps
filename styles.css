@@ -510,6 +510,10 @@ body.dark .logo-img { filter: invert(1); }
   text-transform: none;
 }
 .find-field input { width: 64px; font-variant-numeric: tabular-nums; }
+/* Business row (0.34.0): the same fields as Find clips, sized for words */
+.biz-field { flex: 1 1 150px; min-width: 0; }
+.biz-field input { flex: 1 1 auto; width: auto; min-width: 0; font-variant-numeric: normal; }
+.biz-wide { flex-basis: 260px; }
 .find-field select:focus,
 .find-field input:focus { outline: none; border-color: var(--acc); }
 .find-field input.bad { border-color: var(--danger); }

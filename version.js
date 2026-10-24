@@ -40,7 +40,8 @@
    ── PRE-RELEASE ────────────────────────────────────────────────────────────
    0.x.x means vClyps has not had its first official production release yet.
    1.0.0 is that release. Entertainment mode (Short videos) is close to
-   complete; the other modes and Long videos do not exist yet. (The current
+   complete; Business mode has its first version (0.34.0); Long videos does
+   not exist yet. (The current
    number is VERSION below and nowhere else, this comment included.)
 
    ── NO BUILD NUMBER ────────────────────────────────────────────────────────
@@ -59,9 +60,15 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.33.0";
-  var RELEASED = "2026-10-22";
-  var NOTES = "The editor works like CapCut: one bar of tools at the bottom, where your thumb is; " +
+  var VERSION = "0.34.0";
+  var RELEASED = "2026-10-24";
+  var NOTES = "New: Business mode (first version). Pick Business on the New project screen, add " +
+              "your product footage, fill in the product, what it does, how it should end and the " +
+              "tone, and press Edit. vClyps plans a launch-style video: a hook, the reveal, two or " +
+              "three highlights shown in your footage, animated titles and feature labels, music and " +
+              "a few sounds, and an end card with your product name and call to action. Every claim " +
+              "on screen comes from what you wrote or what is in the footage. 0.33.0: " +
+              "The editor works like CapCut: one bar of tools at the bottom, where your thumb is; " +
               "tap something and the bar shows its tools; tap a tool and only its options slide up, " +
               "with a check mark. Play, undo and redo sit in a row under the picture. A button on " +
               "every cut opens transitions. Drag a text, sticker or overlay to the bin under the " +

@@ -41,7 +41,9 @@
     userMuted: false,
     seed: 1,
     format: "auto",
-    mode: "entertainment",   // Short videos → Entertainment; more modes later
+    mode: "entertainment",   // "entertainment" (short videos) or "business" (product videos, 0.34.0)
+    // Business mode's brief (the Business row): the Director's source of names and claims
+    brief: { name: "", what: "", cta: "", tone: "polished" },
     aspect: "9:16",          // short-form default; see exportSize()
     vertical: false,
     // Find clips (clips.js): the bar's mode, its options, and what it found
@@ -236,9 +238,31 @@
     card.addEventListener("click", () => {
       go(() => {
         S.mode = card.dataset.mode || "entertainment";
+        applyModeUI();
         enterEditor();
       });
     });
+  });
+
+  /* What changes with the mode: the label, the Business row (the brief the
+     Director works from) and Find clips, which is an entertainment tool for
+     long recordings. */
+  function applyModeUI() {
+    const biz = S.mode === "business";
+    $("fmtLabel").textContent = biz ? "Business" : "Entertainment";
+    $("bizRow").classList.toggle("hidden", !biz);
+    $("findChip").classList.toggle("hidden", biz);
+    if (biz && S.find.on) $("findChip").click();
+    $("bizName").value = S.brief.name || "";
+    $("bizWhat").value = S.brief.what || "";
+    $("bizCta").value = S.brief.cta || "";
+    $("bizTone").value = S.brief.tone || "polished";
+    $("semiPrompt").placeholder = biz ? "Anything else? e.g. make it 20 seconds, lead with the price" : "Describe your edit…";
+  }
+  [["bizName", "name"], ["bizWhat", "what"], ["bizCta", "cta"], ["bizTone", "tone"]].forEach(([id, key]) => {
+    const el = $(id);
+    el.addEventListener("input", () => { S.brief[key] = el.value; });
+    el.addEventListener("change", () => { S.brief[key] = el.value; writeSession(); });
   });
 
   // back steps one level: editor → modes → landing
@@ -1773,7 +1797,12 @@
      picture and put on the timeline like any photo (so it is resumed, shown
      and exported the way photos already are). Before the video, everything
      on the timeline moves later by the card's length. */
-  async function makeCardClip(t, where) {
+  function makeCardClip(t, where) { return cardClip(t, where, false); }
+
+  /* A title card drawn to a still and placed as its own clip. `generated` is
+     the Director's end card in business mode: it is not a text on the
+     timeline to remove, nothing gets selected, and nothing is announced. */
+  async function cardClip(t, where, generated) {
     const size = exportSize();
     const k = 1080 / Math.min(size.w, size.h);           // drawn at 1080p, sharp at any export size
     const cv = document.createElement("canvas");
@@ -1789,6 +1818,12 @@
     const m = S.media[S.media.length - 1];
     const len = clamp(t.dur || 2, 0.5, 15);
     const clip = { id: nextId++, mediaId: m.id, in: 0, out: len, speed: 1, volume: 1, muted: false, filter: "none", fadeIn: 0, fadeOut: 0 };
+    if (generated && where === "end" && S.clips.length) {
+      // the footage hands over to the card through black, and the card holds to the end
+      clip.tIn = "black"; clip.tDur = 0.6;
+      const last = S.clips[S.clips.length - 1];
+      last.fadeOut = 0;
+    }
     S.texts = S.texts.filter((x) => x !== t);
     if (where === "start") {
       S.texts.forEach((x) => { x.start += len; });
@@ -1802,6 +1837,12 @@
       S.time = Math.max(0, total() - len);
     }
     if (S.captions.length) remapCaptions();
+    if (generated) {
+      S.time = 0;
+      commit();
+      renderTimeline();
+      return clip;
+    }
     S.sel = { type: "clip", id: clip.id };
     commit();
     recordEdit("card-clip", { where: where, seconds: len });
@@ -7617,6 +7658,7 @@
         g = await SenotelBrain.plan({
           prompt: prompt, media: media, seed: S.seed++, format: S.format === "auto" ? null : S.format,
           range: range, target: opts.target || null,
+          mode: S.mode, brief: S.mode === "business" ? Object.assign({}, S.brief) : null,
           /* A track the creator picked by hand is theirs: the Director is told
              it exists and plans around it rather than choosing another. */
           music: { available: navigator.onLine !== false, chosen: S.music && S.music.by !== "director" ? S.music.title : null }
@@ -7631,6 +7673,20 @@
       if (directorFailure) throw directorFailure;
       if (!g || !g.clips.length) throw new Error("The AI Director could not prepare an edit. Reload the app and retry; your timeline has not been changed.");
       applyGenerated(g);
+      // Business mode: the product name and call to action, as the video's last clip
+      if (g.endCard) {
+        try {
+          const card = await cardClip(Object.assign({ style: "card", size: 48, color: BRAND.text, bg: BRAND.main }, g.endCard), "end", true);
+          if (card) {
+            // the card is the last word: no title runs onto it
+            const cardStart = total() - dispDur(card);
+            S.texts = S.texts.filter((t) => t.start < cardStart - 0.6);
+            S.texts.forEach((t) => { t.dur = Math.min(t.dur, cardStart - t.start); });
+            commit();
+            renderTimeline();
+          }
+        } catch (_) {}
+      }
       progress("Finishing b-roll and captions…");
       // Caption timings depend on the final b-roll sequence. Keep this job
       // owned until both have settled; only then is a completion alert honest.
@@ -9675,7 +9731,7 @@
         // snapshot it can no longer read, instead of restoring it wrongly
         by: window.SenotelVersion ? window.SenotelVersion.stamp() : null,
         name: $("projectName").value,
-        format: S.format, mode: S.mode, vertical: S.vertical, nextId: nextId,
+        format: S.format, mode: S.mode, brief: S.brief, vertical: S.vertical, nextId: nextId,
         media: S.media.map((m) => ({ id: m.id, name: m.name, type: m.type, duration: m.duration, w: m.w, h: m.h,
           fromVideo: !!m.fromVideo, soundSaved: !!m.soundSaved,
           // the transcript, so captions can be restyled after a reload without listening again
@@ -9753,7 +9809,9 @@
     S.music = snap.music && snap.music.url ? snap.music : null;
     loadMusicElement();
     S.format = "auto";
-    S.mode = snap.mode || "entertainment";
+    S.mode = snap.mode === "business" ? "business" : "entertainment";
+    S.brief = Object.assign({ name: "", what: "", cta: "", tone: "polished" }, snap.brief && typeof snap.brief === "object" ? snap.brief : {});
+    applyModeUI();
     S.vertical = !!snap.vertical;
     if (snap.find && typeof snap.find === "object") S.find = Object.assign({ on: false, len: "auto", genre: "auto", from: "", to: "" }, snap.find);
     // found clips only mean something while their recording is still here
