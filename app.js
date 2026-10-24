@@ -4797,6 +4797,8 @@
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // ccl17 stabilize: a frame held steady between two brackets
+    stabilize: I('<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/>'),
     // ccl14 reduce noise: a wave with its rough edge smoothed
     denoise: I('<path d="M2 12h2l1.5-4 2 8 2-10 2 12 2-8 1.5 4H22"/><line x1="3" y1="20" x2="21" y2="20"/>'),
     // ccl11 chroma key: a person's outline in front of a screen
@@ -5043,6 +5045,8 @@
         box.appendChild(group("Name", nameIn));
         setTimeout(() => nameIn.focus(), 50);
       }));
+      // ccl17: near the end of the bar
+      if (isVid) list.push(tool("stabilize", "Stabilize", ICON.stabilize, (box) => stabilizePanel(box, c)));
       // ccl10: at the far end of the bar, where CapCut keeps it
       if (isVid) {
         const busy = reversing && reversing.clipId === c.id;
@@ -6595,6 +6599,133 @@
       try { v.load(); } catch (e) {}
       renderInspector();
       syncOverlays();
+    }
+  }
+
+  /* ═══════════ STABILIZE (ccl17, 0.45.0) ═══════════
+     CapCut's Stabilize, near the end of the clip bar: Minimal, Recommended,
+     Most stable. The clip's camera movement is measured once (stabilize.js,
+     every frame, small), kept on the clip (clip.stab.raw), and the chosen
+     level's correction is applied when the picture is drawn (drawOrientedSrc),
+     so the preview and the export are the same. Changing level after that
+     is instant. Up to two minutes of footage. */
+  let stabilizing = null;   // {clipId, p, cancel}
+  async function stabilizeClip(c, lvl) {
+    const F = window.SenotelFastExport, ST = window.SenotelStab, m = mediaById(c.mediaId);
+    if (!F || !ST || !m || m.type !== "video") return;
+    if (c.stab && c.stab.raw && Math.abs(c.stab.t0 - c.in) < 0.05 && c.stab.t1 >= c.out - 0.05) {
+      c.stab.lvl = lvl; commit(); syncOverlays(); renderInspector(); return;
+    }
+    if (stabilizing) return;
+    if (c.out - c.in > 120.5) { toast("Stabilize works on up to 2 minutes of video. Split the clip first", 6000); return; }
+    const job = { clipId: c.id, p: 0, cancel: false };
+    stabilizing = job;
+    renderInspector();
+    let src = null;
+    try {
+      src = await F.frameSource(m);
+      const fps = 30, from = c.in, to = c.out, n = Math.max(2, Math.round((to - from) * fps));
+      const first = await src.frameAt(from);
+      if (!first) throw new Error("no picture");
+      const W = ST.AW, H = Math.max(16, Math.round((ST.AW * first.h) / first.w));
+      const cv = document.createElement("canvas");
+      cv.width = W; cv.height = H;
+      const x = cv.getContext("2d", { willReadFrequently: true });
+      const grab = (pic) => { x.drawImage(pic.el, 0, 0, W, H); return ST.gray(x.getImageData(0, 0, W, H).data, W, H); };
+      let prev = grab(first);
+      const raw = [0, 0, 0];
+      for (let i = 1; i < n && !job.cancel; i++) {
+        const pic = await src.frameAt(from + i / fps);
+        const g = pic ? grab(pic) : prev;
+        const mv = ST.estimate(prev, g, W, H);
+        raw.push(mv ? +(mv.x / W).toFixed(5) : 0, mv ? +(mv.y / H).toFixed(5) : 0, mv ? +mv.r.toFixed(5) : 0);
+        prev = g;
+        job.p = i / n;
+        if (i % 15 === 0) { renderInspector(); await F.breathe(); }
+      }
+      if (job.cancel) { toast("Stabilize stopped"); return; }
+      const cc = clipById(c.id);
+      if (!cc) return;
+      cc.stab = { lvl: lvl, fps: fps, t0: from, t1: to, raw: raw };
+      commit();
+      toast("Stabilized");
+      recordEdit("stabilize", { level: lvl, secs: +(to - from).toFixed(1) });
+    } catch (e) {
+      toast("This clip could not be stabilized here: " + ((e && e.message) || "unknown"), 6000);
+    } finally {
+      if (src && src.close) { try { src.close(); } catch (e) {} }
+      stabilizing = null;
+      syncOverlays();
+      renderInspector();
+    }
+  }
+  /* After an AI edit: each kept video clip's shake is measured on two
+     seconds from its middle (15 frames a second). Clearly shaky ones get
+     Recommended, one after another, and a note says how many. Intended
+     movement (a pan, a walk) is smooth, so it never counts as shake: only
+     the jerky part, the frame-to-frame change of the camera's speed. */
+  const SHAKY = 0.01;    // mean jerk, in frame widths per frame (about 2 px at 192): plainly visible handheld shake
+  async function autoStabilize() {
+    const F = window.SenotelFastExport, ST = window.SenotelStab;
+    if (!F || !ST) return;
+    let done = 0;
+    for (const c of S.clips.slice()) {
+      const m = mediaById(c.mediaId);
+      if (!m || m.type !== "video" || c.stab || c.out - c.in < 1.2 || c.out - c.in > 120) continue;
+      let src = null, jerk = 0;
+      try {
+        src = await F.frameSource(m);
+        const mid = (c.in + c.out) / 2, from = Math.max(c.in, mid - 1), to = Math.min(c.out, mid + 1);
+        const first = await src.frameAt(from);
+        if (!first) continue;
+        const W = ST.AW, H = Math.max(16, Math.round((ST.AW * first.h) / first.w));
+        const cv = document.createElement("canvas");
+        cv.width = W; cv.height = H;
+        const x = cv.getContext("2d", { willReadFrequently: true });
+        const grab = (pic) => { x.drawImage(pic.el, 0, 0, W, H); return ST.gray(x.getImageData(0, 0, W, H).data, W, H); };
+        let prev = grab(first), last = null, n = 0;
+        for (let t = from + 1 / 15; t <= to; t += 1 / 15) {
+          const pic = await src.frameAt(t);
+          if (!pic) break;
+          const g = grab(pic), mv = ST.estimate(prev, g, W, H);
+          prev = g;
+          if (!mv) continue;
+          const v = [mv.x / W, mv.y / H];
+          if (last) { jerk += Math.hypot(v[0] - last[0], v[1] - last[1]); n++; }
+          last = v;
+          await F.breathe();
+        }
+        jerk = n ? jerk / n : 0;
+      } catch (e) { jerk = 0; } finally { if (src && src.close) { try { src.close(); } catch (e) {} } }
+      if (jerk > SHAKY && clipById(c.id) && !stabilizing) { await stabilizeClip(c, "rec"); done++; }
+    }
+    if (done) toast("Steadied " + done + (done === 1 ? " shaky clip" : " shaky clips") + " (Stabilize, Recommended)");
+    if (window.SenotelDiag) window.SenotelDiag.last.stabilize = done + " clips steadied";
+  }
+  function stabilizePanel(box, c) {
+    const ST = window.SenotelStab;
+    if (!ST) return;
+    const cur = c.stab && c.stab.lvl ? c.stab.lvl : "off";
+    const busy = stabilizing && stabilizing.clipId === c.id;
+    box.appendChild(group("Stabilize", chipsRow(ST.LEVELS, cur, (v) => {
+      if (v === "off") { if (c.stab) c.stab.lvl = "off"; commit(); syncOverlays(); }
+      else stabilizeClip(c, v);
+    }, () => renderInspector())));
+    if (busy) {
+      const row = mk("div", "mask-progress");
+      const bar = mk("div", "mask-bar");
+      bar.appendChild(mk("i", ""));
+      bar.firstChild.style.width = Math.round(stabilizing.p * 100) + "%";
+      row.appendChild(mk("span", "", "Analysing " + Math.round(stabilizing.p * 100) + "%"));
+      row.appendChild(bar);
+      const stop = mk("button", "fchip", "Cancel");
+      stop.type = "button";
+      stop.addEventListener("click", () => { if (stabilizing) stabilizing.cancel = true; });
+      row.appendChild(stop);
+      box.appendChild(row);
+    } else {
+      box.appendChild(mk("p", "panel-note", cur === "off" ? "Smooths shaky handheld footage. The picture is zoomed in a little to hide the edges."
+        : "The more stable, the more the picture is zoomed in to hide its moving edges."));
     }
   }
 
@@ -8622,15 +8753,34 @@
   }
 
   // part of a picture (s = {x, y, w, h} of the source) into a rect, turned and flipped as the clip says
-  function drawOrientedSrc(ctx, el, s, dx, dy, dw, dh, c) {
-    if (!c || (!c.rot && !c.flipH && !c.flipV)) { ctx.drawImage(el, s.x, s.y, s.w, s.h, dx, dy, dw, dh); return; }
+  /* st: a stabilising correction (ccl17) {x, y (fractions of the whole
+     source), r (radians), z (zoom)}, applied in the source's own frame so
+     it holds through a flip, a turn and a crop. srcW/srcH: the whole
+     source's size. */
+  function drawOrientedSrc(ctx, el, s, dx, dy, dw, dh, c, st, srcW, srcH) {
+    if (!st && (!c || (!c.rot && !c.flipH && !c.flipV))) { ctx.drawImage(el, s.x, s.y, s.w, s.h, dx, dy, dw, dh); return; }
     ctx.save();
     ctx.translate(dx + dw / 2, dy + dh / 2);
-    ctx.scale(c.flipH ? -1 : 1, c.flipV ? -1 : 1);
-    if (c.rot) ctx.rotate((c.rot * Math.PI) / 180);
-    const w = turned(c) ? dh : dw, h = turned(c) ? dw : dh;
+    if (c) ctx.scale(c.flipH ? -1 : 1, c.flipV ? -1 : 1);
+    if (c && c.rot) ctx.rotate((c.rot * Math.PI) / 180);
+    const w = c && turned(c) ? dh : dw, h = c && turned(c) ? dw : dh;
+    if (st) {
+      ctx.scale(st.z, st.z);
+      ctx.rotate(st.r);
+      ctx.translate(st.x * (srcW || s.w) * (w / s.w), st.y * (srcH || s.h) * (h / s.h));
+    }
     ctx.drawImage(el, s.x, s.y, s.w, s.h, -w / 2, -h / 2, w, h);
     ctx.restore();
+  }
+  // ccl17: a stabilised clip's correction at `local` seconds into it
+  const stabCache = new WeakMap();
+  function stabAt(clip, local) {
+    const ST = window.SenotelStab, sb = clip.stab;
+    if (!ST || !sb || !sb.raw || !sb.lvl || sb.lvl === "off") return null;
+    let byLvl = stabCache.get(sb);
+    if (!byLvl) { byLvl = {}; stabCache.set(sb, byLvl); }
+    const cor = byLvl[sb.lvl] || (byLvl[sb.lvl] = ST.corrections(sb.raw, sb.fps, sb.lvl));
+    return ST.at(cor, sb.fps, clip.in + srcOff(clip, local) - sb.t0);
   }
 
   const FIT_BACKGROUNDS = [["blur", "Blur"], ["black", "Black"], ["white", "White"], ["color", "Colour"]];
@@ -8702,6 +8852,7 @@
         }
         ctx.filter = pictureFilter(clip, blur);
         const k = clip.kb;
+        const st = stabAt(clip, local);   // ccl17
         if (k) {
           const p = clamp(local / Math.max(dispDur(clip), 0.01), 0, 1);
           const zs = k.s0 + (k.s1 - k.s0) * p;
@@ -8709,10 +8860,10 @@
           ctx.translate(W / 2 + (k.x0 + (k.x1 - k.x0) * p) * dw, H / 2 + (k.y0 + (k.y1 - k.y0) * p) * dh);
           ctx.scale(zs, zs);
           ctx.translate(-W / 2, -H / 2);
-          drawOrientedSrc(ctx, el, s, dx, dy, dw, dh, clip);
+          drawOrientedSrc(ctx, el, s, dx, dy, dw, dh, clip, st, src.w, src.h);
           ctx.restore();
         } else {
-          drawOrientedSrc(ctx, el, s, dx, dy, dw, dh, clip);
+          drawOrientedSrc(ctx, el, s, dx, dy, dw, dh, clip, st, src.w, src.h);
         }
       }
     } catch (e) { /* a frame not ready yet: skip it, never break */ }
@@ -9699,6 +9850,8 @@
       routeDirectorAudio();
       if (opts.onDone) opts.onDone();
       writeSession();
+      // ccl17: shaky clips the edit kept are steadied in the background (it never holds the edit up)
+      autoStabilize().catch(() => {});
       $("doneDownload").classList.add("hidden");
       notifyDone("Your edit is ready", extrasFailed
         ? "Your draft is ready. Some finishing touches were unavailable."

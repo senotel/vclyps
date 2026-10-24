@@ -60,9 +60,12 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.44.0";
+  var VERSION = "0.45.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: Reduce noise, next to Volume on a video or audio clip, as in CapCut. One tap takes " +
+  var NOTES = "New: Stabilize, near the end of a video clip's tools as in CapCut: Minimal, " +
+              "Recommended or Most stable smooths shaky handheld footage (worked out on your device, a " +
+              "few seconds per clip; the picture zooms in a little to hide the edges). After an AI edit, " +
+              "clips with clear shake are steadied by themselves. 0.44.0: New: Reduce noise, next to Volume on a video or audio clip, as in CapCut. One tap takes " +
               "wind, traffic, fans and hum out from under the voice, with a Strength slider. It runs on " +
               "your device (the first time it downloads its 5 MB sound model), the preview plays the " +
               "cleaned sound and the export has exactly the same. The AI turns it on by itself for " +
