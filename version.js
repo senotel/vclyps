@@ -60,9 +60,11 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.40.0";
+  var VERSION = "0.41.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: Voice effects, as in CapCut. Select a video clip or an audio clip, tap Voice " +
+  var NOTES = "New: Reverse, at the end of a video clip's tool bar as in CapCut. The clip plays " +
+              "backwards, sound included (up to 60 seconds; it shows its progress and a second tap " +
+              "stops it). Tap Forwards to put the original back. 0.40.0: New: Voice effects, as in CapCut. Select a video clip or an audio clip, tap Voice " +
               "effects and pick one of 16 (Chipmunk, Elf, Deep, Monster, Robot, Alien, Echo, Hall, Cave, " +
               "Underwater, Phone, Megaphone, Radio, Lo-fi, Vibrato, Tremolo); a tap plays a few seconds " +
               "through it, and Amount sets how far it goes. The export sounds exactly like the preview. " +

@@ -1138,6 +1138,137 @@
     toast("Frozen for 3 seconds. Drag its edge to make it longer");
   }
 
+  /* ─── Reverse (ccl10, 0.41.0) ───
+     CapCut's Reverse, at the end of the clip bar: the clip plays backwards,
+     sound included. Made on the device: the clip is decoded once, forwards
+     (export-fast.js), its frames kept as JPEGs, then encoded last first
+     into a new video with the sound reversed, and the clip uses that video
+     from then on. Tapping it again ("Forwards") puts the
+     original back. Up to 60 seconds, so a phone's memory is never at risk. */
+  let reversing = null;   // {clipId, p, cancel} while one is being made
+  async function reverseClip(c) {
+    if (reversing) {
+      if (reversing.clipId === c.id) reversing.cancel = true;
+      return;
+    }
+    if (c.reversed) {
+      const o = c.reversed;
+      if (!mediaById(o.mediaId)) { toast("The original footage is no longer here"); return; }
+      c.mediaId = o.mediaId; c.in = o.in; c.out = o.out;
+      delete c.reversed;
+      commit(); renderTimeline(); renderInspector(); syncNow();
+      toast("Plays forwards again");
+      return;
+    }
+    const F = window.SenotelFastExport, m = mediaById(c.mediaId);
+    if (!m || m.type !== "video") { toast("Only a video can be reversed"); return; }
+    if (!F || typeof VideoEncoder === "undefined" || typeof createImageBitmap === "undefined") {
+      toast("Reverse needs a browser that can make video files (Chrome, Edge, or Safari 17 or newer)", 6000);
+      return;
+    }
+    const len = c.out - c.in;
+    if (len > 60.05) { toast("Reverse works on up to 60 seconds of video. Split the clip first", 6000); return; }
+    const job = { clipId: c.id, p: 0, cancel: false };
+    reversing = job;
+    renderActionBar();
+    let src = null;
+    const cache = new Map();   // output frame → its picture, half a second at a time
+    try {
+      src = await F.frameSource(m);
+      const first = await src.frameAt(c.in);
+      if (!first) throw new Error("no picture");
+      const k = Math.min(1, 1920 / Math.max(first.w, first.h));
+      const W = Math.max(2, Math.round((first.w * k) / 2) * 2), H = Math.max(2, Math.round((first.h * k) / 2) * 2);
+      const fps = 30, N = Math.max(1, Math.round(len * fps));
+      const canvas = document.createElement("canvas");
+      canvas.width = W; canvas.height = H;
+      const cx = canvas.getContext("2d");
+      /* Pass 1, forwards (the only order a decoder is fast in, whatever the
+         file's key frames): every frame once, kept as a high-quality JPEG so
+         a minute of 1080p stays a few hundred MB the browser can hold on
+         disk, not gigabytes of raw pictures. */
+      const keep = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(W, H) : canvas;
+      const kx = keep.getContext("2d");
+      const toJpeg = () => (keep.convertToBlob ? keep.convertToBlob({ type: "image/jpeg", quality: 0.95 })
+        : new Promise((res) => keep.toBlob(res, "image/jpeg", 0.95)));
+      const shots = new Array(N).fill(null);
+      const tk = { start: performance.now(), src: src.kind || "" };
+      for (let i = 0; i < N && !job.cancel; i++) {
+        const pic = await src.frameAt(c.in + i / fps);
+        if (pic) { kx.drawImage(pic.el, 0, 0, W, H); shots[i] = await toJpeg(); }
+        else if (i) shots[i] = shots[i - 1];
+        job.p = ((i + 1) / N) * 0.5;
+        if (i % 10 === 0) { renderActionBar(); await F.breathe(); }
+      }
+      if (job.cancel) { toast("Reverse stopped"); return; }
+      tk.frames = performance.now();
+      // the sound, sample by sample backwards, at the export's rate
+      let audio = null;
+      try {
+        const a = await F.audioOf(m, c.in, c.out);
+        if (a && a.buffer) {
+          const b = a.buffer, r = b.sampleRate;
+          const s0 = Math.max(0, Math.round((c.in - a.startsAt) * r)), s1 = Math.min(b.length, Math.round((c.out - a.startsAt) * r));
+          const n = Math.max(1, s1 - s0);
+          const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+          const oc = new Ctx(2, Math.max(1, Math.round((n / r) * F.AUDIO_RATE)), F.AUDIO_RATE);
+          const rb = oc.createBuffer(b.numberOfChannels, n, r);
+          for (let ch = 0; ch < b.numberOfChannels; ch++) {
+            const d = b.getChannelData(ch).subarray(s0, s1), o = rb.getChannelData(ch);
+            for (let q = 0; q < n; q++) o[q] = d[n - 1 - q];
+          }
+          const bs = oc.createBufferSource();
+          bs.buffer = rb; bs.connect(oc.destination); bs.start(0);
+          audio = await oc.startRendering();
+        }
+      } catch (e) { audio = null; }   // no sound track, or none that can be read: the picture still reverses
+      tk.sound = performance.now();
+      const blob = await F.encode({
+        canvas: canvas, fps: fps, duration: N / fps, audio: audio,
+        cancelled: () => job.cancel,
+        // pass 2: the kept frames, last first
+        renderFrame: async (t) => {
+          const i = Math.min(N - 1, Math.round(t * fps));
+          const shot = shots[N - 1 - i];
+          if (shot) {
+            const bm = await createImageBitmap(shot);
+            cx.drawImage(bm, 0, 0, W, H);
+            bm.close();
+          }
+          shots[N - 1 - i] = null;
+          job.p = 0.5 + ((i + 1) / N) * 0.5;
+          if (i % 10 === 0) renderActionBar();
+        }
+      });
+      if (!blob) { toast("Reverse stopped"); return; }
+      if (window.SenotelDiag) window.SenotelDiag.last.reverse = N + " frames via " + tk.src + ": frames " +
+        ((tk.frames - tk.start) / 1000).toFixed(1) + " s, sound " + ((tk.sound - tk.frames) / 1000).toFixed(1) +
+        " s, encode " + ((performance.now() - tk.sound) / 1000).toFixed(1) + " s";
+      const before = S.media.length;
+      addFiles([new File([blob], (m.name || "clip") + " reversed.mp4", { type: "video/mp4" })], "library");
+      if (S.media.length === before) throw new Error("not added");
+      const nm = S.media[S.media.length - 1];
+      nm.fromReverse = m.id;
+      const cc = clipById(c.id);
+      if (!cc) return;
+      cc.reversed = { mediaId: cc.mediaId, in: cc.in, out: cc.out };
+      cc.mediaId = nm.id;
+      cc.in = 0;
+      cc.out = N / fps;
+      if (cc.mask) delete cc.mask.track;   // a tracked path belongs to the forwards footage
+      commit(); renderTimeline(); renderInspector(); syncNow();
+      toast("Reversed. Tap Forwards to undo it");
+      recordEdit("reverse", { secs: +len.toFixed(2) });
+    } catch (e) {
+      toast("This clip could not be reversed here: " + ((e && e.message) || "unknown"), 6000);
+    } finally {
+      cache.forEach((bm) => { if (bm) bm.close(); });
+      if (src && src.close) { try { src.close(); } catch (e) {} }
+      reversing = null;
+      renderActionBar();
+    }
+  }
+
   /* ─── Replace (CapCut's Replace) ───
      A new video or photo takes a clip's place: same spot, same length where
      the new footage is long enough, same look, adjustments and transition. */
@@ -4631,6 +4762,8 @@
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // ccl10 reverse: an arrow turning back on itself
+    reverse: I('<polyline points="3 4 3 10 9 10"/><path d="M5.2 15a8 8 0 1 0 1.9-8.3L3 10"/>'),
     // ccl9 voice effects: a microphone with a wave beside it
     voice: I('<rect x="6" y="3" width="6" height="11" rx="3"/><path d="M3 11a6 6 0 0 0 12 0"/><line x1="9" y1="17" x2="9" y2="21"/><path d="M18 8c1.3 1.2 1.3 3.8 0 5"/><path d="M20.5 6c2.4 2.4 2.4 6.6 0 9"/>'),
     // 0.39.0 mask row: invert (a shape and its outside swapped), track (a target), stop tracking, reset
@@ -4872,6 +5005,12 @@
         box.appendChild(group("Name", nameIn));
         setTimeout(() => nameIn.focus(), 50);
       }));
+      // ccl10: at the far end of the bar, where CapCut keeps it
+      if (isVid) {
+        const busy = reversing && reversing.clipId === c.id;
+        list.push(act("reverse", busy ? "Reversing " + Math.round(reversing.p * 100) + "%" : c.reversed ? "Forwards" : "Reverse",
+          ICON.reverse, () => reverseClip(c)));
+      }
       return list.concat(common());
     }
     if (s.type === "text") {
