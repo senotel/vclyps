@@ -1195,6 +1195,7 @@
   }
 
   function deleteSelection() {
+    if (S.sel && S.sel.type === "multi") { deleteMulti(); return; }
     if (!S.sel || S.sel.type === "all") { toast("Tap something on the timeline first, then delete"); return; }
     if (S.sel.type === "music") {
       S.music = null;
@@ -1878,6 +1879,7 @@
   }
 
   function duplicateSelection() {
+    if (S.sel && S.sel.type === "multi") { duplicateMulti(); return; }
     if (!S.sel || S.sel.type === "all") { toast("Select something on the timeline to copy"); return; }
     if (S.sel.type === "broll") {
       const b = brollById(S.sel.id);
@@ -2891,6 +2893,7 @@
       const w = Math.max(dispDur(c) * S.pps, 26);
       const cel = document.createElement("div");
       cel.className = "clip" + (S.sel && S.sel.type === "clip" && S.sel.id === c.id ? " sel" : "");
+      cel.dataset.id = String(c.id);   // multi-select finds clips by id (ccl6)
       cel.style.left = x + "px";
       cel.style.width = w + "px";
       /* Pictures from inside the clip, edge to edge (the frame strip), the
@@ -2987,6 +2990,7 @@
     S.texts.forEach((t) => {
       const tel = document.createElement("div");
       tel.className = "tclip" + (S.sel && S.sel.type === "text" && S.sel.id === t.id ? " sel" : "");
+      tel.dataset.id = String(t.id);
       tel.style.left = t.start * S.pps + "px";
       tel.style.width = Math.max(t.dur * S.pps, 24) + "px";
       tel.appendChild(mk("span", "tname", ""));
@@ -3023,7 +3027,181 @@
       if (!S.texts.length) offer(tt, "Add text", addText);
       if (!S.audio.length && !S.sfx.length && !S.music) offer(ut, "Add audio", () => $("tbAudio").click());
     }
+    markMulti();
     updatePlayheadUI();
+  }
+
+  /* ═══════════ MULTI-SELECT (ccl6, 0.36.0) ═══════════
+     Several things at once, to move, copy or delete together. In this
+     editor a long press already picks a thing up to drag it, so it can't
+     also mean "select more" as in some apps: the selected thing's bar has
+     Select more instead, and from then on a tap on the timeline adds or
+     removes a thing (Shift or Ctrl-click does the same with a mouse).
+     While it is on, S.sel is {type: "multi"}, a kind no single-item code
+     knows, so none of it acts on a group by accident; the group itself is
+     `multi`, kept out of the saved project. Dragging a selected thing moves
+     every selected thing by the same amount; clips on the main track keep
+     their place (it is magnetic, as in CapCut) but can be copied and
+     deleted with the rest. */
+  let multi = null;   // { items: [{type, id}] }
+  const MULTI_SEL = { clip: ["videoTrack", "clip"], text: ["textTrack", "tclip"], broll: ["overlayTrack", "oclip"],
+    sfx: ["audioTrack", "aclip"], uaudio: ["uaudioTrack", "uclip"], effect: ["effectTrack", "eclip"] };
+  function multiItem(type, id) {
+    return type === "clip" ? clipById(id) : type === "text" ? textById(id) : type === "broll" ? brollById(id)
+      : type === "sfx" ? sfxById(id) : type === "uaudio" ? audioById(id) : type === "effect" ? effectById(id) : null;
+  }
+  const multiLen = (type, x) => (type === "sfx" ? sfxDur(x.name) : type === "uaudio" ? audioDur(x) : x.dur || 0);
+  function markMulti() {
+    if (multi && !(S.sel && S.sel.type === "multi")) multi = null;   // the selection moved on
+    if (!multi) return;
+    multi.items = multi.items.filter((x) => multiItem(x.type, x.id));
+    multi.items.forEach((x) => {
+      const m = MULTI_SEL[x.type];
+      const el = document.querySelector("#" + m[0] + " ." + m[1] + '[data-id="' + x.id + '"]');
+      if (el) el.classList.add("sel", "msel");
+    });
+  }
+  function startMulti() {
+    if (!S.sel || !MULTI_SEL[S.sel.type]) return;
+    multi = { items: [{ type: S.sel.type, id: S.sel.id }] };
+    S.sel = { type: "multi" };
+    activeTool = null;
+    renderTimeline();
+    renderInspector();
+    toast("Tap other things on the timeline to add them");
+  }
+  function endMulti() {
+    multi = null;
+    if (S.sel && S.sel.type === "multi") S.sel = null;
+    renderTimeline();
+    renderInspector();
+  }
+  function toggleMulti(type, id) {
+    if (!multi) {
+      multi = { items: S.sel && MULTI_SEL[S.sel.type] && S.sel.id != null ? [{ type: S.sel.type, id: S.sel.id }] : [] };
+      S.sel = { type: "multi" };
+    }
+    const i = multi.items.findIndex((x) => x.type === type && x.id === id);
+    if (i >= 0) multi.items.splice(i, 1); else multi.items.push({ type: type, id: id });
+    buzz("light");
+    if (!multi.items.length) { endMulti(); return; }
+    renderTimeline();
+    renderInspector();
+    toast(multi.items.length + " selected");
+  }
+  // Everything selected that can move along the timeline (not the main track)
+  function multiMovers() {
+    return (multi ? multi.items : []).filter((x) => x.type !== "clip").map((x) => ({ type: x.type, item: multiItem(x.type, x.id) })).filter((x) => x.item);
+  }
+  /* A tap or drag on the timeline while several are selected (or with Shift
+     or Ctrl): caught before the thing's own handler, so it never starts a
+     single-item drag. A tap adds or removes; a drag moves the group. */
+  $("tlScroll").addEventListener("pointerdown", (e) => {
+    if (!multi && !(e.shiftKey || e.ctrlKey || e.metaKey)) return;
+    if (e.target.closest(".handle, .cut-btn, .lane-add, .clip-add")) return;
+    let hit = null;
+    for (const type in MULTI_SEL) {
+      const el = e.target.closest("." + MULTI_SEL[type][1]);
+      if (el && el.dataset.id && el.closest("#" + MULTI_SEL[type][0])) { hit = { type: type, id: +el.dataset.id, el: el }; break; }
+    }
+    if (!hit) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!multi || !multi.items.some((x) => x.type === hit.type && x.id === hit.id)) {
+      toggleMulti(hit.type, hit.id);
+      return;
+    }
+    // on a selected thing: a drag moves the group, a tap takes it out
+    const x0 = e.clientX;
+    const group = multiMovers();
+    const starts = group.map((g) => g.item.start);
+    // nothing starts before 0 or after the video's end (a thing may run past the end, as a single one can)
+    const lo = Math.min(...starts), hi = Math.max(...starts);
+    let moved = false;
+    if (e.pointerType === "touch") touchLocked = true;
+    const move = (ev) => {
+      const dx = ev.clientX - x0;
+      if (!moved && Math.abs(dx) < 4) return;
+      moved = true;
+      // the group keeps its shape and stays on the timeline
+      const d = clamp(dx / S.pps, -lo, Math.max(-lo, total() - 0.05 - hi));
+      group.forEach((g, k) => {
+        g.item.start = starts[k] + d;
+        const m = MULTI_SEL[g.type];
+        const el = document.querySelector("#" + m[0] + " ." + m[1] + '[data-id="' + g.item.id + '"]');
+        if (el) el.style.left = g.item.start * S.pps + "px";
+      });
+      syncOverlays();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      touchLocked = false;
+      if (moved) { commit(); renderTimeline(); recordEdit("multi-move", { items: group.length }); }
+      else toggleMulti(hit.type, hit.id);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }, true);
+
+  function deleteMulti() {
+    if (!multi) return;
+    const n = multi.items.length;
+    const gone = (type) => new Set(multi.items.filter((x) => x.type === type).map((x) => x.id));
+    const g = { clip: gone("clip"), text: gone("text"), broll: gone("broll"), sfx: gone("sfx"), uaudio: gone("uaudio"), effect: gone("effect") };
+    S.clips = S.clips.filter((c) => !g.clip.has(c.id));
+    S.texts = S.texts.filter((t) => !g.text.has(t.id));
+    S.broll = S.broll.filter((b) => !g.broll.has(b.id));
+    S.sfx = S.sfx.filter((x) => !g.sfx.has(x.id));
+    S.audio = S.audio.filter((a) => !g.uaudio.has(a.id));
+    S.effects = S.effects.filter((x) => !g.effect.has(x.id));
+    multi = null;
+    S.sel = null;
+    S.time = clamp(S.time, 0, total());
+    commit();
+    recordEdit("multi-delete", { items: n });
+    renderTimeline();
+    renderInspector();
+    syncOverlays();
+    toast(n + " deleted. Undo brings them back");
+  }
+  /* A copy of the group right after it, keeping its shape: everything that
+     moves shifts by the group's length; a clip's copy goes after its clip. */
+  function duplicateMulti() {
+    if (!multi) return;
+    const movers = multiMovers();
+    const lo = movers.length ? Math.min(...movers.map((g) => g.item.start)) : 0;
+    const hi = movers.length ? Math.max(...movers.map((g) => g.item.start + multiLen(g.type, g.item))) : 0;
+    /* After the group, but never past the video's end, where a copy could
+       not be seen: as far right as the latest start still fits. */
+    const lastStart = movers.length ? Math.max(...movers.map((g) => g.item.start)) : 0;
+    const span = Math.max(0, Math.min(hi - lo, total() - 0.05 - lastStart));
+    const lists = { text: S.texts, broll: S.broll, sfx: S.sfx, uaudio: S.audio, effect: S.effects };
+    const copies = [];
+    movers.forEach((g) => {
+      const c = JSON.parse(JSON.stringify(g.item));
+      c.id = nextId++;
+      c.start = g.item.start + span;
+      delete c.by;   // a copy you made is yours: the next generate leaves it alone
+      lists[g.type].push(c);
+      copies.push({ type: g.type, id: c.id });
+    });
+    multi.items.filter((x) => x.type === "clip").forEach((x) => {
+      const c = clipById(x.id);
+      if (!c) return;
+      const copy = Object.assign({}, c, { id: nextId++ });
+      S.clips.splice(S.clips.indexOf(c) + 1, 0, copy);
+      copies.push({ type: "clip", id: copy.id });
+    });
+    multi = { items: copies };   // the copies are now the selection, as CapCut does
+    commit();
+    recordEdit("multi-duplicate", { items: copies.length });
+    renderTimeline();
+    renderInspector();
+    syncOverlays();
+    toast(copies.length + " copied");
   }
 
   /* On a touchscreen a finger on a clip means one of three things, as in
@@ -4452,6 +4630,8 @@
     // ccl2 copy and paste style: a brush, and a brush onto a page
     copyStyle: I('<path d="M14 4l6 6-8 8H6v-6z"/><path d="M4 20h6"/>'),
     pasteStyle: I('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 13l2 2 4-4"/>'),
+    // ccl6 select more: two stacked squares with a tick
+    selectMore: I('<rect x="3" y="7" width="12" height="12" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2"/><path d="M6 13l2 2 4-4"/>'),
     // ccl3 text templates: a framed T
     tmpl: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7"/>'),
     edit: I('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>'),
@@ -4545,7 +4725,9 @@
   }
   const act = (id, label, icon, run) => ({ id: id, label: label, icon: icon, run: run });
   const tool = (id, label, icon, panel, extra) => Object.assign({ id: id, label: label, icon: icon, panel: panel }, extra || {});
-  const common = () => [act("duplicate", "Duplicate", ICON.duplicate, duplicateSelection), act("delete", "Delete", ICON.trash, deleteSelection)];
+  // ccl6: Select more sits before Duplicate and Delete on everything that can be grouped
+  const common = () => [act("selectmore", "Select more", ICON.selectMore, startMulti),
+    act("duplicate", "Duplicate", ICON.duplicate, duplicateSelection), act("delete", "Delete", ICON.trash, deleteSelection)];
 
   // small builders every panel shares
   const redrawPanel = () => { commit(); renderInspector(); syncOverlays(); };
@@ -4574,6 +4756,13 @@
   function selectionTools() {
     const s = S.sel;
     if (!s) return [];
+    // ccl6: a group's tools. Done ends the group; a style copied earlier can go on all its texts
+    if (s.type === "multi") {
+      const texts = multi ? multi.items.filter((x) => x.type === "text").map((x) => textById(x.id)).filter((t) => t && !t.sticker) : [];
+      const list = [act("done", "Done", ICON.check, endMulti)];
+      if (styleClip && texts.length) list.push(act("pastestyle", "Paste style", ICON.pasteStyle, () => pasteTextStyle(texts)));
+      return list.concat([act("duplicate", "Duplicate", ICON.duplicate, duplicateMulti), act("delete", "Delete", ICON.trash, deleteMulti)]);
+    }
     if (s.type === "all") {
       return [tool("filters", "Filters", ICON.filters, (box) => {
         box.appendChild(mk("p", "panel-note", "On every clip"));
@@ -4809,6 +4998,7 @@
       back.setAttribute("aria-label", "Back");
       back.addEventListener("click", () => {
         if (cropEdit) endCrop(false);
+        if (multi) { endMulti(); return; }
         if (S.sel) { S.sel = null; activeTool = null; renderTimeline(); }
         else toolGroup = null;
         renderInspector();

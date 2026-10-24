@@ -60,9 +60,12 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.35.0";
+  var VERSION = "0.36.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New, the CapCut way: 100 filters in 7 groups (Portrait, Film, Vintage, Black and " +
+  var NOTES = "New: select several things at once. Select a text, sticker, overlay, sound or clip, " +
+              "tap Select more, then tap others on the timeline (Shift or Ctrl-click on a computer). " +
+              "Drag one to move them all, or Duplicate or Delete them together; Done ends it. " +
+              "0.35.0: New, the CapCut way: 100 filters in 7 groups (Portrait, Film, Vintage, Black and " +
               "white, Food, Scenery, Mood) with a strength slider and tiles that show your own clip; " +
               "40 text templates (Text, then Templates); Copy style and Paste style on any text; beat " +
               "marks on the music and Cut to the beat (select the music, then Beats); the sound now " +

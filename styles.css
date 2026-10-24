@@ -2887,3 +2887,7 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
 .tmpl-tile .anim-name { padding: 0 8px 8px; font-size: 12px; color: var(--t1); }
 .tmpl-tile:hover, .tmpl-tile:focus-visible { border-color: var(--t2); }
 .filter-grid .anim-tile canvas { object-fit: cover; }
+
+/* ccl6 (0.36.0): things in a multi-selection carry a second, dashed edge, so a
+   group reads as a group (a solid edge, never a glow) */
+.msel { outline: 2px dashed rgba(238, 234, 226, 0.85); outline-offset: 1px; }
