@@ -310,7 +310,8 @@
     }
     document.addEventListener("click", function (event) {
       if (forwarding || event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      var control = event.target.closest && event.target.closest("#lpPlus, .mode-card, #backBtn, #logoHome");
+      // (the Templates card opens a sheet, not a screen, so it has no curtain)
+      var control = event.target.closest && event.target.closest("#lpPlus, .mode-card[data-mode], #backBtn, #logoHome");
       if (!control) return;
       if (busy) { event.preventDefault(); event.stopImmediatePropagation(); return; }
       if (reduced || !overlay.animate || document.hidden) return;

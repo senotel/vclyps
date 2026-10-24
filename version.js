@@ -60,9 +60,13 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.49.0";
+  var VERSION = "0.50.0";
   var RELEASED = "2026-10-25";
-  var NOTES = "New: Retouch and Body effects, as in CapCut. A clip's Retouch has Face (Smooth, " +
+  var NOTES = "New: templates (first stage). Save as template, at the end of the editor's tool bar, " +
+              "keeps your edit's cuts, looks, transitions, texts, stickers, effects, sounds and library " +
+              "music (never your footage) on this device and as a file to share. On New project, From a " +
+              "template lists them (or opens a shared file): choose your own videos and photos and the " +
+              "same edit is built with them. 0.49.0: New: Retouch and Body effects, as in CapCut. A clip's Retouch has Face (Smooth, " +
               "Whiten, Eyes, Slim face) and Body (Slim, Longer legs); it finds faces and bodies by " +
               "itself and changes only them. Effects has a new Body tab: Outline, Neon edge, Clones, " +
               "Shadow and Glow around the person. All on your device (models download the first time). " +

@@ -247,7 +247,7 @@
   window.vcBegin = function () { go(showModes); };
   window.vcEnterEditor = enterEditor;
 
-  document.querySelectorAll(".mode-card").forEach((card) => {
+  document.querySelectorAll(".mode-card[data-mode]").forEach((card) => {
     card.addEventListener("click", () => {
       go(() => {
         S.mode = card.dataset.mode || "entertainment";
@@ -4799,6 +4799,8 @@
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
     // ccl16 remove background: a person with the space behind them dotted away
     cutout: I('<circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/><path d="M2 3h2M7 3h2M15 3h2M20 3h2M2 3v2M22 3v2" stroke-dasharray="0"/>'),
+    // ccl20 templates: a frame with slots
+    template: I('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="6" y="6" width="5" height="5"/><rect x="13" y="6" width="5" height="5"/><line x1="6" y1="15" x2="18" y2="15"/><line x1="6" y1="18" x2="14" y2="18"/>'),
     // ccl19 retouch: a face with a sparkle beside it
     retouch: I('<circle cx="10" cy="12" r="7"/><path d="M7.5 14.5c1.4 1.2 3.6 1.2 5 0"/><line x1="8" y1="10" x2="8" y2="10.5"/><line x1="12" y1="10" x2="12" y2="10.5"/><path d="M19 3v4M17 5h4"/>'),
     // ccl17 stabilize: a frame held steady between two brackets
@@ -4895,7 +4897,9 @@
       { id: "adjust", label: "Adjust", icon: ICON.adjust, run: () => selectClipHere("adjust") },
       { id: "tidy", label: "Tidy", icon: ICON.tidy, run: () => $("tbTidy").click() },
       { id: "post", label: "Post", icon: ICON.post, run: () => $("tbPost").click() },
-      { id: "add", label: "Add", icon: ICON.add, run: () => $("tbAdd").click() }
+      { id: "add", label: "Add", icon: ICON.add, run: () => $("tbAdd").click() },
+      // ccl20: this edit, kept as a template for new projects (and shared as a file)
+      { id: "template", label: "Save as template", icon: ICON.template, run: () => saveAsTemplate() }
     ];
   }
   function groupTools(g) {
@@ -6614,6 +6618,172 @@
     }
   }
 
+  /* ═══════════ TEMPLATES (ccl20 stage 1, 0.50.0) ═══════════
+     Save as template (main bar) keeps this edit's shape (templates.js) on
+     the device and downloads it as a file to share. "From a template" on
+     the New project screen lists them (and opens a shared file); choose
+     your videos and photos and the edit is rebuilt with them. No server,
+     no account, no money: the shared gallery and paid templates are the
+     plan's later stages and wait on the owner. */
+  const TPL_KEY = "vclyps.templates";
+  function savedTemplates() { try { return JSON.parse(localStorage.getItem(TPL_KEY) || "[]"); } catch (e) { return []; } }
+  function storeTemplates(list) {
+    try { localStorage.setItem(TPL_KEY, JSON.stringify(list)); return true; }
+    catch (e) { toast("There is no room left to keep another template on this device. Remove one first", 6000); return false; }
+  }
+  function templateThumb() {
+    try {
+      const size = exportSize(), h = 240, w = Math.round((size.w / size.h) * h);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      renderPicture(cv.getContext("2d"), w, h, Math.min(0.5, total() / 2), previewSrc);
+      return cv.toDataURL("image/jpeg", 0.7);
+    } catch (e) { return null; }
+  }
+  function saveAsTemplate() {
+    const TP = window.SenotelTemplates;
+    if (!TP || !S.clips.length) { toast("Make an edit first, then save it as a template"); return; }
+    const name = ($("projectName").value || "").trim() || "My template";
+    const t = TP.make(S, {
+      name: name, app: window.SenotelVersion ? SenotelVersion.version : "", thumb: templateThumb(),
+      dispDur: dispDur, kindOf: (c) => { const m = mediaById(c.mediaId); return m ? m.type : "video"; }
+    });
+    const list = savedTemplates().filter((x) => x.name !== t.name);
+    list.unshift(t);
+    if (!storeTemplates(list.slice(0, 30))) return;
+    // and as a file, to share
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(t)], { type: "application/json" }));
+      a.download = name.replace(/[^\w\- ]+/g, "").trim() + ".vclyps-template.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch (e) {}
+    toast("Saved as a template (" + t.slots.length + " clips). Start a new project with it from New project, From a template", 6000);
+    recordEdit("template-save", { slots: t.slots.length });
+  }
+  function openVideoTemplates() {
+    const TP = window.SenotelTemplates;
+    const wrap = mk("div", "tpl-sheet");
+    const bar = mk("div", "mask-draw-bar");
+    const close = mk("button", "icon-btn", ICON.close);
+    close.type = "button"; close.setAttribute("aria-label", "Close");
+    close.addEventListener("click", () => wrap.remove());
+    bar.appendChild(close); bar.appendChild(mk("span", "mask-draw-title", "Templates")); bar.appendChild(mk("span", "", ""));
+    wrap.appendChild(bar);
+    const body = mk("div", "tpl-body");
+    wrap.appendChild(body);
+    const use = (t) => {
+      // the footage, chosen inside this tap (a browser asks for that)
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.multiple = true; inp.accept = "video/*,image/*";
+      inp.addEventListener("change", () => {
+        const files = [...(inp.files || [])];
+        if (files.length) { wrap.remove(); startFromTemplate(t, files); }
+      });
+      inp.click();
+    };
+    const fileBtn = mk("button", "fchip", "Open a template file");
+    fileBtn.type = "button";
+    fileBtn.addEventListener("click", () => {
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = ".json,application/json";
+      inp.addEventListener("change", async () => {
+        const f = inp.files && inp.files[0];
+        if (!f) return;
+        try {
+          const t = JSON.parse(await f.text());
+          if (!TP.valid(t)) throw new Error("bad");
+          const list = savedTemplates().filter((x) => x.name !== t.name);
+          list.unshift(t);
+          storeTemplates(list.slice(0, 30));
+          wrap.remove(); openVideoTemplates();
+          toast("Template added: " + t.name);
+        } catch (e) { toast("That file is not a vClyps template"); }
+      });
+      inp.click();
+    });
+    body.appendChild(fileBtn);
+    const list = savedTemplates();
+    if (!list.length) body.appendChild(mk("p", "panel-note", "No templates yet. Make an edit, then tap Save as template at the end of the editor's tool bar, or open a template file someone shared."));
+    list.forEach((t, i) => {
+      const card = mk("div", "tpl-card");
+      if (t.thumb) { const im = document.createElement("img"); im.src = t.thumb; im.alt = ""; card.appendChild(im); }
+      const info = mk("div", "tpl-info");
+      info.appendChild(mk("span", "tpl-name", t.name));
+      const secs = t.slots.reduce((a, s) => a + s.len, 0);
+      info.appendChild(mk("span", "tpl-meta", t.slots.length + " clips, " + secs.toFixed(0) + " s" + (t.music ? ", with music" : "")));
+      const row = mk("div", "tpl-actions");
+      const go1 = mk("button", "fchip active", "Use: choose " + t.slots.length + " videos or photos");
+      go1.type = "button";
+      // it replaces the edit that is open, so with one open it asks first (a second tap), as New project does
+      let armed = false;
+      go1.addEventListener("click", () => {
+        if (S.clips.length && !armed) {
+          armed = true;
+          go1.textContent = "This replaces your current edit. Tap again";
+          setTimeout(() => { armed = false; go1.textContent = "Use: choose " + t.slots.length + " videos or photos"; }, 4000);
+          return;
+        }
+        use(t);
+      });
+      row.appendChild(go1);
+      // removing asks for the word, as every delete in the app does
+      const rm = mk("button", "fchip", "Remove");
+      rm.type = "button";
+      rm.addEventListener("click", () => {
+        const ask = document.createElement("input");
+        ask.className = "panel-input"; ask.placeholder = "Type delete to remove it";
+        ask.addEventListener("input", () => {
+          if (ask.value.trim().toLowerCase() !== "delete") return;
+          const all = savedTemplates();
+          all.splice(i, 1);
+          storeTemplates(all);
+          wrap.remove(); openVideoTemplates();
+          toast("Template removed");
+        });
+        row.replaceChild(ask, rm);
+        ask.focus();
+      });
+      row.appendChild(rm);
+      info.appendChild(row);
+      card.appendChild(info);
+      body.appendChild(card);
+    });
+    document.body.appendChild(wrap);
+  }
+  async function startFromTemplate(t, files) {
+    const TP = window.SenotelTemplates;
+    if (!resetProject()) return;
+    const before = S.media.length;
+    addFiles(files, "library");
+    const media = S.media.slice(before).filter((m) => m.type === "video" || m.type === "image");
+    if (!media.length) { toast("Choose videos or photos for the template"); return; }
+    toast("Building the edit from the template…");
+    await Promise.all(media.map((m) => mediaDuration(m).catch(() => 0)));
+    try {
+      const b = TP.build(t, media, () => nextId++);
+      S.clips = b.clips;
+      S.texts = b.texts;
+      S.effects = b.effects;
+      S.sfx = b.sfx;
+      if (b.capOpts) S.capOpts = Object.assign(capDefaults(), b.capOpts);
+      S.vertical = b.vertical;
+      if (b.aspect) S.aspect = b.aspect;
+      if (b.music) { S.music = b.music; loadMusicElement(); }
+      S.mode = b.mode;
+      $("projectName").value = t.name;
+      commit();
+      go(() => { applyModeUI(); enterEditor(); renderAll(); });
+      toast(media.length < t.slots.length ? "Done. The template has " + t.slots.length + " clips, so some of your " + media.length + " are used twice" : "Done: your clips in the template's edit", 6000);
+      recordEdit("template-use", { slots: t.slots.length, files: media.length });
+    } catch (e) {
+      toast("The template could not be used: " + e.message, 6000);
+    }
+  }
+  // listened for on the page, so it still works if the New project screen is rebuilt
+  document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#templateCard")) openVideoTemplates(); });
+  
   /* ═══════════ RETOUCH (ccl19, 0.49.0) ═══════════
      CapCut's Retouch, near the end of a video clip's bar: Face (Smooth,
      Whiten, Eyes, Slim face) and Body (Slim, Longer legs), each a strength.
