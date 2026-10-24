@@ -105,5 +105,25 @@
     return true;
   }
 
-  global.SenotelCutout = { load: load, ready: ready, onReady: onReady, apply: apply, failed: () => failed };
+  /* The person mask alone, as a canvas (white where the person is, see-
+     through elsewhere) at the working size, for the body effects (ccl19).
+     key may be null to always work it out afresh. Null when not ready. */
+  let outMask = null;
+  function mask(source, W, H, key, opts) {
+    if (!seg) { if (!failed) load().catch(() => {}); return null; }
+    const o = opts || {};
+    const a = alphaFor(source, W, H, key || ("fx" + Math.random()), o.stream || "fx", o.index || 0);
+    if (!key) cache.delete(cache.size ? [...cache.keys()].pop() : null);
+    const mw = a.mw, mh = a.mh;
+    if (!outMask) outMask = document.createElement("canvas");
+    if (outMask.width !== mw) outMask.width = mw;
+    if (outMask.height !== mh) outMask.height = mh;
+    const x = outMask.getContext("2d");
+    const img = x.createImageData(mw, mh);
+    for (let i = 0; i < a.length; i++) { img.data[i * 4] = 255; img.data[i * 4 + 1] = 255; img.data[i * 4 + 2] = 255; img.data[i * 4 + 3] = a[i]; }
+    x.putImageData(img, 0, 0);
+    return outMask;
+  }
+
+  global.SenotelCutout = { load: load, ready: ready, onReady: onReady, apply: apply, mask: mask, failed: () => failed };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -4799,6 +4799,8 @@
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
     // ccl16 remove background: a person with the space behind them dotted away
     cutout: I('<circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/><path d="M2 3h2M7 3h2M15 3h2M20 3h2M2 3v2M22 3v2" stroke-dasharray="0"/>'),
+    // ccl19 retouch: a face with a sparkle beside it
+    retouch: I('<circle cx="10" cy="12" r="7"/><path d="M7.5 14.5c1.4 1.2 3.6 1.2 5 0"/><line x1="8" y1="10" x2="8" y2="10.5"/><line x1="12" y1="10" x2="12" y2="10.5"/><path d="M19 3v4M17 5h4"/>'),
     // ccl17 stabilize: a frame held steady between two brackets
     stabilize: I('<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/>'),
     // ccl14 reduce noise: a wave with its rough edge smoothed
@@ -5048,7 +5050,8 @@
         box.appendChild(group("Name", nameIn));
         setTimeout(() => nameIn.focus(), 50);
       }));
-      // ccl17: near the end of the bar
+      // ccl19 Retouch and ccl17 Stabilize: near the end of the bar
+      list.push(tool("retouch", "Retouch", ICON.retouch, (box) => retouchPanel(box, c)));
       if (isVid) list.push(tool("stabilize", "Stabilize", ICON.stabilize, (box) => stabilizePanel(box, c)));
       // ccl10: at the far end of the bar, where CapCut keeps it
       if (isVid) {
@@ -6609,6 +6612,39 @@
       renderInspector();
       syncOverlays();
     }
+  }
+
+  /* ═══════════ RETOUCH (ccl19, 0.49.0) ═══════════
+     CapCut's Retouch, near the end of a video clip's bar: Face (Smooth,
+     Whiten, Eyes, Slim face) and Body (Slim, Longer legs), each a strength.
+     The work is retouch.js; the AI never turns these on: changing how
+     people look is always the person's own choice. */
+  const RETOUCH = { face: [["smooth", "Smooth"], ["whiten", "Whiten"], ["eyes", "Eyes"], ["slim", "Slim face"]], body: [["body", "Slim"], ["legs", "Longer legs"]] };
+  function retouchOn(r) { return !!r && Object.keys(r).some((k) => r[k] > 0); }
+  let retouchTab = "face";
+  function retouchPanel(box, c) {
+    const RT = window.SenotelRetouch;
+    if (!RT) return;
+    const tabs = mk("div", "ins-seg anim-kinds");
+    [["face", "Face"], ["body", "Body"]].forEach(([id, label]) => {
+      const b = mk("button", retouchTab === id ? "active" : "", label);
+      b.type = "button";
+      b.addEventListener("click", () => { retouchTab = id; renderInspector(); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    RETOUCH[retouchTab].forEach(([k, label]) => {
+      const cur = c.retouch && c.retouch[k] ? c.retouch[k] : 0;
+      box.appendChild(group(label, slider(0, 1, 0.05, cur, (v) => {
+        c.retouch = Object.assign({}, c.retouch || {}, { [k]: v });
+        if (!retouchOn(c.retouch)) delete c.retouch;
+        if (v > 0 && !RT.ready()) RT.load().then(() => { syncOverlays(); renderInspector(); }).catch(() => renderInspector());
+        syncOverlays();
+      }, () => { commit(); recordEdit("retouch", { what: k }); }, (v) => Math.round(v * 100) + "%")));
+    });
+    box.appendChild(mk("p", "panel-note", RT.failed() ? "The face and body models could not be loaded. Check the connection and try again."
+      : retouchOn(c.retouch) && !RT.ready() ? "Getting the face and body models ready (first time only, about 9 MB)…"
+      : "It finds faces and bodies by itself and changes only them. Natural looks sit around 30 to 50%."));
   }
 
   /* ═══════════ TEXT TO SPEECH (ccl15, 0.48.0) ═══════════
@@ -9234,6 +9270,15 @@
         ctx.restore();
       }
     }
+    // ccl19: Retouch (face and body), on the clip's own picture
+    if (clip.retouch && window.SenotelRetouch && retouchOn(clip.retouch)) {
+      const RT = window.SenotelRetouch, srcT = clip.in + srcOff(clip, local), idx = Math.round(srcT * 30);
+      if (!RT.ready()) { if (!RT.failed()) RT.load().then(() => syncOverlays()).catch(() => {}); }
+      else {
+        const look = [W, H, clip.crop ? clip.crop.x + "," + clip.crop.y + "," + clip.crop.w : "", clip.fit || "", clip.rot || 0, clip.flipH ? 1 : 0].join("|");
+        try { RT.apply(ctx, W, H, "r" + clip.id + ":" + idx + ":" + look, clip.retouch, { stream: "r" + clip.id, index: idx }); } catch (e) {}
+      }
+    }
     // ccl16: Remove background: only the person is kept (black behind, as with a mask)
     const cut = clip.cutout && window.SenotelCutout ? cutoutHere(ctx, W, H, clip, "c" + clip.id, clip.in + srcOff(clip, local)) : false;
     if (cut && !(clip.mask && clip.mask.shape && clip.mask.shape !== "none")) {
@@ -11464,8 +11509,14 @@
       await textFontsReady();
       await soundsReady();
       if (!stillHere()) return;
-      // ccl16: a cutout in the edit needs its model before the first frame is drawn
-      if (window.SenotelCutout && (S.clips.some((c) => c.cutout) || S.broll.some((b) => b.cutout))) {
+      // ccl19: retouch needs its face and body models before the first frame is drawn
+      if (window.SenotelRetouch && S.clips.some((c) => retouchOn(c.retouch))) {
+        $("expStatus").textContent = "getting the retouch ready…";
+        try { await SenotelRetouch.load(); } catch (e) { toast("Retouch could not be loaded, so this export is without it", 6000); }
+        if (!stillHere()) return;
+      }
+      // ccl16 + ccl19 body effects: a cutout in the edit needs its model before the first frame is drawn
+      if (window.SenotelCutout && (S.clips.some((c) => c.cutout) || S.broll.some((b) => b.cutout) || S.effects.some((e) => /^body-/.test(e.type)))) {
         $("expStatus").textContent = "getting the cutout ready…";
         try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
         if (!stillHere()) return;

@@ -60,9 +60,13 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.48.0";
+  var VERSION = "0.49.0";
   var RELEASED = "2026-10-25";
-  var NOTES = "New: Text to speech, in a text's tools after Animation as in CapCut: 14 natural " +
+  var NOTES = "New: Retouch and Body effects, as in CapCut. A clip's Retouch has Face (Smooth, " +
+              "Whiten, Eyes, Slim face) and Body (Slim, Longer legs); it finds faces and bodies by " +
+              "itself and changes only them. Effects has a new Body tab: Outline, Neon edge, Clones, " +
+              "Shadow and Glow around the person. All on your device (models download the first time). " +
+              "The AI never turns retouch on by itself. 0.48.0: New: Text to speech, in a text's tools after Animation as in CapCut: 14 natural " +
               "English voices (tap one to hear it), a speed, and Add voice, which reads the text aloud " +
               "onto the audio track where the text starts; the music steps back under it. Made on your " +
               "device (the first time downloads the voices, about 90 MB, once). 0.47.0: New: Remove background, as CapCut's Cutout, on a clip or an overlay: Auto finds the " +

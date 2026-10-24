@@ -559,8 +559,89 @@
     ["Glitch", [["rgb-split", "RGB split"], ["glitch", "Glitch"], ["pixelate", "Pixelate"], ["static", "Static"]]],
     ["Split", [["split-2", "Split 2"], ["split-3", "Split 3"], ["split-4", "Split 4"], ["split-9", "Split 9"], ["mirror", "Mirror"]]],
     ["Frame", [["letterbox", "Cinema bars"], ["vignette-pulse", "Vignette pulse"]]],
-    ["Particles", [["snow", "Snow"], ["rain", "Rain"], ["confetti", "Confetti"], ["sparkle", "Sparkle"], ["bokeh", "Bokeh"]]]
+    ["Particles", [["snow", "Snow"], ["rain", "Rain"], ["confetti", "Confetti"], ["sparkle", "Sparkle"], ["bokeh", "Bokeh"]]],
+    // ccl19 (0.49.0): CapCut's Body effects, drawn around the person the cutout finds
+    ["Body", [["body-outline", "Outline"], ["body-neon", "Neon edge"], ["body-clones", "Clones"], ["body-shadow", "Shadow"], ["body-glow", "Glow"]]]
   ];
+
+  /* ─── Body effects (ccl19) ───
+     The person is found in the frame by the cutout model (cutout.js); while
+     it is still loading the frame is left as it is. */
+  var bodyCv = {};
+  function bodyCanvas(name, W, H) {
+    var c = bodyCv[name];
+    if (!c) c = bodyCv[name] = document.createElement("canvas");
+    if (c.width !== W) c.width = W;
+    if (c.height !== H) c.height = H;
+    var x = c.getContext("2d");
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.globalCompositeOperation = "source-over";
+    x.globalAlpha = 1;
+    x.filter = "none";
+    x.clearRect(0, 0, W, H);
+    return c;
+  }
+  function personMask(c, W, H, local) {
+    var C = global.SenotelCutout;
+    if (!C || (W < 240 && !C.ready())) return null;   // a tile in the Effects sheet never downloads the model by itself
+    return C.mask(c.canvas, W, H, null, { stream: "fx-body", index: Math.round(local * 30) });
+  }
+  // the person alone, cut from the frame
+  function personLayer(c, m, W, H) {
+    var p = bodyCanvas("person", W, H), x = p.getContext("2d");
+    x.drawImage(c.canvas, 0, 0, W, H);
+    x.globalCompositeOperation = "destination-in";
+    x.drawImage(m, 0, 0, W, H);
+    return p;
+  }
+  // a band just outside the person's edge, of colour col, `w` pixels wide
+  function edgeBand(m, W, H, w, col) {
+    var b = bodyCanvas("band", W, H), x = b.getContext("2d");
+    x.filter = "blur(" + w.toFixed(1) + "px)";
+    for (var i = 0; i < 4; i++) x.drawImage(m, 0, 0, W, H);   // a blur drawn four times: a wide, solid halo
+    x.filter = "none";
+    x.globalCompositeOperation = "source-in";
+    x.fillStyle = col;
+    x.fillRect(0, 0, W, H);
+    x.globalCompositeOperation = "destination-out";
+    x.drawImage(m, 0, 0, W, H);
+    return b;
+  }
+  E["body-outline"] = function (c, W, H, t, a) {
+    var m = personMask(c, W, H, t); if (!m) return;
+    c.globalAlpha = a; c.drawImage(edgeBand(m, W, H, Math.max(2, W * 0.006), "#ffffff"), 0, 0);
+  };
+  E["body-neon"] = function (c, W, H, t, a) {
+    var m = personMask(c, W, H, t); if (!m) return;
+    var hue = Math.round((t * 90) % 360);
+    var band = edgeBand(m, W, H, Math.max(2, W * 0.008), "hsl(" + hue + ", 95%, 60%)");
+    c.globalAlpha = a; c.globalCompositeOperation = "screen";
+    c.filter = "blur(" + (W * 0.01).toFixed(1) + "px)"; c.drawImage(band, 0, 0);
+    c.filter = "none"; c.drawImage(band, 0, 0);
+  };
+  E["body-clones"] = function (c, W, H, t, a) {
+    var m = personMask(c, W, H, t); if (!m) return;
+    var p = personLayer(c, m, W, H), off = W * 0.2;
+    var keep = bodyCanvas("keep", W, H); keep.getContext("2d").drawImage(p, 0, 0);
+    c.globalAlpha = 0.55 * a; c.drawImage(keep, -off, 0); c.drawImage(keep, off, 0);
+    c.globalAlpha = 1; c.drawImage(keep, 0, 0);   // the person back in front of their copies
+  };
+  E["body-shadow"] = function (c, W, H, t, a) {
+    var m = personMask(c, W, H, t); if (!m) return;
+    var p = personLayer(c, m, W, H);
+    var keep = bodyCanvas("keep", W, H); keep.getContext("2d").drawImage(p, 0, 0);
+    var s = bodyCanvas("shadow", W, H), x = s.getContext("2d");
+    x.drawImage(m, 0, 0, W, H); x.globalCompositeOperation = "source-in"; x.fillStyle = "#000"; x.fillRect(0, 0, W, H);
+    c.globalAlpha = 0.5 * a; c.filter = "blur(" + (W * 0.008).toFixed(1) + "px)"; c.drawImage(s, W * 0.035, H * 0.02);
+    c.filter = "none"; c.globalAlpha = 1; c.drawImage(keep, 0, 0);
+  };
+  E["body-glow"] = function (c, W, H, t, a) {
+    var m = personMask(c, W, H, t); if (!m) return;
+    var p = personLayer(c, m, W, H);
+    c.globalAlpha = 0.6 * a; c.globalCompositeOperation = "screen";
+    c.filter = "blur(" + (W * 0.02).toFixed(1) + "px) brightness(1.4)"; c.drawImage(p, 0, 0);
+    c.filter = "none";
+  };
 
   function effect(id, c, W, H, local, amount) {
     var fn = E[id];
