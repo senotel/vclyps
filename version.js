@@ -60,9 +60,13 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.36.0";
+  var VERSION = "0.37.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: select several things at once. Select a text, sticker, overlay, sound or clip, " +
+  var NOTES = "New: pro colour tools in Adjust (tabs Basic, HSL, Curves, Wheels). Auto evens out a " +
+              "clip's light and colour in one tap; HSL changes one of eight colours only; Curves " +
+              "bends light and dark for all channels or one; Wheels tint the shadows, midtones and " +
+              "highlights. The AI also evens out clips that are too dark or too bright. 0.36.0: " +
+              "New: select several things at once. Select a text, sticker, overlay, sound or clip, " +
               "tap Select more, then tap others on the timeline (Shift or Ctrl-click on a computer). " +
               "Drag one to move them all, or Duplicate or Delete them together; Done ends it. " +
               "0.35.0: New, the CapCut way: 100 filters in 7 groups (Portrait, Film, Vintage, Black and " +

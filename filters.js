@@ -324,10 +324,8 @@
     return t;
   }
 
-  /* The filtered picture of `src` (a canvas), as a canvas to draw back, or
-     null when this device can't (then the caller uses cssOf). */
-  function apply(src, id, amount) {
-    if (!BY[id] || id === "none" || !init()) return null;
+  // one pass of a table texture over `src`
+  function draw(src, tex, amount) {
     try {
       const W = src.width, H = src.height;
       if (!W || !H) return null;
@@ -339,7 +337,7 @@
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
       gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, lutFor(id));
+      gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.uniform1i(loc.img, 0);
       gl.uniform1i(loc.lut, 1);
       gl.uniform1f(loc.amt, amount == null ? 1 : Math.max(0, Math.min(1, amount)));
@@ -348,6 +346,157 @@
     } catch (e) {
       return null;
     }
+  }
+
+  /* The filtered picture of `src` (a canvas), as a canvas to draw back, or
+     null when this device can't (then the caller uses cssOf). */
+  function apply(src, id, amount) {
+    if (!BY[id] || id === "none" || !init()) return null;
+    return draw(src, lutFor(id), amount);
+  }
+
+  // ── grading (ccl7, 0.37.0): HSL, curves, colour wheels ──
+  // any colour function as a table, in the same layout as table()
+  function tableFromFn(fn) {
+    const d = new Uint8Array(N * N * N * 4);
+    for (let g = 0; g < N; g++) for (let b = 0; b < N; b++) for (let r = 0; r < N; r++) {
+      const o = fn(r / (N - 1), g / (N - 1), b / (N - 1));
+      const i = (g * N * N + b * N + r) * 4;
+      d[i] = Math.round(clamp01(o[0]) * 255); d[i + 1] = Math.round(clamp01(o[1]) * 255); d[i + 2] = Math.round(clamp01(o[2]) * 255); d[i + 3] = 255;
+    }
+    return d;
+  }
+  // custom tables (a clip's grade with its filter), the most recent 24 kept on the card
+  const customTex = new Map();
+  function applyFn(src, key, fn) {
+    if (!init()) return null;
+    let t = customTex.get(key);
+    if (t) { customTex.delete(key); customTex.set(key, t); }
+    else {
+      t = texture();
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, N * N, N, 0, gl.RGBA, gl.UNSIGNED_BYTE, tableFromFn(fn));
+      customTex.set(key, t);
+      while (customTex.size > 24) { const [k, old] = customTex.entries().next().value; customTex.delete(k); try { gl.deleteTexture(old); } catch (e) {} }
+    }
+    return draw(src, t, 1);
+  }
+
+  /* A smooth curve through points (monotone cubic, Fritsch-Carlson): it
+     never overshoots between points, so a curve can't flip colours. */
+  function smoothCurve(pts) {
+    const p = pts.slice().sort((a, b) => a[0] - b[0]);
+    const n = p.length;
+    if (n < 2) return (x) => x;
+    const d = [], m = new Array(n);
+    for (let i = 0; i < n - 1; i++) d.push((p[i + 1][1] - p[i][1]) / Math.max(1e-6, p[i + 1][0] - p[i][0]));
+    m[0] = d[0]; m[n - 1] = d[n - 2];
+    for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+      const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+      if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+    }
+    return (x) => {
+      if (x <= p[0][0]) return p[0][1];
+      if (x >= p[n - 1][0]) return p[n - 1][1];
+      let i = 0;
+      while (i < n - 2 && x > p[i + 1][0]) i++;
+      const h = p[i + 1][0] - p[i][0], t = (x - p[i][0]) / h, t2 = t * t, t3 = t2 * t;
+      return (2 * t3 - 3 * t2 + 1) * p[i][1] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * p[i + 1][1] + (t3 - t2) * h * m[i + 1];
+    };
+  }
+
+  // the 8 colours of HSL, CapCut's, by hue in degrees
+  const HSL_COLOURS = [["red", 0], ["orange", 30], ["yellow", 60], ["green", 120], ["aqua", 180], ["blue", 225], ["purple", 270], ["magenta", 315]];
+  function rgbToHsl(r, g, b) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    if (mx === mn) return [0, 0, l];
+    const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    let h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h * 60, s, l];
+  }
+  function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    if (s <= 0) return [l, l, l];
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
+  }
+  const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+  /* A clip's grade as a colour function, or null when it has none.
+     adj.hsl: {colour: {h, s, l}} each -100..100 · adj.curves: {m, r, g, b}
+     point lists · adj.wheels: {sh, mid, hi}: [x, y] in -1..1, a tint for
+     the shadows, midtones and highlights (the direction is the hue). */
+  function gradeFn(adj) {
+    if (!adj) return null;
+    const hsl = adj.hsl && Object.keys(adj.hsl).length ? adj.hsl : null;
+    const cv = adj.curves || null;
+    const curve = (k) => (cv && cv[k] && cv[k].length >= 2 ? smoothCurve(cv[k]) : null);
+    const cm = curve("m"), cr = curve("r"), cg = curve("g"), cb = curve("b");
+    const wh = adj.wheels && Object.keys(adj.wheels).some((k) => adj.wheels[k] && (adj.wheels[k][0] || adj.wheels[k][1])) ? adj.wheels : null;
+    if (!hsl && !cm && !cr && !cg && !cb && !wh) return null;
+    const bands = hsl ? HSL_COLOURS.filter(([name]) => hsl[name]).map(([name, hue]) => [hue, hsl[name]]) : [];
+    const tint = (w) => {
+      if (!w || (!w[0] && !w[1])) return null;
+      const ang = Math.atan2(-w[1], w[0]) * 180 / Math.PI;   // up on the pad is red-magenta, as on a wheel
+      const amt = Math.min(1, Math.hypot(w[0], w[1]));
+      const c = hslToRgb(ang, 1, 0.5);
+      return [(c[0] - 0.5) * amt * 0.22, (c[1] - 0.5) * amt * 0.22, (c[2] - 0.5) * amt * 0.22];
+    };
+    const tSh = wh && tint(wh.sh), tMid = wh && tint(wh.mid), tHi = wh && tint(wh.hi);
+    return (r, g, b) => {
+      if (bands.length) {
+        let [h, s, l] = rgbToHsl(r, g, b);
+        if (s > 0.02) {
+          let dh = 0, ds = 0, dl = 0;
+          const k = Math.min(1, s * 2.5);   // greys are left alone
+          bands.forEach(([hue, v]) => {
+            const w = Math.max(0, 1 - hueDist(h, hue) / 40) * k;
+            if (!w) return;
+            dh += w * (v.h || 0) * 0.3;      // up to 30 degrees
+            ds += w * (v.s || 0) / 100;
+            dl += w * (v.l || 0) / 100;
+          });
+          h += dh;
+          s = clamp01(s * (1 + ds));
+          l = clamp01(l + dl * 0.3 * (1 - Math.abs(2 * l - 1)));
+          [r, g, b] = hslToRgb(h, s, l);
+        }
+      }
+      if (cm) { r = cm(r); g = cm(g); b = cm(b); }
+      if (cr) r = cr(r);
+      if (cg) g = cg(g);
+      if (cb) b = cb(b);
+      if (wh) {
+        const y = clamp01(0.2126 * r + 0.7152 * g + 0.0722 * b);
+        const add = (t, w) => { if (t) { r += t[0] * w; g += t[1] * w; b += t[2] * w; } };
+        add(tSh, (1 - y) * (1 - y));
+        add(tMid, 1 - Math.abs(2 * y - 1));
+        add(tHi, y * y);
+      }
+      return [clamp01(r), clamp01(g), clamp01(b)];
+    };
+  }
+
+  /* The one table a clip needs: its grade, then its filter at its strength
+     (strength is baked in, so the grade stays at full). Null when the clip
+     has neither. key changes whenever the result would. */
+  function clipLook(filterId, amount, adj) {
+    const g = gradeFn(adj);
+    const f = filterId && filterId !== "none" && BY[filterId] ? BY[filterId] : null;
+    if (!g && !f) return null;
+    const a = amount == null ? 1 : Math.max(0, Math.min(1, amount));
+    if (!g) return { filterOnly: true, id: filterId, amount: a };
+    const key = (f ? filterId + "@" + a.toFixed(2) : "-") + "|" + JSON.stringify({ h: adj.hsl || null, c: adj.curves || null, w: adj.wheels || null });
+    const fn = (r, gg, b) => {
+      const x = g(r, gg, b);
+      if (!f) return x;
+      const y = f.fn(x[0], x[1], x[2]);
+      return [x[0] + (y[0] - x[0]) * a, x[1] + (y[1] - x[1]) * a, x[2] + (y[2] - x[2]) * a];
+    };
+    return { key: key, fn: fn };
   }
 
   // whether filters run on the graphics card here (else the CSS look is used)
@@ -363,6 +512,7 @@
     has: (id) => !!BY[id], nameOf: (id) => (BY[id] ? BY[id].name : id), isDark: (id) => !!(BY[id] && BY[id].dark),
     colour: (id, r, g, b) => (BY[id] ? BY[id].fn(r, g, b) : [r, g, b]),
     table: table, cssOf: cssOf, apply: apply, gpu: gpu, directorList: directorList,
+    applyFn: applyFn, gradeFn: gradeFn, clipLook: clipLook, smoothCurve: smoothCurve, HSL_COLOURS: HSL_COLOURS,
     ids: () => LIST.map((f) => f.id)
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -842,6 +842,16 @@
       speed: 1, volume: 1, muted: false, filter: look, fadeIn: 0, fadeOut: 0,
       _i: i   // which Director clip this is, through the merges below; see soundMoments()
     }));
+    /* ccl7 (0.37.0): footage the device measured as too dark or too bright
+       gets its brightness evened out, gently (the same Basic slider a person
+       would use, so they can see and change it). */
+    clips.forEach((c) => {
+      const m = media.find((x) => x.id === c.mediaId);
+      const bri = m && m.analysis && m.analysis.vis && m.analysis.vis.avgBri;
+      if (typeof bri !== "number" || (bri >= 0.3 && bri <= 0.72)) return;
+      const v = Math.round(Math.max(-40, Math.min(50, (0.47 - bri) * 180)));
+      if (Math.abs(v) >= 5) c.adj = { bright: v };
+    });
     // the Director's effects — emphasis only, never decoration
     (ai.effects || []).forEach((ef) => {
       const c = clips[ef.clip];

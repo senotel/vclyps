@@ -4803,20 +4803,7 @@
           box.appendChild(group("", all));
         }
       }));
-      list.push(tool("adjust", "Adjust", ICON.adjust, (box) => {
-        ADJ.forEach(([k, label, lo, hi]) => {
-          box.appendChild(group(label, slider(lo, hi, 1, (c.adj && c.adj[k]) || 0,
-            (v) => { c.adj = Object.assign({}, c.adj, { [k]: v }); if (!v) delete c.adj[k]; syncOverlays(); },
-            () => commit(), (v) => (v > 0 && lo < 0 ? "+" : "") + v)));
-        });
-        const row = mk("div", "filter-chips");
-        const all = mk("button", "fchip", "Use on every clip");
-        all.addEventListener("click", () => { S.clips.forEach((x) => { if (c.adj) x.adj = Object.assign({}, c.adj); else delete x.adj; }); commit(); syncNow(); toast("Adjustments copied to every clip"); });
-        const reset = mk("button", "fchip", "Reset");
-        reset.addEventListener("click", () => { delete c.adj; redrawPanel(); });
-        row.appendChild(all); row.appendChild(reset);
-        box.appendChild(row);
-      }));
+      list.push(tool("adjust", "Adjust", ICON.adjust, (box) => adjustPanel(box, c)));
       list.push(tool("crop", "Crop", ICON.crop, (box) => cropPanel(box, c), { onDone: () => endCrop(true), onClose: () => { if (cropEdit) endCrop(false); } }));
       list.push(tool("canvas", "Canvas", ICON.canvas, (box) => {
         box.appendChild(group("Frame", chipsRow([["fill", "Fill the frame"], ["fit", "Whole picture"]], c.fit === "fit" ? "fit" : "fill", (v) => { if (v === "fit") c.fit = "fit"; else delete c.fit; })));
@@ -5647,6 +5634,277 @@
     ["bright", "Brightness", -100, 100], ["contrast", "Contrast", -100, 100], ["sat", "Saturation", -100, 100],
     ["warmth", "Warmth", -100, 100], ["vignette", "Vignette", 0, 100]
   ];
+  /* ═══════════ ADJUST: Basic, HSL, Curves, Wheels (ccl7, 0.37.0) ═══════════
+     CapCut's Adjust tabs. Basic is the five sliders it always had, plus
+     Auto. HSL changes one of eight colours only; Curves bends light and dark
+     for all channels or one; Wheels tint the shadows, midtones and
+     highlights. The last three become part of the clip's colour table
+     (filters.js clipLook), so a graded, filtered clip costs one lookup a
+     pixel, in the preview and the export alike. */
+  let adjTab = "basic", hslColour = "red", curveCh = "m";
+  const HSL_DOT = { red: "#e5383b", orange: "#f48c06", yellow: "#ffd60a", green: "#38b000", aqua: "#00b4d8", blue: "#3a6ff7", purple: "#8338ec", magenta: "#e0479e" };
+  const WHEELS = [["sh", "Shadows"], ["mid", "Midtones"], ["hi", "Highlights"]];
+  // drop anything back at neutral, so an untouched clip stays exactly as it was
+  function tidyAdj(c) {
+    const a = c.adj;
+    if (!a) return;
+    if (a.hsl) {
+      Object.keys(a.hsl).forEach((k) => { const v = a.hsl[k]; if (!v || (!v.h && !v.s && !v.l)) delete a.hsl[k]; });
+      if (!Object.keys(a.hsl).length) delete a.hsl;
+    }
+    if (a.curves) {
+      Object.keys(a.curves).forEach((k) => {
+        const p = a.curves[k];
+        if (!p || (p.length === 2 && p[0][0] === 0 && p[0][1] === 0 && p[1][0] === 1 && p[1][1] === 1)) delete a.curves[k];
+      });
+      if (!Object.keys(a.curves).length) delete a.curves;
+    }
+    if (a.wheels) {
+      Object.keys(a.wheels).forEach((k) => { const w = a.wheels[k]; if (!w || (!w[0] && !w[1])) delete a.wheels[k]; });
+      if (!Object.keys(a.wheels).length) delete a.wheels;
+    }
+    if (!Object.keys(a).length) delete c.adj;
+  }
+  function setAdj(c, fn) {
+    c.adj = JSON.parse(JSON.stringify(c.adj || {}));
+    fn(c.adj);
+    tidyAdj(c);
+    syncOverlays();
+  }
+  /* Auto (Basic): exposure, contrast and white balance from the clip's own
+     still, gently: towards a mid-grey average, a natural spread, and no
+     colour cast (grey world). CapCut charges for this; here it is free. */
+  function autoAdjust(c) {
+    const img = clipThumb(c);
+    if (!img || !img.naturalWidth) { toast("The picture isn't ready yet. Try again in a moment"); return; }
+    const cv = document.createElement("canvas");
+    cv.width = 64; cv.height = 64;
+    const x = cv.getContext("2d");
+    x.drawImage(img, 0, 0, 64, 64);
+    const d = x.getImageData(0, 0, 64, 64).data;
+    let r = 0, g = 0, b = 0, n = 0, s2 = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    r /= n * 255; g /= n * 255; b /= n * 255;
+    const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    for (let i = 0; i < d.length; i += 4) { const y = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255 - L; s2 += y * y; }
+    const sd = Math.sqrt(s2 / n);
+    const bright = Math.round(clamp((0.47 - L) * 220, -45, 60));
+    const contrast = Math.round(clamp((0.21 - sd) * 220, -25, 35));
+    const warmth = Math.round(clamp((b - r) * 260, -40, 40));
+    setAdj(c, (a) => {
+      ["bright", "contrast", "warmth"].forEach((k) => delete a[k]);
+      if (Math.abs(bright) >= 3) a.bright = bright;
+      if (Math.abs(contrast) >= 3) a.contrast = contrast;
+      if (Math.abs(warmth) >= 3) a.warmth = warmth;
+    });
+    commit();
+    renderInspector();
+    recordEdit("auto-adjust", { bright: bright, contrast: contrast, warmth: warmth });
+    toast(bright || contrast || warmth ? "Auto adjusted the light and colour" : "This clip already looks balanced");
+  }
+
+  function adjustPanel(box, c) {
+    const tabs = mk("div", "ins-seg anim-kinds");
+    [["basic", "Basic"], ["hsl", "HSL"], ["curves", "Curves"], ["wheels", "Wheels"]].forEach(([k, label]) => {
+      const b = mk("button", adjTab === k ? "active" : "", label);
+      b.type = "button";
+      b.addEventListener("click", () => { adjTab = k; renderInspector(); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    const a = c.adj || {};
+    if (adjTab === "basic") {
+      const auto = mk("button", "fchip", "Auto");
+      auto.type = "button";
+      auto.addEventListener("click", () => autoAdjust(c));
+      box.appendChild(group("", auto));
+      ADJ.forEach(([k, label, lo, hi]) => {
+        box.appendChild(group(label, slider(lo, hi, 1, a[k] || 0,
+          (v) => setAdj(c, (x) => { if (v) x[k] = v; else delete x[k]; }),
+          () => commit(), (v) => (v > 0 && lo < 0 ? "+" : "") + v)));
+      });
+    } else if (adjTab === "hsl") {
+      const dots = mk("div", "hsl-dots");
+      Object.keys(HSL_DOT).forEach((k) => {
+        const b = mk("button", "hsl-dot" + (hslColour === k ? " on" : ""));
+        b.type = "button";
+        b.style.background = HSL_DOT[k];
+        b.setAttribute("aria-label", k);
+        b.title = k[0].toUpperCase() + k.slice(1);
+        if (a.hsl && a.hsl[k]) b.classList.add("changed");
+        b.addEventListener("click", () => { hslColour = k; renderInspector(); });
+        dots.appendChild(b);
+      });
+      box.appendChild(dots);
+      const cur = (a.hsl && a.hsl[hslColour]) || {};
+      [["h", "Hue"], ["s", "Saturation"], ["l", "Lightness"]].forEach(([k, label]) => {
+        box.appendChild(group(label, slider(-100, 100, 1, cur[k] || 0,
+          (v) => setAdj(c, (x) => { x.hsl = x.hsl || {}; const e = Object.assign({ h: 0, s: 0, l: 0 }, x.hsl[hslColour]); e[k] = v; x.hsl[hslColour] = e; }),
+          () => commit(), (v) => (v > 0 ? "+" : "") + v)));
+      });
+    } else if (adjTab === "curves") {
+      const chans = mk("div", "filter-chips");
+      [["m", "All"], ["r", "Red"], ["g", "Green"], ["b", "Blue"]].forEach(([k, label]) => {
+        const b = mk("button", "fchip" + (curveCh === k ? " active" : ""), label);
+        b.type = "button";
+        b.addEventListener("click", () => { curveCh = k; renderInspector(); });
+        chans.appendChild(b);
+      });
+      box.appendChild(chans);
+      box.appendChild(curveEditor(c));
+      box.appendChild(mk("p", "panel-note", "Drag the line to add a point. Double-tap a point to remove it."));
+    } else {
+      const row = mk("div", "wheel-row");
+      WHEELS.forEach(([k, label]) => row.appendChild(wheelPad(c, k, label)));
+      box.appendChild(row);
+      box.appendChild(mk("p", "panel-note", "Drag a dot toward a colour to tint that part of the picture. Double-tap to reset."));
+    }
+    const row = mk("div", "filter-chips");
+    if (S.clips.length > 1) {
+      const all = mk("button", "fchip", "Use on every clip");
+      all.type = "button";
+      all.addEventListener("click", () => { S.clips.forEach((x) => { if (c.adj) x.adj = JSON.parse(JSON.stringify(c.adj)); else delete x.adj; }); commit(); syncNow(); toast("Adjustments copied to every clip"); });
+      row.appendChild(all);
+    }
+    const reset = mk("button", "fchip", adjTab === "basic" ? "Reset" : "Reset this tab");
+    reset.type = "button";
+    reset.addEventListener("click", () => {
+      setAdj(c, (x) => {
+        if (adjTab === "basic") ADJ.forEach(([k]) => delete x[k]);
+        else if (adjTab === "hsl") delete x.hsl;
+        else if (adjTab === "curves") delete x.curves;
+        else delete x.wheels;
+      });
+      commit(); renderInspector();
+    });
+    row.appendChild(reset);
+    box.appendChild(row);
+  }
+
+  // The curve editor: drag a point, drag the line to add one, double-tap to remove
+  function curveEditor(c) {
+    const FL = window.SenotelFilters;
+    const wrap = mk("div", "curve-box");
+    const cv = document.createElement("canvas");
+    cv.className = "curve-cv";
+    wrap.appendChild(cv);
+    const pts = () => ((c.adj && c.adj.curves && c.adj.curves[curveCh]) || [[0, 0], [1, 1]]).map((p) => p.slice());
+    const col = { m: "#eeeae2", r: "#ff5a5f", g: "#38d16a", b: "#4a8bff" }[curveCh];
+    const drawIt = () => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = cv.clientWidth || 260, h = cv.clientHeight || 200;
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      const x = cv.getContext("2d");
+      x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      x.fillStyle = "#161715"; x.fillRect(0, 0, w, h);
+      x.strokeStyle = "rgba(238,234,226,0.08)"; x.lineWidth = 1;
+      for (let i = 1; i < 4; i++) { x.beginPath(); x.moveTo((w * i) / 4, 0); x.lineTo((w * i) / 4, h); x.moveTo(0, (h * i) / 4); x.lineTo(w, (h * i) / 4); x.stroke(); }
+      x.strokeStyle = "rgba(238,234,226,0.18)"; x.beginPath(); x.moveTo(0, h); x.lineTo(w, 0); x.stroke();
+      const p = pts();
+      const f = FL ? FL.smoothCurve(p) : (v) => v;
+      x.strokeStyle = col; x.lineWidth = 2; x.beginPath();
+      for (let i = 0; i <= 100; i++) { const u = i / 100, v = clamp(f(u), 0, 1); const px = u * w, py = (1 - v) * h; if (i) x.lineTo(px, py); else x.moveTo(px, py); }
+      x.stroke();
+      p.forEach(([u, v]) => { x.fillStyle = "#111210"; x.strokeStyle = col; x.lineWidth = 2; x.beginPath(); x.arc(u * w, (1 - v) * h, 6, 0, Math.PI * 2); x.fill(); x.stroke(); });
+    };
+    const save = (p) => setAdj(c, (a) => { a.curves = a.curves || {}; a.curves[curveCh] = p.map(([u, v]) => [Math.round(u * 1000) / 1000, Math.round(v * 1000) / 1000]); });
+    let drag = null, lastTap = 0;
+    cv.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const r = cv.getBoundingClientRect();
+      const u = clamp((e.clientX - r.left) / r.width, 0, 1), v = clamp(1 - (e.clientY - r.top) / r.height, 0, 1);
+      const p = pts();
+      let i = p.findIndex(([pu, pv]) => Math.hypot((pu - u) * r.width, (pv - v) * r.height) < 16);
+      const now = e.timeStamp;
+      if (i > 0 && i < p.length - 1 && now - lastTap < 320) {   // double-tap removes an inner point
+        p.splice(i, 1); save(p); drawIt(); commit(); lastTap = 0; return;
+      }
+      lastTap = now;
+      if (i < 0) {
+        if (p.length >= 8) return;
+        p.push([u, v]); p.sort((A, B) => A[0] - B[0]);
+        i = p.findIndex((q) => q[0] === u && q[1] === v);
+        save(p);
+      }
+      drag = { i: i };
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      drawIt();
+    });
+    cv.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const r = cv.getBoundingClientRect();
+      const p = pts();
+      const i = drag.i, last = p.length - 1;
+      let u = clamp((e.clientX - r.left) / r.width, 0, 1);
+      const v = clamp(1 - (e.clientY - r.top) / r.height, 0, 1);
+      if (i === 0) u = 0; else if (i === last) u = 1;
+      else u = clamp(u, p[i - 1][0] + 0.02, p[i + 1][0] - 0.02);
+      p[i] = [u, v];
+      save(p);
+      drawIt();
+    });
+    const end = () => { if (drag) { drag = null; commit(); } };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+    requestAnimationFrame(drawIt);
+    return wrap;
+  }
+
+  // A colour wheel pad: the dot's direction is the tint's hue, its distance the amount
+  function wheelPad(c, k, label) {
+    const wrap = mk("div", "wheel");
+    const cv = document.createElement("canvas");
+    cv.className = "wheel-cv";
+    wrap.appendChild(cv);
+    wrap.appendChild(mk("span", "wheel-name", label));
+    const val = () => (c.adj && c.adj.wheels && c.adj.wheels[k]) || [0, 0];
+    const drawIt = () => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const s = cv.clientWidth || 92;
+      cv.width = Math.round(s * dpr); cv.height = Math.round(s * dpr);
+      const x = cv.getContext("2d");
+      x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const R = s / 2 - 2, cx = s / 2, cy = s / 2;
+      for (let a = 0; a < 360; a += 6) {   // the hue ring, drawn so it matches the tint maths
+        x.beginPath(); x.moveTo(cx, cy);
+        x.arc(cx, cy, R, (-a - 3) * Math.PI / 180, (-a + 3.5) * Math.PI / 180);
+        x.closePath(); x.fillStyle = "hsl(" + a + ",70%,50%)"; x.fill();
+      }
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, R);
+      g.addColorStop(0, "rgba(22,23,21,1)"); g.addColorStop(1, "rgba(22,23,21,0.15)");
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.fill();
+      const [u, v] = val();
+      x.strokeStyle = "#eeeae2"; x.lineWidth = 2; x.fillStyle = "#111210";
+      x.beginPath(); x.arc(cx + u * R, cy + v * R, 6, 0, Math.PI * 2); x.fill(); x.stroke();
+    };
+    let on = false, lastTap = 0;
+    const at = (e) => {
+      const r = cv.getBoundingClientRect();
+      let u = ((e.clientX - r.left) / r.width) * 2 - 1, v = ((e.clientY - r.top) / r.height) * 2 - 1;
+      const d = Math.hypot(u, v);
+      if (d > 1) { u /= d; v /= d; }
+      setAdj(c, (a) => { a.wheels = a.wheels || {}; a.wheels[k] = [Math.round(u * 1000) / 1000, Math.round(v * 1000) / 1000]; });
+      drawIt();
+    };
+    cv.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (e.timeStamp - lastTap < 320) {   // double-tap: back to no tint
+        setAdj(c, (a) => { if (a.wheels) delete a.wheels[k]; });
+        drawIt(); commit(); lastTap = 0; return;
+      }
+      lastTap = e.timeStamp;
+      on = true;
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      at(e);
+    });
+    cv.addEventListener("pointermove", (e) => { if (on) at(e); });
+    const end = () => { if (on) { on = false; commit(); } };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+    requestAnimationFrame(drawIt);
+    return wrap;
+  }
+
   function pictureFilter(c, blurPx) {
     const parts = [];
     /* 0.35.0: a filter is a colour table applied on the graphics card after
@@ -7236,10 +7494,12 @@
     ctx.filter = "none";
     drawAdjustVeils(ctx, clip, { x: 0, y: 0, w: W, h: H });
     ctx.restore();
-    // ccl4: the filter's colour table over the clip's own picture (the canvas is W x H here)
+    /* ccl4 + ccl7: the clip's grade (HSL, curves, wheels) and its filter, as
+       one colour table over the clip's own picture (the canvas is W x H here) */
     const FL = window.SenotelFilters;
-    if (clip.filter && clip.filter !== "none" && FL && FL.has(clip.filter)) {
-      const out = FL.apply(ctx.canvas, clip.filter, clip.filterAmt == null ? 1 : clip.filterAmt);
+    const look = FL && FL.clipLook ? FL.clipLook(FL.has(clip.filter) ? clip.filter : null, clip.filterAmt, clip.adj) : null;
+    if (look) {
+      const out = look.filterOnly ? FL.apply(ctx.canvas, look.id, look.amount) : FL.applyFn(ctx.canvas, look.key, look.fn);
       if (out) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);

@@ -2891,3 +2891,16 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
 /* ccl6 (0.36.0): things in a multi-selection carry a second, dashed edge, so a
    group reads as a group (a solid edge, never a glow) */
 .msel { outline: 2px dashed rgba(238, 234, 226, 0.85); outline-offset: 1px; }
+
+/* ccl7 (0.37.0): Adjust tabs. HSL colour dots (a solid edge when chosen, a small
+   mark when changed), the curve editor and the three colour wheels */
+.hsl-dots { display: flex; justify-content: space-between; gap: 6px; padding: 2px 2px 6px; }
+.hsl-dot { position: relative; width: 32px; height: 32px; min-width: 32px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
+.hsl-dot.on { border-color: #eeeae2; }
+.hsl-dot.changed::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px; border-radius: 50%; background: #eeeae2; border: 2px solid var(--bg1); }
+.curve-box { padding: 4px 0; }
+.curve-cv { display: block; width: 100%; max-width: 360px; height: 200px; margin: 0 auto; border: 1px solid var(--line); border-radius: 8px; touch-action: none; cursor: crosshair; }
+.wheel-row { display: flex; justify-content: space-around; gap: 8px; padding: 6px 0; }
+.wheel { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.wheel-cv { width: 92px; height: 92px; border-radius: 50%; touch-action: none; cursor: pointer; }
+.wheel-name { font-size: 12px; color: var(--t1); }
