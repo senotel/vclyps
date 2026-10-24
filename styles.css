@@ -2976,3 +2976,15 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
   position: absolute; top: 50%; z-index: 3; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0;
   border: 1.5px solid #151614; background: #eeeae2; transform: rotate(45deg); border-radius: 2px;
 }
+
+/* ccl9 (0.40.0): voice effects, in groups of tiles */
+.voice-group { margin: 2px 0 -6px; font-size: 12px; font-weight: 500; color: var(--t2); }
+.voice-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.voice-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 68px;
+  padding: 8px 4px; border: 1px solid transparent; border-radius: 10px; background: var(--bg2); color: var(--text);
+  font-size: 11.5px; font-weight: 500;
+}
+.voice-tile svg { width: 22px; height: 22px; color: var(--t1); }
+.voice-tile.selected { border-color: var(--acc); background: var(--acc-soft); color: var(--acc); }
+.voice-tile.selected svg { color: var(--acc); }

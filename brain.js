@@ -859,6 +859,8 @@
       if (ef.type === "slow-mo") c.speed = 0.5;
       else if (ef.type === "speed-up") c.speed = 1.4;
       else if (ef.type === "punch-in") c.kb = { s0: 1, s1: 1.09, x0: 0, x1: 0, y0: 0, y1: 0 };
+      // ccl9: a comic voice on a reaction line (asked for in comedy only, two at most: intelligence.js)
+      else if (ef.type === "voice" && ef.voice) c.voice = ef.voice;
     });
     snapToSentences(clips, media); // even the Director can't cut mid-sentence
     /* What keeps people watching, enforced whatever the Director said

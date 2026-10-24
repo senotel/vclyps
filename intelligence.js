@@ -643,6 +643,9 @@
     const tpl = templateLine(lean);
     if (tpl) L.push(tpl);
     L.push("EFFECTS: a punch-in marks the stressed line of a reveal or a payoff, at most one every ~8 seconds; slow-mo or speed-up only where the motion itself is the point.");
+    /* ccl9 (0.40.0): the voice changer, with the restraint the sound effects
+       have: a joke's tool, never decoration, never in a serious edit. */
+    L.push("VOICE EFFECTS: only when the edit is comedy, at most 2 effects of type 'voice' on a short clip that is a reaction line or the punchline, with 'voice' one of chipmunk, deep, monster, robot, echo (e.g. {clip: 3, type: 'voice', voice: 'chipmunk'}). Never in a serious, emotional, informative or sad edit, never on the hook line, never on two clips in a row.");
     /* Phrased as an EXPECTATION, not an option. The earlier wording ended with
        "skip b-roll entirely rather than forcing it", and the model took that
        invitation every single time — b-roll came back as [] on every generate,
@@ -1241,10 +1244,15 @@
       .slice(0, 80)
       .map((t) => normText(t, defPos, defSize));
 
+    const COMIC_VOICES = ["chipmunk", "deep", "monster", "robot", "echo"];
+    let voiced = 0;
     const effects = (Array.isArray(plan.effects) ? plan.effects : [])
-      .filter((e) => e && ["punch-in", "slow-mo", "speed-up"].includes(e.type))
+      .filter((e) => e && (["punch-in", "slow-mo", "speed-up"].includes(e.type) ||
+        (e.type === "voice" && COMIC_VOICES.includes(e.voice) && ++voiced <= 2)))   // ccl9: two at most
       .slice(0, 12)
-      .map((e) => ({ clip: Math.max(0, Math.floor(+e.clip || 0)), type: e.type }));
+      .map((e) => (e.type === "voice"
+        ? { clip: Math.max(0, Math.floor(+e.clip || 0)), type: "voice", voice: e.voice }
+        : { clip: Math.max(0, Math.floor(+e.clip || 0)), type: e.type }));
 
     // texts must include the chosen hook line even if the model only put it in `hook`
     const textFor = [];   // the Director's text index → the text it became, as for clips

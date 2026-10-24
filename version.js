@@ -60,9 +60,14 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.39.0";
+  var VERSION = "0.40.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: keyframes, the CapCut diamond next to undo. Select a clip's mask, an overlay or a " +
+  var NOTES = "New: Voice effects, as in CapCut. Select a video clip or an audio clip, tap Voice " +
+              "effects and pick one of 16 (Chipmunk, Elf, Deep, Monster, Robot, Alien, Echo, Hall, Cave, " +
+              "Underwater, Phone, Megaphone, Radio, Lo-fi, Vibrato, Tremolo); a tap plays a few seconds " +
+              "through it, and Amount sets how far it goes. The export sounds exactly like the preview. " +
+              "In comedy edits the AI may give a reaction line a comic voice (two at most). 0.39.0: " +
+              "New: keyframes, the CapCut diamond next to undo. Select a clip's mask, an overlay or a " +
               "text, tap the diamond, move the playhead and change it: it changes smoothly between the " +
               "two moments (the curve button sets the ease). Mask is now the full package: 15 shapes " +
               "plus Custom (draw your own shape with a finger on the darkened picture), CapCut's " +

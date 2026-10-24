@@ -4392,8 +4392,9 @@
       const src = audioCtx.createMediaElementSource(v.el);
       const g = audioCtx.createGain();
       src.connect(g);
-      if (v.speech && speechGain) g.connect(speechGain);   // bleeped with the footage
-      else g.connect(masterBus);           // speakers and the exported file
+      // through a voice-effect slot (ccl9), then to the speech stage (bleeped with the footage) or the speakers and the file
+      v.slot = voiceSlot(audioCtx, v.speech && speechGain ? speechGain : masterBus);
+      g.connect(v.slot.inp);
       v.gain = g;
     } catch (e) {
       v.failed = true;
@@ -4410,6 +4411,7 @@
     if (!v) return;
     try { v.el.pause(); v.el.removeAttribute("src"); v.el.load(); } catch (e) {}
     if (v.gain) { try { v.gain.disconnect(); } catch (e) {} }
+    if (v.slot && v.slot.chain) { try { v.slot.chain.stop(); } catch (e) {} }
     voices.delete(id);
   }
 
@@ -4440,6 +4442,7 @@
       const level = inside && !silent ? audioLevel(a, S.time) : 0;
       if (v.gain) { v.el.volume = 1; v.gain.gain.value = clamp(level, 0, 2); }
       else v.el.volume = clamp(level, 0, 1);
+      if (v.slot) setVoiceSlot(v.slot, a.voice, a.voiceAmt);
       if (v.el.playbackRate !== sp) v.el.playbackRate = sp;
       const want = a.in + (S.time - a.start) * sp;
       if (S.playing && inside) {
@@ -4628,6 +4631,8 @@
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // ccl9 voice effects: a microphone with a wave beside it
+    voice: I('<rect x="6" y="3" width="6" height="11" rx="3"/><path d="M3 11a6 6 0 0 0 12 0"/><line x1="9" y1="17" x2="9" y2="21"/><path d="M18 8c1.3 1.2 1.3 3.8 0 5"/><path d="M20.5 6c2.4 2.4 2.4 6.6 0 9"/>'),
     // 0.39.0 mask row: invert (a shape and its outside swapped), track (a target), stop tracking, reset
     invert: I('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4.5" fill="currentColor"/>'),
     track: I('<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>'),
@@ -4797,6 +4802,7 @@
           box.appendChild(group("Volume", slider(0, 1, 0.05, c.volume, (v) => { c.volume = v; }, () => commit(), pct)));
           box.appendChild(group("Sound", chipsRow([[false, "On"], [true, "Muted"]], !!c.muted, (v) => { c.muted = v; })));
         }));
+        list.push(tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, c, () => clipStartOf(c), () => dispDur(c))));
       } else {
         list.push(tool("duration", "Duration", ICON.timing, (box) => {
           box.appendChild(group("Shows for", slider(0.5, 15, 0.1, c.out - c.in, (v) => { c.out = c.in + v; renderTimeline(); }, () => commit(), (v) => v.toFixed(1) + "s")));
@@ -4928,6 +4934,7 @@
       const list = [
         act("split", "Split", ICON.split, splitAtPlayhead),
         tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 1.5, 0.05, typeof a.gain === "number" ? a.gain : 1, (v) => { a.gain = v; syncAudioClips(); }, () => commit(), pct)))),
+        tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, a, () => a.start, () => audioDur(a))),
         tool("fade", "Fade", ICON.fade, (box) => {
           box.appendChild(group("Fade in", slider(0, 3, 0.05, a.fadeIn || 0, (v) => { a.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
           box.appendChild(group("Fade out", slider(0, 3, 0.05, a.fadeOut || 0, (v) => { a.fadeOut = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
@@ -6410,6 +6417,53 @@
       renderInspector();
       syncOverlays();
     }
+  }
+
+  /* ═══════════ VOICE EFFECTS (ccl9, 0.40.0) ═══════════
+     CapCut's Voice effects, in the clip bar after Volume and in an audio
+     clip's bar: tiles in four groups, an Amount slider, and a tap plays a
+     few seconds of the clip through the effect straight away. */
+  const VOICE_GROUP_ICON = {
+    Character: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/>',
+    Space: '<path d="M4 18a10 10 0 0 1 16 0"/><path d="M7.5 18a6 6 0 0 1 9 0"/><circle cx="12" cy="18" r="1.4"/>',
+    Device: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><line x1="11" y1="18.5" x2="13" y2="18.5"/>',
+    Wobble: '<path d="M2 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0"/>'
+  };
+  function voicePanel(box, item, startOf, lenOf) {
+    const V = window.SenotelVoice;
+    if (!V) return;
+    const cur = item.voice || "none";
+    if (cur !== "none") {
+      box.appendChild(group("Amount", slider(0, 1, 0.05, item.voiceAmt == null ? 1 : item.voiceAmt,
+        (v) => { item.voiceAmt = v; }, () => commit(), (v) => Math.round(v * 100) + "%")));
+    }
+    let lastGroup = null, grid = null;
+    V.LIST.forEach(([id, label, grp]) => {
+      if (grp !== lastGroup) {
+        lastGroup = grp;
+        if (grp) box.appendChild(mk("p", "voice-group", grp));
+        grid = mk("div", "voice-grid");
+        box.appendChild(grid);
+      }
+      const b = mk("button", "voice-tile" + (cur === id ? " selected" : ""));
+      b.type = "button";
+      b.innerHTML = id === "none" ? ICON.close : I(VOICE_GROUP_ICON[grp] || "");
+      b.appendChild(mk("span", "", label));
+      b.addEventListener("click", () => {
+        if (id === "none") { delete item.voice; delete item.voiceAmt; }
+        else item.voice = id;
+        commit();
+        renderInspector();
+        recordEdit("voice", { effect: id });
+        // hear it: a few seconds from the playhead (or the clip's start)
+        if (id !== "none") {
+          const s = startOf(), len = lenOf();
+          const from = S.time >= s && S.time < s + len - 0.3 ? S.time : s;
+          previewSpan(from, Math.min(3, Math.max(0.5, s + len - from)));
+        }
+      });
+      grid.appendChild(b);
+    });
   }
 
   /* ═══════════ KEYFRAMES (ccl13, 0.39.0) ═══════════
@@ -9601,8 +9655,11 @@
       // pv's own level, for the sound blend across a transition (mixBlend)
       const pg = ctx.createGain();
       src.connect(pg);
-      pg.connect(speech);
+      // ccl9: the clip under the playhead's voice effect sits between its level and the speech stage
+      const vs = voiceSlot(ctx, speech);
+      pg.connect(vs.inp);
       pvGain = pg;
+      pvVoice = vs;
       speech.connect(bus);             // speakers and the export file, through the ceiling
       /* The music listens to the speech stage to know when to step back
          (see mixMusic). An analyser is a tap: nothing it hears changes. */
@@ -9654,6 +9711,38 @@
     const now = audioCtx.currentTime;
     try { pvGain.gain.setTargetAtTime(main, now, 0.01); } catch (e) { pvGain.gain.value = main; }
     if (pvTGain) { try { pvTGain.gain.setTargetAtTime(other, now, 0.01); } catch (e) { pvTGain.gain.value = other; } }
+    // ccl9: the voice effect of the clip being heard
+    if (pvVoice) {
+      const at = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+      setVoiceSlot(pvVoice, at && at.clip.voice, at && at.clip.voiceAmt);
+    }
+  }
+
+  /* ccl9: a place in a sound's path where a voice effect (voice-fx.js) is
+     put in and taken out while it plays. The chain is built on the side
+     and swapped in when ready, so the sound never stops. */
+  let pvVoice = null;
+  function voiceSlot(ctx, dest) {
+    const inp = ctx.createGain();
+    inp.connect(dest);
+    return { inp: inp, dest: dest, key: "", chain: null, busy: false };
+  }
+  function setVoiceSlot(slot, id, amount) {
+    const on = !!(id && id !== "none" && window.SenotelVoice);
+    const key = on ? id + ":" + (amount == null ? 1 : amount) : "";
+    if (slot.key === key || slot.busy) return;
+    slot.busy = true;
+    slot.key = key;
+    (on ? SenotelVoice.build(slot.inp.context, id, amount) : Promise.resolve(null)).then((ch) => {
+      try { slot.inp.disconnect(); } catch (e) {}
+      if (slot.chain) { try { slot.chain.output.disconnect(); slot.chain.stop(); } catch (e) {} }
+      slot.chain = ch;
+      if (ch) { slot.inp.connect(ch.input); ch.output.connect(slot.dest); } else slot.inp.connect(slot.dest);
+    }).catch(() => {
+      try { slot.inp.disconnect(); } catch (e) {}
+      slot.inp.connect(slot.dest);
+      slot.chain = null;
+    }).then(() => { slot.busy = false; });
   }
 
   /* ── the bleep ────────────────────────────────────────────────────────────
@@ -10453,8 +10542,9 @@
     };
     const edge = 0.008;   // a few milliseconds of fade at every cut, so no clicks
 
-    // Place [from, to] of a sound at timeline `at`, at `speed`, with `gain(t)`.
-    async function place(ctx, dest, m, from, to, at, speed, level) {
+    // Place [from, to] of a sound at timeline `at`, at `speed`, with `gain(t)`,
+    // through its voice effect (ccl9: the same chain the preview plays it through).
+    async function place(ctx, dest, m, from, to, at, speed, level, voice) {
       const a = await soundOf(m, from, to);
       if (!a || !a.buffer) return;
       const buf = a.buffer, r = buf.sampleRate;
@@ -10472,7 +10562,10 @@
       const d = seg.duration;
       level(g.gain, at, d, edge);
       src.connect(g);
-      g.connect(dest);
+      const fx = voice && voice.voice && voice.voice !== "none" && window.SenotelVoice
+        ? await SenotelVoice.build(ctx, voice.voice, voice.voiceAmt).catch(() => null) : null;
+      if (fx) { g.connect(fx.input); fx.output.connect(dest); }
+      else g.connect(dest);
       src.start(at);
       src.stop(at + d + 0.01);
     }
@@ -10530,13 +10623,13 @@
         const tail = Math.min(hOut, Math.max(0, ((m.duration || c.out) - c.out) / sp));
         const v = c.volume == null ? 1 : c.volume;
         const level = hIn > 0 || hOut > 0 ? blendLevel(v, hIn, lead, hOut, tail) : flat(v);
-        await place(p1, speech, m, c.in - lead * sp, c.out + tail * sp, at - lead, sp, level);
+        await place(p1, speech, m, c.in - lead * sp, c.out + tail * sp, at - lead, sp, level, c);
       }
       at += d;
     }
     for (const a of S.audio) {
       const m = mediaById(a.mediaId);
-      if (m && isSpeech(m)) await place(p1, speech, m, a.in, a.out, a.start, a.speed || 1, clipLevel(a));
+      if (m && isSpeech(m)) await place(p1, speech, m, a.in, a.out, a.start, a.speed || 1, clipLevel(a), a);
     }
     // the bleep's silences (no lead here: nothing is late offline)
     const C = global_SenotelCaptions();
@@ -10629,7 +10722,7 @@
 
     for (const a of S.audio) {
       const m = mediaById(a.mediaId);
-      if (m && !isSpeech(m)) await place(p2, bus, m, a.in, a.out, a.start, a.speed || 1, clipLevel(a));
+      if (m && !isSpeech(m)) await place(p2, bus, m, a.in, a.out, a.start, a.speed || 1, clipLevel(a), a);
     }
 
     const e = sfxEngine();
