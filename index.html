@@ -709,6 +709,17 @@
       <div class="stk-grid" id="stkGrid"></div>
     </div>
 
+    <!-- TEXT TEMPLATES (ccl3, 0.35.0): designed titles, CapCut's Text → Templates -->
+    <div class="sheet hidden" id="tmplSheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3>Text templates</h3>
+        <span class="sheet-sub">Tap one to add it at the playhead</span>
+      </div>
+      <div class="filter-chips" id="tmplCats"></div>
+      <div class="tmpl-grid" id="tmplGrid"></div>
+    </div>
+
     <!-- EXPORT SETTINGS: CapCut's export screen. Remembered on this device. -->
     <div class="sheet hidden" id="exportSheet">
       <div class="sheet-grip"></div>
@@ -727,6 +738,11 @@
       <div class="cap-field">
         <label>Quality</label>
         <div class="ins-seg cap-seg" id="exQ"><button data-v="low">Smaller file</button><button data-v="rec">Recommended</button><button data-v="high">Higher</button></div>
+      </div>
+      <!-- 0.35.0: the finished mix brought to -14 LUFS, what social apps play at (loudness.js) -->
+      <div class="cap-field">
+        <label>Sound</label>
+        <div class="ins-seg cap-seg" id="exLevel"><button data-v="on">Level for social</button><button data-v="off">As mixed</button></div>
       </div>
       <p class="set-note" id="exNote"></p>
       <button class="primary-btn" id="exGo" type="button">Export</button>
@@ -1123,6 +1139,10 @@
   <script defer src="fonts.js"></script>
   <script defer src="text-anims.js"></script>
   <script defer src="fx-library.js"></script>
+  <script defer src="filters.js"></script>
+  <script defer src="text-templates.js"></script>
+  <script defer src="beats.js"></script>
+  <script defer src="loudness.js"></script>
   <script defer src="stickers.js"></script>
   <script defer src="caption-tools.js"></script>
   <script defer src="caption-styles.js"></script>

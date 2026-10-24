@@ -364,6 +364,22 @@
   const BIZ_IN = ["fade", "rise", "drop", "left", "right-in", "pop", "zoom", "grow", "blur", "wipe", "wipeup", "unfold", "type", "l-fade", "l-rise", "l-blur", "l-pop", "w-rise", "w-pop"];
   const BIZ_OUT = ["fade", "rise", "drop", "blur", "wipe", "shrink", "zoom", "l-fade", "l-blur", "w-rise"];
 
+  /* The look (0.35.0): the 100 filters of filters.js, each with its mood
+     words, so the Director picks a colour grade for the story. The lean
+     brief (the backup Directors' free tiers) keeps the original 8. */
+  // The designed titles a text may name (text-templates.js); not in the lean brief
+  function templateLine(lean) {
+    const TT = typeof window !== "undefined" ? window.SenotelTextTemplates : null;
+    if (!TT || lean) return null;
+    return "TEMPLATES (optional, for on-screen texts, not captions): a text may add 'template': one id from this list for a designed look (its font, colours, label and animation; the words stay yours). Use at most one or two kinds per video so it looks designed, not random: " + TT.directorList();
+  }
+
+  function lookLine(lean) {
+    const FL = typeof window !== "undefined" ? window.SenotelFilters : null;
+    if (!FL || lean) return "LOOK (the colour filter): none, cinematic, vivid, warm, cool, noir, vintage or dreamy.";
+    return "LOOK (the colour filter for the whole video): one id from this list, chosen for the story's mood and kept subtle for talking, faces and products; 'none' when the footage already looks right. Never a dark look on footage that is already dark or at night.\n" + FL.directorList();
+  }
+
   function structureText(lean) {
     const X = R();
     if (!X) return "";
@@ -499,6 +515,7 @@
     L.push(lengthLine(req));
     const music = musicBrief(req, lean);
     if (music) L.push(music + (lean ? "" : "\n· In business mode, music nearly always helps: choose by the tone, and level \"forward\" when nobody talks."));
+    L.push(lookLine(lean));
     L.push("Respond with ONLY this compact JSON. List beats IN FINAL PLAYBACK ORDER; from/to are rough source-time regions (refined in step 2). 'claim' is the one claim the video proves (10 words or fewer); 'payoffAt' the SOURCE second where the footage proves it best:");
     const shape = {
       story: "one-sentence summary of the video",
@@ -509,7 +526,7 @@
       claim: "the claim the video proves",
       payoffAt: 0.0,
       beats: [{ beat: "hook|reveal|highlight|proof", says: "what this beat shows", mediaId: exampleId(req), from: 0.0, to: 4.0 }],
-      look: "none|cinematic|vivid|warm|cool|noir|vintage|dreamy"
+      look: "a filter id from the LOOK list, or none"
     };
     if (wantsMusic(req)) shape.music = { use: true, query: "mood + genre, 2-3 words", level: "under|forward", why: "10 words or fewer" };
     shape.confidence = 0.9;
@@ -530,6 +547,8 @@
     L.push(lengthLine(req));
     L.push("Turn each beat into precise kept clips. Every 'reason' names the beat it serves, 12 words or fewer.");
     L.push("TEXTS (this is where a product video lives): the hook line at 0.1s is REQUIRED. Then one short line or label per highlight, timed to the footage that shows it. Each text: 'in' = its entrance, one of " + BIZ_IN.join(", ") + "; 'out' = its exit (optional), one of " + BIZ_OUT.join(", ") + ". Vary the entrances across the video, never the same one on every line. 'style': leave it out for a title; \"lower\" for a feature label in the lower third, with 'sub' as its optional second line. dur follows the READABLE rule. A landed line stays still. No questions you do not answer, no emoji.");
+    const tpl = templateLine(lean);
+    if (tpl) L.push(tpl);
     L.push("END CARD: endCard is added AFTER the footage as its own clip: 'text' = the product name, 'sub' = the call to action from the brief (or, if none, what it does in 8 words or fewer), 'dur' 2.5-4 seconds. Do NOT put the end card in texts.");
     L.push("EFFECTS: a punch-in on the reveal or the strongest highlight, at most one every ~8 seconds; slow-mo or speed-up only where the motion itself is the point.");
     L.push("BROLL: usually none; the product's own footage is the point. At most 1 photo or video item, only if the footage lacks a picture of something the brief names. Never reaction GIFs.");
@@ -583,6 +602,7 @@
     L.push(lengthLine(req));
     const music = musicBrief(req, lean);
     if (music) L.push(music);
+    L.push(lookLine(lean));
     L.push("Respond with ONLY this compact JSON — list beats IN FINAL PLAYBACK ORDER. from/to are the rough source-time regions that serve each beat (refined in step 2). Chronological except a cold-open hook. 'gap' is the question the hook opens (10 words or fewer); 'payoffAt' the SOURCE second where the footage answers it:");
     const shape = {
       story: "one-sentence summary of the whole video",
@@ -594,7 +614,7 @@
       payoffAt: 0.0,
       // real id, not a hardcoded 1 — see the note in editBrief
       beats: [{ beat: "hook|context|the genre's beat names|payoff", says: "what this beat delivers", mediaId: exampleId(req), from: 0.0, to: 5.0 }],
-      look: "none|cinematic|vivid|warm|cool|noir|vintage|dreamy"
+      look: "a filter id from the LOOK list, or none"
     };
     /* Placeholders, not a real query: models copy example values, and a
        literal "chill lofi" here would put the same track under every video. */
@@ -620,6 +640,8 @@
        brought him to the brink at 17?") and once added a word the speaker
        never said. Questions read as less informative (E43). */
     L.push("TEXTS: the hook line is REQUIRED — text at 0.1s, 8 words or fewer: a STATEMENT made from the speaker's own words that sets up the locked story's gap without answering it. Shorten their words; never add a claim or a word they did not say. Never a question, never a summary, never a greeting, no emoji.");
+    const tpl = templateLine(lean);
+    if (tpl) L.push(tpl);
     L.push("EFFECTS: a punch-in marks the stressed line of a reveal or a payoff, at most one every ~8 seconds; slow-mo or speed-up only where the motion itself is the point.");
     /* Phrased as an EXPECTATION, not an option. The earlier wording ended with
        "skip b-roll entirely rather than forcing it", and the model took that
@@ -1192,6 +1214,20 @@
       if (t.style === "lower") {
         n.style = "lower";
         if (t.sub) n.sub = String(t.sub).slice(0, 80);
+      }
+      /* A designed title (text-templates.js, 0.35.0): the template's look,
+         the Director's words, time and place. A template's sample second
+         line never shows unless the Director wrote one. */
+      const TT = typeof window !== "undefined" ? window.SenotelTextTemplates : null;
+      if (TT && t.template && TT.has(t.template)) {
+        const f = TT.fields(t.template);
+        const keep = { text: n.text, start: n.start, dur: n.dur, pos: n.pos };
+        if (n.animIn) { keep.animIn = n.animIn; keep.animInLen = n.animInLen; }
+        if (n.animOut) { keep.animOut = n.animOut; keep.animOutLen = n.animOutLen; }
+        Object.assign(n, f, keep);
+        if (t.sub) n.sub = String(t.sub).slice(0, 80);
+        else delete n.sub;
+        n.template = t.template;
       }
       if (req.mode === "business") {
         // the READABLE floor: 0.5s + 0.3s a word, whatever the model wrote

@@ -60,9 +60,17 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.34.1";
+  var VERSION = "0.35.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "Fixed on phones: after an edit the timeline was squeezed off the screen and could " +
+  var NOTES = "New, the CapCut way: 100 filters in 7 groups (Portrait, Film, Vintage, Black and " +
+              "white, Food, Scenery, Mood) with a strength slider and tiles that show your own clip; " +
+              "40 text templates (Text, then Templates); Copy style and Paste style on any text; beat " +
+              "marks on the music and Cut to the beat (select the music, then Beats); the sound now " +
+              "blends across transitions instead of jumping; and every export is levelled to the " +
+              "loudness TikTok, Reels and YouTube play at (Export, then Sound). The AI uses all of " +
+              "it: it picks from the 100 filters, gives titles designed templates, and puts its cuts " +
+              "on the music's beat. 0.34.1: " +
+              "Fixed on phones: after an edit the timeline was squeezed off the screen and could " +
               "not be scrolled, and it could not be moved while the video played. The timeline now " +
               "scrolls up and down through its tracks, the picture makes room for it, touching the " +
               "timeline pauses the video (as in CapCut), the edit's summary is one line (tap for " +

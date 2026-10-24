@@ -824,7 +824,19 @@
   }
 
   function materialize(ai, intent, fmt, media) {
-    const look = LOOKS.includes(ai.look) ? ai.look : intent.look;
+    /* Any of the 100 filters (filters.js, 0.35.0), not only the first 8.
+       A dark look on footage that is already dark crushes it to mud, so
+       that one choice is overruled (avgBri is measured on the device). */
+    const FL = window.SenotelFilters;
+    let look = LOOKS.includes(ai.look) || (FL && FL.has(ai.look)) ? ai.look : intent.look;
+    if (FL && FL.isDark(look)) {
+      const bri = media.map((m) => m.analysis && m.analysis.vis && m.analysis.vis.avgBri).filter((v) => typeof v === "number");
+      const avg = bri.length ? bri.reduce((a, b) => a + b, 0) / bri.length : 0.5;
+      if (avg < 0.33) {
+        if (window.SenotelDiag) window.SenotelDiag.last.look = ai.look + " overruled: the footage is already dark";
+        look = "none";
+      }
+    }
     const clips = ai.clips.map((c, i) => ({
       mediaId: c.mediaId, in: c.in, out: c.out,
       speed: 1, volume: 1, muted: false, filter: look, fadeIn: 0, fadeOut: 0,

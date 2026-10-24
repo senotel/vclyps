@@ -3505,7 +3505,9 @@
      actually a sound to play — a project with no sound effects should never
      have its audio re-routed at all. */
   function primeAudio() {
-    if (!S.sfx.length && !S.music && !S.audio.length) return;
+    // a transition blends the two clips' sound through the graph too (ccl1, mixBlend)
+    const blends = S.clips.some((c, i) => i > 0 && c.tIn && c.tIn !== "none" && c.tAudio !== false);
+    if (!S.sfx.length && !S.music && !S.audio.length && !blends) return;
     try { ensureAudioGraph(); } catch (e) { return; }
     ensureMusicRoute();
     routeAudioVoices();
@@ -3697,6 +3699,8 @@
     span(S.sfx, (x) => sfxDur(x.name));
     span(S.effects, (e) => e.dur);
     if (S.music && S.music !== except) { const m = musicSpan(); marks.push(m.from, m.to); }
+    // ccl5: things snap onto the beat marks too
+    if (S.music !== except) musicBeatTimes().forEach((b) => marks.push(b.t));
     return marks;
   }
 
@@ -3907,6 +3911,17 @@
         if (take <= 0.01) break;
       }
       el.appendChild(strip);
+    }
+    // ccl5: the beat marks, a dot per beat, bigger on the strong ones and on the user's own
+    const bt = musicBeatTimes();
+    if (bt.length) {
+      const dots = mk("div", "mbeats");
+      bt.forEach((b) => {
+        const d = mk("i", b.mine ? "mine" : b.strong ? "strong" : "");
+        d.style.left = (b.t - sp.from) * S.pps + "px";
+        dots.appendChild(d);
+      });
+      el.appendChild(dots);
     }
     if (on) {
       const hl = mk("div", "handle hl"), hr = mk("div", "handle hr");
@@ -4332,6 +4347,74 @@
     return wrap;
   }
 
+  /* The Filters panel (ccl4, 0.35.0), CapCut's: group tabs, a tile per
+     filter showing the user's own clip in that look, and Strength. */
+  let filterCat = null;   // the group tab showing; null = the current filter's own group
+  function filterPanel(box, getCur, apply, getAmt, setAmt, thumbClip) {
+    const FL = window.SenotelFilters;
+    if (!FL) { box.appendChild(filterChips(getCur, apply)); return; }
+    const cur = getCur() || "none";
+    const curF = FL.LIST.find((f) => f.id === cur);
+    const cat = filterCat || (curF && curF.group) || FL.GROUPS[0];
+    const cats = mk("div", "filter-chips");
+    FL.GROUPS.forEach((g) => {
+      const b = mk("button", "fchip" + (cat === g ? " active" : ""), g);
+      b.type = "button";
+      b.addEventListener("click", () => { filterCat = g; renderInspector(); });
+      cats.appendChild(b);
+    });
+    box.appendChild(cats);
+    const grid = mk("div", "anim-grid filter-grid");
+    [FL.LIST[0]].concat(FL.LIST.filter((f) => f.group === cat)).forEach((f) => {
+      const b = mk("button", "anim-tile" + (cur === f.id ? " selected" : ""));
+      b.type = "button";
+      b.title = f.name;
+      const cv = document.createElement("canvas");
+      cv.dataset.filter = f.id;
+      b.appendChild(cv);
+      b.appendChild(mk("span", "anim-name", f.name));
+      b.addEventListener("click", () => { apply(f.id); commit(); syncOverlays(); renderInspector(); recordEdit("filter", { id: f.id }); });
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+    if (cur !== "none") {
+      box.appendChild(group("Strength", slider(0, 1, 0.01, getAmt(), (v) => { setAmt(v); syncOverlays(); }, () => commit(), pct)));
+    }
+    requestAnimationFrame(() => drawFilterTiles(box, thumbClip));
+  }
+  /* Each tile: the clip's still in that filter (the same colour table the
+     picture uses). A still that isn't decoded yet is waited for, a few times,
+     instead of leaving flat tiles. */
+  function drawFilterTiles(box, clip, tries) {
+    const FL = window.SenotelFilters;
+    const still = clip ? clipThumb(clip) : null;
+    const ready = still && still.complete !== false && still.naturalWidth;
+    if (clip && !ready && (tries || 0) < 12 && box.isConnected) {
+      setTimeout(() => drawFilterTiles(box, clip, (tries || 0) + 1), 250);
+    }
+    box.querySelectorAll("canvas[data-filter]").forEach((cv) => {
+      const w = Math.max(40, cv.clientWidth || 72), h = Math.max(40, cv.clientHeight || 72);
+      cv.width = Math.round(w * 2); cv.height = Math.round(h * 2);
+      const ctx = cv.getContext("2d");
+      coverInto(ctx, still, cv.width, cv.height, "#6a5a48");
+      const id = cv.dataset.filter;
+      if (id === "none") return;
+      const out = FL.apply(cv, id, 1);
+      if (out) {
+        ctx.globalCompositeOperation = "copy";
+        ctx.drawImage(out, 0, 0, cv.width, cv.height);
+        ctx.globalCompositeOperation = "source-over";
+      } else {
+        const tmp = document.createElement("canvas");
+        tmp.width = cv.width; tmp.height = cv.height;
+        tmp.getContext("2d").drawImage(cv, 0, 0);
+        ctx.filter = FL.cssOf(id);
+        ctx.drawImage(tmp, 0, 0);
+        ctx.filter = "none";
+      }
+    });
+  }
+
   function filterChips(getCur, apply) {
     const wrap = mk("div", "filter-chips");
     Object.keys(FILTERS).forEach((key) => {
@@ -4364,6 +4447,13 @@
   const ICON = {
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
+    // ccl5 beats: a waveform with dots on its beats
+    beats: I('<path d="M3 12h2l2-5 3 10 3-14 3 12 2-3h3"/><circle cx="7" cy="20" r="1"/><circle cx="13" cy="20" r="1"/><circle cx="19" cy="20" r="1"/>'),
+    // ccl2 copy and paste style: a brush, and a brush onto a page
+    copyStyle: I('<path d="M14 4l6 6-8 8H6v-6z"/><path d="M4 20h6"/>'),
+    pasteStyle: I('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 13l2 2 4-4"/>'),
+    // ccl3 text templates: a framed T
+    tmpl: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7"/>'),
     edit: I('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>'),
     split: I('<line x1="12" y1="3" x2="12" y2="21"/><path d="M8 7H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h3M16 7h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-3"/>'),
     audio: I('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
@@ -4447,6 +4537,8 @@
     }
     return [
       { id: "addtext", label: "Add text", icon: ICON.text, run: () => { pendingTool = "edit"; addText(); } },
+      // ccl3: CapCut keeps Text templates right next to Add text
+      { id: "templates", label: "Templates", icon: ICON.tmpl, run: openTemplates },
       { id: "captions", label: "Captions", icon: ICON.captions, run: () => $("tbCaptions").click() },
       { id: "stickers", label: "Stickers", icon: ICON.sticker, run: () => openStickers(null) }
     ];
@@ -4484,7 +4576,12 @@
     if (!s) return [];
     if (s.type === "all") {
       return [tool("filters", "Filters", ICON.filters, (box) => {
-        box.appendChild(group("Look, on every clip", filterChips(() => (S.clips[0] ? S.clips[0].filter : "none"), (key) => { S.clips.forEach((c) => { c.filter = key; }); syncOverlays(); })));
+        box.appendChild(mk("p", "panel-note", "On every clip"));
+        filterPanel(box, () => (S.clips[0] ? S.clips[0].filter : "none"),
+          (key) => { S.clips.forEach((c) => { c.filter = key; }); },
+          () => (S.clips[0] && S.clips[0].filterAmt != null ? S.clips[0].filterAmt : 1),
+          (v) => { S.clips.forEach((c) => { c.filterAmt = v; }); },
+          S.clips[0]);
       })];
     }
     if (s.type === "clip") {
@@ -4508,7 +4605,15 @@
       }
       list.push(tool("anim", "Animation", ICON.anim, (box) => clipAnimPanel(box, c, redrawPanel)));
       if (idx > 0) list.push(tool("trans", "Transition", ICON.trans, (box) => transitionPanel(box, c, S.clips[idx - 1], redrawPanel)));
-      list.push(tool("filters", "Filters", ICON.filters, (box) => box.appendChild(group("Look", filterChips(() => c.filter, (k) => { c.filter = k; syncOverlays(); })))));
+      list.push(tool("filters", "Filters", ICON.filters, (box) => {
+        filterPanel(box, () => c.filter, (k) => { c.filter = k; }, () => (c.filterAmt == null ? 1 : c.filterAmt), (v) => { c.filterAmt = v; }, c);
+        if (c.filter && c.filter !== "none" && S.clips.length > 1) {
+          const all = mk("button", "fchip", "Use on every clip");
+          all.type = "button";
+          all.addEventListener("click", () => { S.clips.forEach((x) => { x.filter = c.filter; if (c.filterAmt != null) x.filterAmt = c.filterAmt; else delete x.filterAmt; }); commit(); syncNow(); toast("This filter is on every clip now"); });
+          box.appendChild(group("", all));
+        }
+      }));
       list.push(tool("adjust", "Adjust", ICON.adjust, (box) => {
         ADJ.forEach(([k, label, lo, hi]) => {
           box.appendChild(group(label, slider(lo, hi, 1, (c.adj && c.adj[k]) || 0,
@@ -4587,6 +4692,12 @@
       const heading = textStyleOf(t) === "heading";
       const list = [tp("edit", "Edit", ICON.rename, "text"), tp("font", "Font", ICON.font, "font")];
       if (heading) list.push(tp("style", "Style", ICON.style, "style"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"));
+      // ccl2: copy this text's whole look, paste it on another (or on every text)
+      list.push(act("copystyle", "Copy style", ICON.copyStyle, () => copyTextStyle(t)));
+      if (styleClip) {
+        list.push(act("pastestyle", "Paste style", ICON.pasteStyle, () => pasteTextStyle([t])));
+        if (S.texts.filter((x) => !x.sticker).length > 2) list.push(act("pasteall", "Paste on all", ICON.pasteStyle, () => pasteTextStyle(S.texts.filter((x) => !x.sticker))));
+      }
       return list.concat(common());
     }
     if (s.type === "broll") {
@@ -4646,6 +4757,7 @@
           box.appendChild(group("Fade in", slider(0, 5, 0.1, typeof S.music.fadeIn === "number" ? S.music.fadeIn : 0.3, (v) => { S.music.fadeIn = v; applyMusicGain(); }, () => commit(), (v) => v.toFixed(1) + "s")));
           box.appendChild(group("Fade out", slider(0, 8, 0.1, typeof S.music.fadeOut === "number" ? S.music.fadeOut : 1.5, (v) => { S.music.fadeOut = v; applyMusicGain(); }, () => commit(), (v) => v.toFixed(1) + "s")));
         }),
+        tool("beats", "Beats", ICON.beats, (box) => beatsPanel(box)),
         tool("duck", "Lower for voices", ICON.duck, (box) => box.appendChild(group("Lower the music while someone talks", chipsRow([[true, "On"], [false, "Off"]], S.music.duck !== false, (v) => { S.music.duck = v; })))),
         act("replace", "Replace", ICON.replace, change),
         act("delete", "Delete", ICON.trash, deleteSelection)
@@ -5347,7 +5459,13 @@
   ];
   function pictureFilter(c, blurPx) {
     const parts = [];
-    const look = FILTERS[c.filter] ? FILTERS[c.filter].css : "none";
+    /* 0.35.0: a filter is a colour table applied on the graphics card after
+       the picture is drawn (drawClipPicture → SenotelFilters.apply); only a
+       device without WebGL gets the nearest CSS look here instead. */
+    const FL = window.SenotelFilters;
+    const look = !c.filter || c.filter === "none" ? "none"
+      : FL && FL.has(c.filter) ? (FL.gpu() ? "none" : FL.cssOf(c.filter))
+      : FILTERS[c.filter] ? FILTERS[c.filter].css : "none";
     if (look !== "none") parts.push(look);
     const a = c.adj;
     if (a) {
@@ -5966,9 +6084,11 @@
       ins.appendChild(group("Length", slider(0.1, max, 0.05, Math.min(transDur(c), max),
         (v) => { c.tDur = v; syncOverlays(); },
         () => { commit(); previewSpan(clipStartOf(c) - transDur(c) / 2 - 0.4, transDur(c) + 0.8); }, (v) => v.toFixed(2) + "s")));
+      // ccl1: the sound blends across the transition too, unless switched off
+      ins.appendChild(group("Blend sound", chipsRow([[true, "On"], [false, "Off"]], c.tAudio !== false, (v) => { if (v) delete c.tAudio; else c.tAudio = false; }, redo)));
       const all = mk("button", "fchip", "Use on every cut");
       all.addEventListener("click", () => {
-        S.clips.forEach((x, i) => { if (i > 0) { x.tIn = c.tIn; if (c.tDur != null) x.tDur = c.tDur; else delete x.tDur; } });
+        S.clips.forEach((x, i) => { if (i > 0) { x.tIn = c.tIn; if (c.tDur != null) x.tDur = c.tDur; else delete x.tDur; if (c.tAudio === false) x.tAudio = false; else delete x.tAudio; } });
         commit(); renderTimeline(); toast(FX.nameOf(c.tIn) + " is on every cut now");
       });
       ins.appendChild(group("", all));
@@ -6223,6 +6343,76 @@
      in Noto Color Emoji) or "shape" (t.shape, drawn in code in t.color).
      So it moves, pinches, turns, aligns and animates exactly like a text. */
   let stkCat = "Shapes", stkReplace = null;
+  /* ── Text templates (ccl3, 0.35.0) ──
+     A sheet of designed titles in groups; each tile is drawn by the same
+     code as the picture (drawHeading / drawStyledText), in its own font, so
+     what you tap is what lands on the video. */
+  let tmplCat = "Titles";
+  function openTemplates() {
+    if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
+    if (!window.SenotelTextTemplates) { toast("Templates aren't available here. Reload the page."); return; }
+    renderTemplateSheet();
+    openSheet("tmplSheet");
+  }
+  function renderTemplateSheet() {
+    const TT = window.SenotelTextTemplates;
+    const cats = $("tmplCats"), grid = $("tmplGrid");
+    cats.innerHTML = "";
+    grid.innerHTML = "";
+    TT.GROUPS.forEach((g) => {
+      const b = mk("button", "fchip" + (tmplCat === g ? " active" : ""), g);
+      b.type = "button";
+      b.addEventListener("click", () => { tmplCat = g; renderTemplateSheet(); });
+      cats.appendChild(b);
+    });
+    TT.LIST.filter((x) => x.group === tmplCat).forEach((x) => {
+      const b = mk("button", "tmpl-tile");
+      b.type = "button";
+      b.title = x.name;
+      const cv = document.createElement("canvas");
+      cv.width = 320; cv.height = 200;
+      b.appendChild(cv);
+      b.appendChild(mk("span", "anim-name", x.name));
+      b.addEventListener("click", () => addTemplate(x.id));
+      grid.appendChild(b);
+      drawTemplateTile(cv, x.t);
+    });
+  }
+  function drawTemplateTile(cv, f) {
+    const draw = () => {
+      const ctx = cv.getContext("2d");
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#2a2b29";
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      const frame = { x: 0, y: 0, w: cv.width, h: cv.height };
+      const s = Object.assign({ id: -1, start: -60, dur: 1e6, color: "#ffffff" }, f);
+      // a tile is wide where the picture is tall: text sized against its height reads larger
+      s.size = f.size * (s.style === "lower" ? 2.3 : s.style === "card" ? 0.9 : 1.45);
+      if (s.style !== "lower") { s.x = 0.5; s.y = 0.5; }
+      delete s.animIn; delete s.animOut; delete s.animLoop;
+      if (s.style === "lower" || s.style === "card") drawStyledText(ctx, s, frame, 0);
+      else drawHeading(ctx, s, frame, null, null);
+    };
+    draw();
+    const SF = window.SenotelFonts;
+    if (SF && f.font) { try { SF.load(f.font, f.weight || 400, !!f.italic).then(draw, () => {}); } catch (e) {} }
+  }
+  function addTemplate(id) {
+    const TT = window.SenotelTextTemplates;
+    const f = TT && TT.fields(id);
+    if (!f) return;
+    const t = Object.assign({ id: nextId++, start: clamp(S.time, 0, Math.max(0, total() - 0.5)), dur: 3, color: "#ffffff", pos: "center" }, f);
+    S.texts.push(t);
+    S.sel = { type: "text", id: t.id };
+    commit();
+    closeSheets();
+    renderTimeline();
+    renderInspector();
+    syncOverlays();
+    recordEdit("text-template", { id: id });
+    toast("Template added. Tap Edit to change the words");
+  }
+
   function openStickers(replace) {
     if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
     stkReplace = replace || null;
@@ -6502,6 +6692,33 @@
      leaves the words, font, size and place alone. */
   const PRESET_BASE = { color: "#ffffff", opacity: 1, strokeW: 0, strokeColor: "#000000", boxOn: false, boxColor: "#000000", boxOpacity: 0.75, boxRadius: 0.25,
     shadow: false, shColor: "#000000", shOpacity: 0.8, shBlur: 0.22, shDist: 0, shAngle: 45, glowOn: false, glowColor: "#00e5ff", glowSize: 0.6 };
+  /* ── Copy and paste style (ccl2, 0.35.0) ──
+     Everything about how a text LOOKS and MOVES: font, colours, outline,
+     shadow, label box, glow, spacing, curve, size, kind (title, lower
+     third, card) and its animations. Never what it says, where it sits or
+     when it shows. A key the copied text doesn't have is removed from the
+     pasted one, so the result is identical, not a mix of the two. */
+  const STYLE_KEYS = Object.keys(TEXT_LOOK).concat(["color", "size", "style", "accent", "bg",
+    "animIn", "animOut", "animLoop", "animInLen", "animOutLen", "animLoopSpeed", "animLen", "animLenSet"]);
+  let styleClip = null;
+  function copyTextStyle(t) {
+    styleClip = {};
+    STYLE_KEYS.forEach((k) => { styleClip[k] = t[k] == null ? null : JSON.parse(JSON.stringify(t[k])); });
+    buzz("light");
+    toast("Style copied. Select another text and tap Paste style");
+    renderActionBar();
+  }
+  function pasteTextStyle(list) {
+    if (!styleClip) return;
+    list.forEach((t) => STYLE_KEYS.forEach((k) => { if (styleClip[k] == null) delete t[k]; else t[k] = JSON.parse(JSON.stringify(styleClip[k])); }));
+    commit();
+    syncOverlays();
+    renderTimeline();
+    renderInspector();
+    recordEdit("paste-style", { texts: list.length });
+    toast(list.length > 1 ? "Style pasted on " + list.length + " texts" : "Style pasted");
+  }
+
   const TEXT_PRESETS = [
     { name: "Soft shadow", shadow: true, shOpacity: 0.6, shBlur: 0.3 },
     { name: "Outline", strokeW: 0.08 },
@@ -6693,6 +6910,20 @@
     }
     return null;
   }
+  /* ccl1 (0.35.0): the SOUND crosses a transition too. Half the window of
+     the transition into clip i, as transitionAt measures it, or 0 when there
+     is none or its "Blend sound" is off (clip.tAudio === false). Across the
+     window the two clips' sound is mixed with equal-power curves (cos/sin),
+     so the loudness never dips in the middle, in the preview (mixBlend) and
+     the export (renderMixOffline) alike. */
+  function transHalf(i) {
+    const c = S.clips[i], prev = S.clips[i - 1];
+    if (!c || !prev || !c.tIn || c.tIn === "none" || c.tAudio === false) return 0;
+    return Math.min(transDur(c), dispDur(prev) * 2, dispDur(c) * 2) / 2;
+  }
+  const blendOut = (p) => Math.cos(clamp(p, 0, 1) * Math.PI / 2);
+  const blendIn = (p) => Math.sin(clamp(p, 0, 1) * Math.PI / 2);
+
   // where in its footage a clip is at timeline time t, inside the file
   function srcTimeAt(clip, start, t) {
     const m = mediaById(clip.mediaId);
@@ -6815,6 +7046,20 @@
     ctx.filter = "none";
     drawAdjustVeils(ctx, clip, { x: 0, y: 0, w: W, h: H });
     ctx.restore();
+    // ccl4: the filter's colour table over the clip's own picture (the canvas is W x H here)
+    const FL = window.SenotelFilters;
+    if (clip.filter && clip.filter !== "none" && FL && FL.has(clip.filter)) {
+      const out = FL.apply(ctx.canvas, clip.filter, clip.filterAmt == null ? 1 : clip.filterAmt);
+      if (out) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.filter = "none";
+        ctx.globalCompositeOperation = "copy";
+        ctx.drawImage(out, 0, 0, W, H);
+        ctx.restore();
+      }
+    }
   }
 
   /* An overlay's place: its centre (b.x, b.y, fractions of the frame), its
@@ -7179,6 +7424,7 @@
     syncMedia();
     syncMusic();
     mixMusic();
+    mixBlend();
     syncAudioClips();
     applyBleep();
     syncOverlays();
@@ -7731,6 +7977,8 @@
          included, and a cutaway that was never found takes its sound with it. */
       try { placeDirectorSounds(g.sfx, entrances); } catch (_) { extrasFailed = true; }
       try { if (!(await addDirectorMusic(g.music, progress))) extrasFailed = true; } catch (_) { extrasFailed = true; }
+      // ccl5: the cuts onto the music's beat (a failure leaves the edit as it is)
+      try { progress("Putting the cuts on the beat…"); await beatsAfterEdit(); } catch (_) {}
       routeDirectorAudio();
       if (opts.onDone) opts.onDone();
       writeSession();
@@ -8184,7 +8432,11 @@
       /* The footage's sound goes through one gain, the "speech" stage, so a
          swear word can be silenced and bleeped in both places at once. */
       const speech = ctx.createGain();
-      src.connect(speech);
+      // pv's own level, for the sound blend across a transition (mixBlend)
+      const pg = ctx.createGain();
+      src.connect(pg);
+      pg.connect(speech);
+      pvGain = pg;
       speech.connect(bus);             // speakers and the export file, through the ceiling
       /* The music listens to the speech stage to know when to step back
          (see mixMusic). An analyser is a tap: nothing it hears changes. */
@@ -8200,7 +8452,42 @@
       audioGraphFailed = true;
       throw e;
     }
+    /* The other clip of a transition plays in #pvT. It was silent; it now
+       feeds the speech stage through its own gain, at 0 until a transition
+       blends it in. Separate, so a failure here leaves pvT muted and the
+       footage's sound untouched. */
+    try {
+      const ts = audioCtx.createMediaElementSource(pvT);
+      const tg = audioCtx.createGain();
+      tg.gain.value = 0;
+      ts.connect(tg);
+      tg.connect(speechGain);
+      pvTGain = tg;
+      pvT.muted = false;
+    } catch (e) { pvTGain = null; }
     buildBleep();
+  }
+
+  /* Every frame: the sound across a transition (ccl1). pv plays the clip
+     under the playhead and pvT the other side; each gets its equal-power
+     share of the window. Outside a transition pv is at 1 and pvT silent. */
+  let pvGain = null, pvTGain = null;
+  function mixBlend() {
+    if (!pvGain || !audioCtx) return;
+    let main = 1, other = 0;
+    const live = S.playing || EXP.active;
+    const tr = live ? transitionAt(S.time) : null;
+    if (tr && tr.b.tAudio !== false) {
+      const at = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+      const mainIsA = !!(at && at.clip === tr.a);
+      const o = mainIsA ? tr.b : tr.a;
+      main = mainIsA ? blendOut(tr.p) : blendIn(tr.p);
+      const vol = o.muted ? 0 : (o.volume == null ? 1 : o.volume);
+      other = (mainIsA ? blendIn(tr.p) : blendOut(tr.p)) * vol * (S.userMuted && !EXP.active ? 0 : 1);
+    }
+    const now = audioCtx.currentTime;
+    try { pvGain.gain.setTargetAtTime(main, now, 0.01); } catch (e) { pvGain.gain.value = main; }
+    if (pvTGain) { try { pvTGain.gain.setTargetAtTime(other, now, 0.01); } catch (e) { pvTGain.gain.value = other; } }
   }
 
   /* ── the bleep ────────────────────────────────────────────────────────────
@@ -8472,6 +8759,150 @@
     }
   }
 
+  /* ═══════════ BEATS (ccl5, 0.35.0) ═══════════
+     Where the music's beats are (beats.js), shown as marks on the music,
+     used for snapping, for "Cut to the beat", and by the Director: after an
+     AI edit picks its music, the cuts move onto the nearest beat (never
+     into a spoken word), and in Business mode the cut into the end card
+     lands on a strong one. Analysed once per track, kept in memory only. */
+  const beatJobs = new Map();   // url → Promise of the analysis (or null)
+  const beatDone = new Map();   // url → the analysis, once known
+  function beatsOf(url) {
+    if (!url || !window.SenotelBeats) return Promise.resolve(null);
+    if (!beatJobs.has(url)) {
+      beatJobs.set(url, (async () => {
+        const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!Ctx) return null;
+        const bytes = await (await fetch(url)).arrayBuffer();
+        const ctx = new Ctx(1, 1, 16000);
+        const buf = await new Promise((res, rej) => { const p = ctx.decodeAudioData(bytes, res, rej); if (p && p.then) p.then(res, rej); });
+        const a = SenotelBeats.analyze(buf.getChannelData(0), buf.sampleRate);
+        a.dur = buf.duration;
+        beatDone.set(url, a);
+        return a;
+      })().catch(() => { beatJobs.delete(url); return null; }));
+    }
+    return beatJobs.get(url);
+  }
+  function analyzeCurrentBeats() {
+    const url = S.music && S.music.url;
+    if (!url || beatDone.has(url)) return;
+    beatsOf(url).then((a) => { if (a && S.music && S.music.url === url) { renderTimeline(); if (S.sel && S.sel.type === "music") renderInspector(); } });
+  }
+  /* The beats on the timeline, in timeline seconds: the song's own beats
+     wherever the (looping) bed plays them, plus the marks the user added
+     (S.music.marks, seconds after the music's start, so they move with it). */
+  function musicBeatTimes(all) {
+    const m = S.music;
+    if (!m) return [];
+    const out = [];
+    const sp = musicSpan();
+    const a = beatDone.get(m.url);
+    if (a && a.beats.length && a.dur > 1 && (all || m.beatMarks !== false)) {
+      const strong = new Set(window.SenotelBeats.strongBeats(a));
+      for (let k = 0; k < 2000; k++) {
+        const base = sp.from - sp.at + k * a.dur;
+        if (base > sp.to) break;
+        a.beats.forEach((b) => { const t = base + b; if (t >= sp.from - 1e-6 && t <= sp.to + 1e-6) out.push({ t: t, strong: strong.has(b) }); });
+      }
+    }
+    (m.marks || []).forEach((x) => { const t = sp.from + x; if (t >= sp.from && t <= sp.to) out.push({ t: t, strong: true, mine: true }); });
+    return out.sort((p, q) => p.t - q.t);
+  }
+  // whether `t` (source seconds) falls inside a spoken word of media m
+  function insideWord(m, t) {
+    return !!(m && m.words && m.words.some((w) => t > w.start + 0.02 && t < w.end - 0.02));
+  }
+  /* Move each cut between clips onto the nearest beat within `win` seconds,
+     by lengthening or shortening the clip before it; everything after the
+     cut moves with it (texts, overlays, sounds, audio, effects; captions are
+     remapped). A cut that would land inside a spoken word, or past the
+     footage, stays. strongLast: the last cut takes only a strong beat (the
+     Business end card). Returns how many cuts moved. */
+  function cutsToBeats(win, strongLast) {
+    const beats = musicBeatTimes(true);
+    if (!beats.length || S.clips.length < 2) return 0;
+    const lists = [S.texts, S.broll, S.sfx, S.audio, S.effects];
+    let acc = 0, moved = 0;
+    for (let i = 0; i < S.clips.length - 1; i++) {
+      const c = S.clips[i];
+      acc += dispDur(c);
+      const pool = strongLast && i === S.clips.length - 2 ? beats.filter((b) => b.strong) : beats;
+      let best = null;
+      pool.forEach((b) => { const d = b.t - acc; if (Math.abs(d) <= win && (best === null || Math.abs(d) < Math.abs(best))) best = d; });
+      if (best === null || Math.abs(best) < 0.01) continue;
+      const sp = c.speed || 1, m = mediaById(c.mediaId);
+      const out = c.out + best * sp;
+      if (out - c.in < 0.3) continue;
+      if (m && m.type === "video" && out > (m.duration || c.out) - 0.02) continue;
+      if (insideWord(m, out)) continue;
+      const was = acc;
+      c.out = out;
+      acc += best;
+      moved++;
+      lists.forEach((list) => list.forEach((x) => { if (x.start >= was - 1e-6) x.start += best; }));
+    }
+    if (moved && S.captions.length) remapCaptions();
+    return moved;
+  }
+  // The music's Beats panel: marks on or off, your own marks, Cut to the beat
+  function beatsPanel(box) {
+    const m = S.music;
+    if (!m) return;
+    const a = beatDone.get(m.url);
+    if (!a) {
+      analyzeCurrentBeats();
+      box.appendChild(mk("p", "panel-note", window.SenotelBeats ? "Finding the beat…" : "Beats aren't available here. Reload the page."));
+    } else {
+      box.appendChild(mk("p", "panel-note", a.bpm ? a.bpm + " BPM · " + musicBeatTimes(true).length + " beats under your video" : "No steady beat in this track."));
+    }
+    box.appendChild(group("Beat marks", chipsRow([[true, "Show"], [false, "Hide"]], m.beatMarks !== false, (v) => { if (v) delete m.beatMarks; else m.beatMarks = false; renderTimeline(); })));
+    const row = mk("div", "filter-chips");
+    const add = mk("button", "fchip", "Add a mark here");
+    add.addEventListener("click", () => {
+      const sp = musicSpan();
+      if (S.time < sp.from || S.time > sp.to) { toast("Move the playhead over the music first"); return; }
+      const x = +(S.time - sp.from).toFixed(3);
+      m.marks = (m.marks || []).filter((y) => Math.abs(y - x) > 0.05).concat([x]).sort((p, q) => p - q);
+      buzz("light");
+      commit(); renderTimeline(); renderInspector();
+    });
+    row.appendChild(add);
+    if (m.marks && m.marks.length) {
+      const clear = mk("button", "fchip", "Clear my marks");
+      clear.addEventListener("click", () => { delete m.marks; commit(); renderTimeline(); renderInspector(); });
+      row.appendChild(clear);
+    }
+    box.appendChild(group("Your marks", row));
+    const cut = mk("button", "primary-btn", "Cut to the beat");
+    cut.type = "button";
+    cut.addEventListener("click", async () => {
+      await beatsOf(m.url);
+      if (!musicBeatTimes(true).length) { toast("No beat found in this music"); return; }
+      const n = cutsToBeats(0.25, false);
+      if (!n) { toast("Your cuts are already on the beat, or too far from one to move"); return; }
+      commit(); renderTimeline(); syncNow();
+      recordEdit("cut-to-beat", { moved: n });
+      toast(n + (n === 1 ? " cut" : " cuts") + " moved onto the beat");
+    });
+    box.appendChild(group("Cuts", cut));
+  }
+
+  // after an AI edit: wait (a little) for the beats, then put the cuts on them
+  async function beatsAfterEdit() {
+    const D = (window.SenotelDiag && window.SenotelDiag.last) || {};
+    if (!S.music || !S.music.url) { D.beats = "no music"; return; }
+    const url = S.music.url;
+    const a = await Promise.race([beatsOf(url), new Promise((r) => setTimeout(() => r("late"), 20000))]);
+    if (a === "late") { D.beats = "still analysing the music (cuts left as they are)"; return; }
+    if (!a) { D.beats = "the music could not be read for beats"; return; }
+    if (!a.beats.length) { D.beats = "no steady beat in this music"; return; }
+    if (!S.music || S.music.url !== url) return;
+    const moved = cutsToBeats(0.15, S.mode === "business");
+    D.beats = a.bpm + " BPM · " + moved + (moved === 1 ? " cut" : " cuts") + " on the beat";
+    if (moved) { commit(); renderTimeline(); }
+  }
+
   /* Point the element at the current bed, or clear it. Idempotent, so every
      path that changes S.music (use, undo, redo, reload, reset) can call it
      without worrying whether anything actually changed. */
@@ -8489,6 +8920,7 @@
     }
     applyMusicGain();
     measureMusic();
+    analyzeCurrentBeats();
   }
 
   /* Kept locked to the playhead the same way the video is: sampled every
@@ -8616,7 +9048,7 @@
      device, so the next export starts where the last one was set. The
      bitrate follows the picture: pixels × frames, then the quality step. */
   const EXPORT_OPTS = (() => {
-    const base = { res: 1080, fps: 30, q: "rec" };
+    const base = { res: 1080, fps: 30, q: "rec", level: "on" };
     try { return Object.assign(base, JSON.parse(localStorage.getItem("vclyps-export") || "{}")); } catch (e) { return base; }
   })();
   const QUALITY = { low: 0.6, rec: 1, high: 1.6 };
@@ -8625,7 +9057,7 @@
     return Math.round(clamp(perFrame * (QUALITY[EXPORT_OPTS.q] || 1), 2e6, 40e6));
   }
   function renderExportSheet() {
-    [["exRes", "res"], ["exFps", "fps"], ["exQ", "q"]].forEach(([id, k]) => {
+    [["exRes", "res"], ["exFps", "fps"], ["exQ", "q"], ["exLevel", "level"]].forEach(([id, k]) => {
       document.querySelectorAll("#" + id + " button").forEach((b) => b.classList.toggle("active", String(EXPORT_OPTS[k]) === b.dataset.v));
     });
     const s = fastSize();
@@ -8636,7 +9068,7 @@
       (EXPORT_OPTS.res >= 1440 ? " 2K needs a recent phone or computer; if this one can't, it exports at the size it can." : "");
   }
   (function wireExportSheet() {
-    [["exRes", "res", Number], ["exFps", "fps", Number], ["exQ", "q", String]].forEach(([id, k, as]) => {
+    [["exRes", "res", Number], ["exFps", "fps", Number], ["exQ", "q", String], ["exLevel", "level", String]].forEach(([id, k, as]) => {
       document.querySelectorAll("#" + id + " button").forEach((b) => b.addEventListener("click", () => {
         EXPORT_OPTS[k] = as(b.dataset.v);
         try { localStorage.setItem("vclyps-export", JSON.stringify(EXPORT_OPTS)); } catch (e) {}
@@ -8725,6 +9157,7 @@
       $("expStatus").textContent = "mixing the sound…";
       const audio = await renderMixOffline();
       if (!stillHere()) return;
+      levelExportSound(audio);
 
       EXP.canvas = document.createElement("canvas");
       EXP.canvas.width = size.w;
@@ -8894,17 +9327,44 @@
       }
     };
     const isSpeech = (m) => !!(m && (m.fromVideo || m.type === "video"));
+    /* A clip's level across its transitions (ccl1): it rises over the window
+       of the transition into it and falls over the one out of it, with the
+       same equal-power curves as the preview's mixBlend, plus the few
+       milliseconds of edge every placed sound gets. */
+    const blendLevel = (v, hIn, lead, hOut, tail) => (p, at0, d, e) => {
+      const cutIn = at0 + lead, cutOut = at0 + d - tail;
+      const n = Math.max(2, Math.ceil(d * 200));
+      const curve = new Float32Array(n + 1);
+      for (let k = 0; k <= n; k++) {
+        const t = at0 + (k / n) * d;
+        let g = v * clamp((t - at0) / e, 0, 1) * clamp((at0 + d - t) / e, 0, 1);
+        if (hIn > 0) g *= blendIn((t - (cutIn - hIn)) / (2 * hIn));
+        if (hOut > 0) g *= blendOut((t - (cutOut - hOut)) / (2 * hOut));
+        curve[k] = g;
+      }
+      p.setValueCurveAtTime(curve, at0, d);
+    };
 
     // ── pass 1: the speech stage ──
     const p1 = new Ctx(2, frames, SR);
     const speech = p1.createGain();
     speech.connect(p1.destination);
     let at = 0;
-    for (const c of S.clips) {
+    for (let i = 0; i < S.clips.length; i++) {
+      const c = S.clips[i];
       const m = mediaById(c.mediaId);
       const d = dispDur(c);
       if (m && m.type === "video" && !c.muted && (c.volume == null || c.volume > 0)) {
-        await place(p1, speech, m, c.in, c.out, at, c.speed || 1, flat(c.volume == null ? 1 : c.volume));
+        const sp = c.speed || 1;
+        /* Across a transition the picture runs on into the footage past the
+           cut, so the sound does too: `lead` seconds before this clip's in
+           point, `tail` after its out point, as far as the file has them. */
+        const hIn = transHalf(i), hOut = transHalf(i + 1);
+        const lead = Math.min(hIn, c.in / sp);
+        const tail = Math.min(hOut, Math.max(0, ((m.duration || c.out) - c.out) / sp));
+        const v = c.volume == null ? 1 : c.volume;
+        const level = hIn > 0 || hOut > 0 ? blendLevel(v, hIn, lead, hOut, tail) : flat(v);
+        await place(p1, speech, m, c.in - lead * sp, c.out + tail * sp, at - lead, sp, level);
       }
       at += d;
     }
@@ -9014,6 +9474,23 @@
       });
     }
     return p2.startRendering();
+  }
+
+  /* The finished mix brought to -14 LUFS, the level TikTok, Reels and
+     YouTube play everything at, under a -1.5 dBFS ceiling (loudness.js), in
+     place, before encoding. "As mixed" on the export sheet leaves it alone. */
+  function levelExportSound(audio) {
+    const L = window.SenotelLoudness;
+    if (!L || !audio || EXPORT_OPTS.level === "off") return;
+    try {
+      const chans = [];
+      for (let c = 0; c < audio.numberOfChannels; c++) chans.push(audio.getChannelData(c));
+      const r = L.level(chans, audio.sampleRate);
+      if (window.SenotelDiag) window.SenotelDiag.last.loudness = r.skipped ? "silent, left alone"
+        : r.before.toFixed(1) + " → " + r.after.toFixed(1) + " LUFS (" + (r.gainDb >= 0 ? "+" : "") + r.gainDb.toFixed(1) + " dB)";
+    } catch (e) {
+      if (window.SenotelDiag) window.SenotelDiag.last.loudness = "not levelled: " + ((e && e.message) || e);
+    }
   }
 
   /* The finished file, however it was made: offered to save, kept for
