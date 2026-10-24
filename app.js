@@ -4630,6 +4630,8 @@
     // ccl2 copy and paste style: a brush, and a brush onto a page
     copyStyle: I('<path d="M14 4l6 6-8 8H6v-6z"/><path d="M4 20h6"/>'),
     pasteStyle: I('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 13l2 2 4-4"/>'),
+    // ccl8 mask: a frame with a circle cut in it
+    mask: I('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4.5"/>'),
     // ccl6 select more: two stacked squares with a tick
     selectMore: I('<rect x="3" y="7" width="12" height="12" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2"/><path d="M6 13l2 2 4-4"/>'),
     // ccl3 text templates: a framed T
@@ -4793,6 +4795,7 @@
         }));
       }
       list.push(tool("anim", "Animation", ICON.anim, (box) => clipAnimPanel(box, c, redrawPanel)));
+      list.push(tool("mask", "Mask", ICON.mask, (box) => maskPanel(box, c, true)));
       if (idx > 0) list.push(tool("trans", "Transition", ICON.trans, (box) => transitionPanel(box, c, S.clips[idx - 1], redrawPanel)));
       list.push(tool("filters", "Filters", ICON.filters, (box) => {
         filterPanel(box, () => c.filter, (k) => { c.filter = k; }, () => (c.filterAmt == null ? 1 : c.filterAmt), (v) => { c.filterAmt = v; }, c);
@@ -4893,6 +4896,7 @@
             box.appendChild(reset);
           }
         }),
+        tool("mask", "Mask", ICON.mask, (box) => maskPanel(box, b, false)),
         tool("opacity", "Opacity", ICON.opacity, (box) => box.appendChild(group("Opacity", slider(0, 1, 0.01, b.opacity == null ? 1 : b.opacity, (v) => { b.opacity = v; syncOverlays(); }, () => commit(), pct)))),
         tool("blend", "Blend", ICON.blend, (box) => box.appendChild(group("Blend", chipsRow(BLENDS, b.blend || "normal", (v) => { if (v === "normal") delete b.blend; else b.blend = v; })))),
         tool("timing", "Timing", ICON.timing, (box) => {
@@ -5595,6 +5599,8 @@
     if (e.target.closest("#stageEmpty")) return; // the add-button handles itself
     // a touch on a text was about the text, not the video
     if (textGestureUsed) { textGestureUsed = false; return; }
+    // while a mask is being set, touches on the picture move the mask
+    if (maskEditTarget()) return;
     if (!S.clips.length) return;
     if (inFs()) { primeAudio(); if (S.playing) pause(); else play(); }
     else enterFs();
@@ -5904,6 +5910,106 @@
     requestAnimationFrame(drawIt);
     return wrap;
   }
+
+  /* ═══════════ MASK (ccl8, 0.38.0) ═══════════
+     CapCut's Mask, on a clip (after Animation) and on an overlay (after
+     Arrange): shape tiles, then size, width, turn, feather, corners, place
+     and Invert. On a clip the mask is also set on the picture itself: one
+     finger moves it, two make it bigger or smaller and turn it. */
+  function maskEditTarget() {
+    if (activeTool !== "mask" || !S.sel || S.sel.type !== "clip") return null;
+    const c = clipById(S.sel.id);
+    return c && c.mask && c.mask.shape !== "none" ? c : null;
+  }
+  function maskPanel(box, t, onPicture) {
+    const FM = window.SenotelMasks;
+    if (!FM) return;
+    const cur = (t.mask && t.mask.shape) || "none";
+    const grid = mk("div", "anim-grid mask-grid");
+    FM.SHAPES.forEach(([id, label]) => {
+      const b = mk("button", "anim-tile" + (cur === id ? " selected" : ""));
+      b.type = "button";
+      b.title = label;
+      const cv = document.createElement("canvas");
+      cv.width = 120; cv.height = 120;
+      const x = cv.getContext("2d");
+      x.fillStyle = "#2a2b29"; x.fillRect(0, 0, 120, 120);
+      if (id !== "none") { x.fillStyle = "#eeeae2"; FM.path(x, Object.assign(FM.fresh(id), { s: id === "mirror" ? 0.35 : 0.62 }), 120, 120); x.fill(); }
+      else { x.strokeStyle = "#6f6b64"; x.lineWidth = 3; x.beginPath(); x.arc(60, 60, 26, 0, Math.PI * 2); x.moveTo(42, 78); x.lineTo(78, 42); x.stroke(); }
+      b.appendChild(cv);
+      b.appendChild(mk("span", "anim-name", label));
+      b.addEventListener("click", () => {
+        if (id === "none") delete t.mask;
+        else if (cur !== id) {
+          const keep = t.mask ? { x: t.mask.x, y: t.mask.y, rot: t.mask.rot, feather: t.mask.feather, invert: t.mask.invert } : {};
+          t.mask = Object.assign(FM.fresh(id), keep);
+        }
+        commit(); syncOverlays(); renderInspector();
+        recordEdit("mask", { shape: id });
+      });
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+    if (cur === "none") return;
+    const m = t.mask;
+    const live = (k, f) => (v) => { m[k] = f ? f(v) : v; syncOverlays(); };
+    const pc = (v) => Math.round(v * 100) + "%";
+    box.appendChild(group("Size", slider(0.05, 1.5, 0.01, m.s, live("s"), () => commit(), pc)));
+    if (cur !== "line" && cur !== "mirror") box.appendChild(group("Width", slider(0.2, 4, 0.01, m.ar || 1, live("ar"), () => commit(), (v) => v.toFixed(2) + "×")));
+    box.appendChild(group("Rotate", slider(-180, 180, 1, m.rot || 0, live("rot"), () => commit(), (v) => v + "°")));
+    box.appendChild(group("Feather", slider(0, 1, 0.01, m.feather || 0, live("feather"), () => commit(), pc)));
+    if (cur === "rect") box.appendChild(group("Corners", slider(0, 1, 0.01, m.round || 0, live("round"), () => commit(), pc)));
+    box.appendChild(group("Across", slider(0, 1, 0.005, m.x == null ? 0.5 : m.x, live("x"), () => commit(), pc)));
+    box.appendChild(group("Down", slider(0, 1, 0.005, m.y == null ? 0.5 : m.y, live("y"), () => commit(), pc)));
+    box.appendChild(group("Invert", chipsRow([[false, "Off"], [true, "On"]], !!m.invert, (v) => { m.invert = v; commit(); syncOverlays(); })));
+    if (onPicture) box.appendChild(mk("p", "panel-note", "Drag on the picture to move it. Two fingers make it bigger or smaller and turn it."));
+  }
+  // one finger moves the mask on the picture, two resize and turn it
+  (function maskGestures() {
+    const stage = $("stage");
+    const pts = new Map();
+    let base = null;
+    const pos = (e) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    stage.addEventListener("pointerdown", (e) => {
+      const c = maskEditTarget();
+      if (!c) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+      pts.set(e.pointerId, pos(e));
+      const m = c.mask, list = [...pts.values()];
+      base = { m: Object.assign({}, m), pts: list.map((p) => Object.assign({}, p)) };
+    }, true);
+    stage.addEventListener("pointermove", (e) => {
+      const c = maskEditTarget();
+      if (!c || !pts.has(e.pointerId) || !base) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pts.set(e.pointerId, pos(e));
+      const box = pictureBox(), m = c.mask, list = [...pts.values()];
+      if (list.length === 1 && base.pts.length === 1) {
+        m.x = clamp(base.m.x + (list[0].x - base.pts[0].x) / box.w, 0, 1);
+        m.y = clamp(base.m.y + (list[0].y - base.pts[0].y) / box.h, 0, 1);
+      } else if (list.length >= 2 && base.pts.length >= 2) {
+        const d0 = Math.hypot(base.pts[1].x - base.pts[0].x, base.pts[1].y - base.pts[0].y) || 1;
+        const d1 = Math.hypot(list[1].x - list[0].x, list[1].y - list[0].y);
+        const a0 = Math.atan2(base.pts[1].y - base.pts[0].y, base.pts[1].x - base.pts[0].x);
+        const a1 = Math.atan2(list[1].y - list[0].y, list[1].x - list[0].x);
+        m.s = clamp(base.m.s * (d1 / d0), 0.05, 1.5);
+        m.rot = Math.round(((base.m.rot || 0) + ((a1 - a0) * 180) / Math.PI + 540) % 360 - 180);
+      }
+      syncOverlays();
+    }, true);
+    const end = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      const c = maskEditTarget();
+      if (!pts.size) { base = null; if (c) { commit(); renderInspector(); } }
+      else if (c) base = { m: Object.assign({}, c.mask), pts: [...pts.values()].map((p) => Object.assign({}, p)) };
+    };
+    stage.addEventListener("pointerup", end, true);
+    stage.addEventListener("pointercancel", end, true);
+  })();
 
   function pictureFilter(c, blurPx) {
     const parts = [];
@@ -7510,6 +7616,17 @@
         ctx.restore();
       }
     }
+    // ccl8: the clip seen only through its mask; outside it, black
+    if (clip.mask && clip.mask.shape && clip.mask.shape !== "none" && window.SenotelMasks) {
+      SenotelMasks.apply(ctx, clip.mask, W, H);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
   }
 
   /* An overlay's place: its centre (b.x, b.y, fractions of the frame), its
@@ -7554,9 +7671,26 @@
     const sc = Math.max(g.w / src.w, g.h / src.h), dw = src.w * sc, dh = src.h * sc;
     const mcx = (m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
     const dx = dw > g.w + 1 ? clamp(g.w / 2 - mcx * dw, g.w - dw, 0) : (g.w - dw) / 2;
-    try { ctx.drawImage(src.el, -g.w / 2 + dx, -g.h / 2 + (g.h - dh) / 2, dw, dh); } catch (e) {}
+    if (b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) {
+      /* ccl8: an overlay's mask is cut on its own small canvas, so only the
+         overlay is masked and the picture under it stays whole */
+      const ow = Math.max(1, Math.round(g.w)), oh = Math.max(1, Math.round(g.h));
+      if (!brollMaskCv) brollMaskCv = document.createElement("canvas");
+      if (brollMaskCv.width !== ow) brollMaskCv.width = ow;
+      if (brollMaskCv.height !== oh) brollMaskCv.height = oh;
+      const ox = brollMaskCv.getContext("2d");
+      ox.setTransform(1, 0, 0, 1, 0, 0);
+      ox.globalCompositeOperation = "source-over";
+      ox.clearRect(0, 0, ow, oh);
+      try { ox.drawImage(src.el, dx, (g.h - dh) / 2, dw, dh); } catch (e) {}
+      SenotelMasks.apply(ox, b.mask, ow, oh);
+      try { ctx.drawImage(brollMaskCv, -g.w / 2, -g.h / 2, g.w, g.h); } catch (e) {}
+    } else {
+      try { ctx.drawImage(src.el, -g.w / 2 + dx, -g.h / 2 + (g.h - dh) / 2, dw, dh); } catch (e) {}
+    }
     ctx.restore();
   }
+  let brollMaskCv = null;
 
   /* The whole picture at time t on a W x H canvas, for the preview and the
      export alike: the clip (or the two clips of a transition), the overlay,
@@ -7663,6 +7797,10 @@
     else renderPicture(P.getContext("2d"), W, H, S.time, previewSrc);
     if (!pvTUsed && !pvT.paused) pvT.pause();
     ctx.drawImage(P, Math.round(box.x * dpr), Math.round(box.y * dpr));
+    // ccl8: while a clip's mask is being set, its outline over the picture (never in the export)
+    const mt = maskEditTarget();
+    $("stage").classList.toggle("mask-on", !!mt);
+    if (mt && window.SenotelMasks) SenotelMasks.outline(ctx, mt.mask, { x: Math.round(box.x * dpr), y: Math.round(box.y * dpr), w: W, h: H });
   }
 
   /* ═══════════ LAYOUTS: split screen, screen and face ═══════════

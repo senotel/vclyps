@@ -60,9 +60,13 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.37.0";
+  var VERSION = "0.38.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: pro colour tools in Adjust (tabs Basic, HSL, Curves, Wheels). Auto evens out a " +
+  var NOTES = "New: Mask, the CapCut way. Select a clip or an overlay, tap Mask and pick Line, Mirror, " +
+              "Circle, Rectangle, Heart or Star; set its size, width, turn, soft edge and corners, " +
+              "or Invert it to cut the shape out. On a clip, drag on the picture to move the mask " +
+              "and use two fingers to make it bigger or smaller and turn it. 0.37.0: " +
+              "New: pro colour tools in Adjust (tabs Basic, HSL, Curves, Wheels). Auto evens out a " +
               "clip's light and colour in one tap; HSL changes one of eight colours only; Curves " +
               "bends light and dark for all channels or one; Wheels tint the shadows, midtones and " +
               "highlights. The AI also evens out clips that are too dark or too bright. 0.36.0: " +
