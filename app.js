@@ -4797,6 +4797,8 @@
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // ccl16 remove background: a person with the space behind them dotted away
+    cutout: I('<circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/><path d="M2 3h2M7 3h2M15 3h2M20 3h2M2 3v2M22 3v2" stroke-dasharray="0"/>'),
     // ccl17 stabilize: a frame held steady between two brackets
     stabilize: I('<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/>'),
     // ccl14 reduce noise: a wave with its rough edge smoothed
@@ -4983,6 +4985,7 @@
       }
       list.push(tool("anim", "Animation", ICON.anim, (box) => clipAnimPanel(box, c, redrawPanel)));
       list.push(tool("mask", "Mask", ICON.mask, (box) => maskPanel(box, c, true)));
+      list.push(tool("cutout", "Remove background", ICON.cutout, (box) => cutoutPanel(box, c)));
       if (idx > 0) list.push(tool("trans", "Transition", ICON.trans, (box) => transitionPanel(box, c, S.clips[idx - 1], redrawPanel)));
       list.push(tool("filters", "Filters", ICON.filters, (box) => {
         filterPanel(box, () => c.filter, (k) => { c.filter = k; }, () => (c.filterAmt == null ? 1 : c.filterAmt), (v) => { c.filterAmt = v; }, c);
@@ -5098,6 +5101,7 @@
         tool("opacity", "Opacity", ICON.opacity, (box) => box.appendChild(group("Opacity", slider(0, 1, 0.01, b.opacity == null ? 1 : b.opacity, (v) => { b.opacity = v; syncOverlays(); }, () => commit(), pct)))),
         tool("blend", "Blend", ICON.blend, (box) => box.appendChild(group("Blend", chipsRow(BLENDS, b.blend || "normal", (v) => { if (v === "normal") delete b.blend; else b.blend = v; })))),
         tool("chroma", "Chroma key", ICON.chroma, (box) => chromaPanel(box, b)),
+        tool("cutout", "Remove background", ICON.cutout, (box) => cutoutPanel(box, b)),
         tool("timing", "Timing", ICON.timing, (box) => {
           box.appendChild(group("Length", slider(0.3, 12, 0.1, b.dur, (v) => { b.dur = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => v.toFixed(1) + "s")));
           box.appendChild(group("Starts at", slider(0, Math.max(0.1, total()), 0.05, Math.min(b.start, total()), (v) => { b.start = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => fmt(v))));
@@ -6603,6 +6607,43 @@
       renderInspector();
       syncOverlays();
     }
+  }
+
+  /* ═══════════ REMOVE BACKGROUND (ccl16, 0.47.0) ═══════════
+     CapCut's Remove background (its Cutout), on a clip and on an overlay:
+     Auto finds the person and everything behind them goes, no green screen
+     needed (cutout.js, MediaPipe, on the device). On an overlay that puts
+     the person over the video underneath; on the main track, over black. */
+  function cutoutHere(ctx, W, H, item, stream, srcT) {
+    const C = window.SenotelCutout;
+    if (!C.ready()) {
+      if (!C.failed()) { C.load().then(() => syncOverlays()).catch(() => {}); }
+      return false;
+    }
+    const idx = Math.round(srcT * 30);
+    // a frame's cutout is worked out once per look (crop, framing, turn and size can change what is in it)
+    const look = [W, H, item.crop ? item.crop.x + "," + item.crop.y + "," + item.crop.w : "", item.fit || "", item.rot || 0, item.flipH ? 1 : 0, item.scale || "", item.shape || ""].join("|");
+    try {
+      return C.apply(ctx, W, H, stream + ":" + idx + ":" + look, { stream: stream, index: idx, soft: item.cutout.soft });
+    } catch (e) { return false; }
+  }
+  function cutoutPanel(box, item) {
+    const C = window.SenotelCutout;
+    if (!C) return;
+    const on = !!item.cutout;
+    box.appendChild(group("Remove background", chipsRow([[false, "Off"], [true, "Auto (person)"]], on, (v) => {
+      if (v) { item.cutout = { soft: 0.3 }; C.load().then(() => { syncOverlays(); renderInspector(); }).catch(() => renderInspector()); }
+      else delete item.cutout;
+      commit(); syncOverlays();
+      recordEdit("cutout", { on: v });
+    })));
+    if (!on) {
+      box.appendChild(mk("p", "panel-note", "Finds the person and removes everything behind them, no green screen needed. Runs on your device; the first time it downloads its model (about 16 MB)."));
+      return;
+    }
+    box.appendChild(group("Edge", slider(0, 1, 0.05, item.cutout.soft == null ? 0.3 : item.cutout.soft, (v) => { item.cutout.soft = v; syncOverlays(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
+    box.appendChild(mk("p", "panel-note", C.failed() ? "The cutout model could not be loaded. Check the connection and try again."
+      : C.ready() ? "Only the person is kept. Put this on an overlay to stand them in front of another video." : "Getting the cutout ready (first time only)…"));
   }
 
   /* ═══════════ TRACKING (ccl18, 0.46.0) ═══════════
@@ -9084,6 +9125,17 @@
         ctx.restore();
       }
     }
+    // ccl16: Remove background: only the person is kept (black behind, as with a mask)
+    const cut = clip.cutout && window.SenotelCutout ? cutoutHere(ctx, W, H, clip, "c" + clip.id, clip.in + srcOff(clip, local)) : false;
+    if (cut && !(clip.mask && clip.mask.shape && clip.mask.shape !== "none")) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
     // ccl8: the clip seen only through its mask; outside it, black
     if (clip.mask && clip.mask.shape && clip.mask.shape !== "none" && window.SenotelMasks) {
       SenotelMasks.apply(ctx, SenotelMasks.at(clip.mask, local), W, H);
@@ -9141,7 +9193,8 @@
     const mcx = (m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
     const dx = dw > g.w + 1 ? clamp(g.w / 2 - mcx * dw, g.w - dw, 0) : (g.w - dw) / 2;
     const keyed = b.chroma && b.chroma.color && window.SenotelChroma && !chromaPicking;
-    if ((b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) || keyed) {
+    const cutting = !!(b.cutout && window.SenotelCutout);
+    if ((b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) || keyed || cutting) {
       /* ccl8: an overlay's mask is cut on its own small canvas, so only the
          overlay is masked and the picture under it stays whole; ccl11: its
          chroma key is applied there first */
@@ -9154,6 +9207,8 @@
       ox.globalCompositeOperation = "source-over";
       ox.clearRect(0, 0, ow, oh);
       try { ox.drawImage(src.el, dx, (g.h - dh) / 2, dw, dh); } catch (e) {}
+      // ccl16: the person cut out of the overlay
+      if (cutting) cutoutHere(ox, ow, oh, b, "b" + b.id, m.type === "video" && m.duration ? local % m.duration : 0);
       if (keyed) {
         const out = SenotelChroma.key(brollMaskCv, b.chroma);
         if (out !== brollMaskCv) {
@@ -11300,6 +11355,12 @@
       await textFontsReady();
       await soundsReady();
       if (!stillHere()) return;
+      // ccl16: a cutout in the edit needs its model before the first frame is drawn
+      if (window.SenotelCutout && (S.clips.some((c) => c.cutout) || S.broll.some((b) => b.cutout))) {
+        $("expStatus").textContent = "getting the cutout ready…";
+        try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
+        if (!stillHere()) return;
+      }
 
       $("expStatus").textContent = "mixing the sound…";
       const audio = await renderMixOffline();

@@ -60,9 +60,12 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.46.0";
+  var VERSION = "0.47.0";
   var RELEASED = "2026-10-25";
-  var NOTES = "New: Tracking for texts, stickers and overlays, as in CapCut. Select one, tap " +
+  var NOTES = "New: Remove background, as CapCut's Cutout, on a clip or an overlay: Auto finds the " +
+              "person and removes everything behind them, no green screen needed, with an Edge " +
+              "slider. Put the person on an overlay to stand them in front of another video. Runs on " +
+              "your device (the first time it downloads its 16 MB model). 0.46.0: New: Tracking for texts, stickers and overlays, as in CapCut. Select one, tap " +
               "Tracking, move the box over the thing it should follow (drag its corner to fit) and tap " +
               "Start tracking: from the playhead on, it moves with that thing. Runs on your device, " +
               "free. Stop tracking leaves it where it is. 0.45.0: New: Stabilize, near the end of a video clip's tools as in CapCut: Minimal, " +
