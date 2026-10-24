@@ -398,6 +398,8 @@
       var outPoint = clip.out != null ? clip.out : Infinity;
       var atTimeline = clip.timelineStart || 0;
       var rate = clip.speed || 1;
+      // footage seconds past the in point → timeline seconds into the clip (a speed curve passes its own, ccl12)
+      var toLine = typeof clip.map === "function" ? clip.map : function (x) { return x / rate; };
       var visible = words
         .filter(function (w) { return !w.hide && w.end > inPoint && w.start < outPoint; })
         .map(function (w) {
@@ -406,8 +408,8 @@
           var s = Math.max(w.start, inPoint), e = Math.min(w.end, outPoint);
           return {
             text: w.text, raw: w.raw, sp: w.sp, spk: w.spk,
-            start: atTimeline + (s - inPoint) / rate,
-            end: atTimeline + (e - inPoint) / rate
+            start: atTimeline + toLine(s - inPoint),
+            end: atTimeline + toLine(e - inPoint)
           };
         });
       var lang = clip.lang || opts.lang;

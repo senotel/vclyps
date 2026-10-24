@@ -645,6 +645,8 @@
     L.push("EFFECTS: a punch-in marks the stressed line of a reveal or a payoff, at most one every ~8 seconds; slow-mo or speed-up only where the motion itself is the point.");
     /* ccl9 (0.40.0): the voice changer, with the restraint the sound effects
        have: a joke's tool, never decoration, never in a serious edit. */
+    // ccl12 (0.43.0): the speed curve, for the one moment of real action
+    L.push("SPEED CURVE: at most once per edit, an effect of type 'hero' on the clip with the single most striking physical action (a jump, a trick, a catch, a fall) — it slows the middle of that clip dramatically and keeps its length. Never on a talking clip.");
     L.push("VOICE EFFECTS: only when the edit is comedy, at most 2 effects of type 'voice' on a short clip that is a reaction line or the punchline, with 'voice' one of chipmunk, deep, monster, robot, echo (e.g. {clip: 3, type: 'voice', voice: 'chipmunk'}). Never in a serious, emotional, informative or sad edit, never on the hook line, never on two clips in a row.");
     /* Phrased as an EXPECTATION, not an option. The earlier wording ended with
        "skip b-roll entirely rather than forcing it", and the model took that
@@ -1245,9 +1247,10 @@
       .map((t) => normText(t, defPos, defSize));
 
     const COMIC_VOICES = ["chipmunk", "deep", "monster", "robot", "echo"];
-    let voiced = 0;
+    let voiced = 0, heroes = 0;
     const effects = (Array.isArray(plan.effects) ? plan.effects : [])
       .filter((e) => e && (["punch-in", "slow-mo", "speed-up"].includes(e.type) ||
+        (e.type === "hero" && ++heroes <= 1) ||   // ccl12: one speed curve at most
         (e.type === "voice" && COMIC_VOICES.includes(e.voice) && ++voiced <= 2)))   // ccl9: two at most
       .slice(0, 12)
       .map((e) => (e.type === "voice"

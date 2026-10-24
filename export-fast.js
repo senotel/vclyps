@@ -544,6 +544,54 @@
     return out.map((o) => o.subarray(0, outLen));
   }
 
+  /* The same WSOLA, but the input position follows a map instead of one
+     rate (ccl12 speed curves): posAt(output sample) → input sample. Output
+     is outLen samples long. */
+  function stretchMap(channels, outLen, posAt) {
+    const N = 2048, Hs = N / 2, TOL = 512;
+    const inLen = channels[0].length;
+    const out = channels.map(() => new Float32Array(outLen + N));
+    const norm = new Float32Array(outLen + N);
+    const win = new Float32Array(N);
+    for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N);
+    const mono = new Float32Array(Math.ceil(inLen / 4));
+    for (let i = 0; i < mono.length; i++) {
+      let s = 0, k = i * 4;
+      for (let c = 0; c < channels.length; c++) s += channels[c][Math.min(inLen - 1, k)];
+      mono[i] = s / channels.length;
+    }
+    let prev = 0;
+    for (let o = 0, n = 0; o < outLen; o += Hs, n++) {
+      // the window centred on output o comes from around the input the map says
+      const nominal = Math.round(posAt(o + Hs) - Hs);
+      let best = nominal;
+      if (n > 0) {
+        const cont = prev + Hs;
+        let bestScore = -Infinity;
+        for (let d = -TOL; d <= TOL; d += 4) {
+          const cand = nominal + d;
+          if (cand < 0 || cand + N >= inLen) continue;
+          let score = 0;
+          for (let i = 0; i < N / 2; i += 16) score += (mono[(cand + i) >> 2] || 0) * (mono[(cont + i) >> 2] || 0);
+          if (score > bestScore) { bestScore = score; best = cand; }
+        }
+      }
+      best = clamp(best, 0, Math.max(0, inLen - 1));
+      for (let i = 0; i < N && o + i < out[0].length; i++) {
+        const src = best + i;
+        if (src >= inLen) break;
+        for (let c = 0; c < channels.length; c++) out[c][o + i] += channels[c][src] * win[i];
+        norm[o + i] += win[i];
+      }
+      prev = best;
+    }
+    for (let c = 0; c < out.length; c++) {
+      const o = out[c];
+      for (let i = 0; i < outLen; i++) if (norm[i] > 1e-3) o[i] /= norm[i];
+    }
+    return out.map((o) => o.subarray(0, outLen));
+  }
+
   /* ═══════════ ENCODE AND WRITE ═══════════ */
 
   let muxerLib = null;
@@ -632,6 +680,7 @@
     frameSource: frameSource,
     audioOf: audioOf,
     stretch: stretch,
+    stretchMap: stretchMap,
     encode: encode,
     breathe: breathe,
     // exported for the tests

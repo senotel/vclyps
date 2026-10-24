@@ -861,6 +861,8 @@
       else if (ef.type === "punch-in") c.kb = { s0: 1, s1: 1.09, x0: 0, x1: 0, y0: 0, y1: 0 };
       // ccl9: a comic voice on a reaction line (asked for in comedy only, two at most: intelligence.js)
       else if (ef.type === "voice" && ef.voice) c.voice = ef.voice;
+      // ccl12: Hero, the speed curve that slows the middle of the action and keeps the clip's length
+      else if (ef.type === "hero" && window.SenotelCurve) { c.curve = window.SenotelCurve.preset("hero"); c.curvePreset = "hero"; }
     });
     snapToSentences(clips, media); // even the Director can't cut mid-sentence
     /* What keeps people watching, enforced whatever the Director said
@@ -877,6 +879,10 @@
        a clip merge shifted every later index, and even when the index was
        right the cutaway sat at the START of the clip, not on its words. */
     const broll = placeBroll(ai.broll || [], clips, media);
+    // a Hero curve on a clip that got split above stays on its longest piece only
+    const heroBest = {};
+    clips.forEach((c) => { if (c.curve && (!heroBest[c._i] || c.out - c.in > heroBest[c._i].out - heroBest[c._i].in)) heroBest[c._i] = c; });
+    clips.forEach((c) => { if (c.curve && heroBest[c._i] !== c) { delete c.curve; delete c.curvePreset; } });
     clips.forEach((c) => { delete c._i; });
     // No opening fade when a hook has to be read in the first second — fading
     // up from black over the most important text in the video is self-defeating.

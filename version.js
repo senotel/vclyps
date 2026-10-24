@@ -60,9 +60,13 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.42.0";
+  var VERSION = "0.43.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: Chroma key (green screen), in an overlay's tools after Blend as in CapCut. Tap " +
+  var NOTES = "New: speed curves. A video clip's Speed now has CapCut's two tabs: Normal, and Curve " +
+              "with Montage, Hero, Bullet, Jump cut, Flash in and Flash out (each keeps the clip's " +
+              "length) or Custom, a curve you shape with your finger (up is faster). The voice keeps " +
+              "its pitch, and the export matches the preview frame for frame. The AI may put Hero on " +
+              "the one big action moment of an edit. 0.42.0: New: Chroma key (green screen), in an overlay's tools after Blend as in CapCut. Tap " +
               "Auto to remove a green or blue screen, or Pick colour and tap any colour on the " +
               "picture; Strength, Edge and Spill fine-tune it (Spill takes the green glow off hair " +
               "and skin). 0.41.0: New: Reverse, at the end of a video clip's tool bar as in CapCut. The clip plays " +

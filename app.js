@@ -83,7 +83,19 @@
   const mediaById = (id) => S.media.find((m) => m.id === id) || null;
   const clipById = (id) => S.clips.find((c) => c.id === id) || null;
   const textById = (id) => S.texts.find((t) => t.id === id) || null;
-  const dispDur = (c) => (c.out - c.in) / c.speed;
+  /* A clip's footage runs at its speed, or along its speed curve (ccl12,
+     speedcurve.js). Everything that turns timeline time into footage time
+     goes through these, so a curve clip plays, cuts and exports exactly. */
+  const CV = () => window.SenotelCurve || null;
+  const hasCurve = (c) => !!(c && c.curve && c.curve.length > 1 && CV());
+  const dispDur = (c) => (hasCurve(c) ? CV().length(c.curve, c.out - c.in) : (c.out - c.in) / c.speed);
+  // footage seconds past the in point at `local` timeline seconds into the clip, and back
+  const srcOff = (c, local) => (hasCurve(c) ? CV().srcOff(c.curve, c.out - c.in, local) : local * (c.speed || 1));
+  const dispOff = (c, s) => (hasCurve(c) ? CV().dispOff(c.curve, c.out - c.in, s) : s / (c.speed || 1));
+  // how fast the footage is going `local` seconds in
+  const rateAt = (c, local) => (hasCurve(c) ? CV().rateAt(c.curve, c.out - c.in, local) : c.speed || 1);
+  // one speed standing for the whole clip (for things that take only one, like a Premiere file)
+  const avgSpeed = (c) => (hasCurve(c) ? (c.out - c.in) / Math.max(1e-6, dispDur(c)) : c.speed || 1);
   const total = () => S.clips.reduce((s, c) => s + dispDur(c), 0);
 
   function clipAt(t) {
@@ -1066,8 +1078,14 @@
       toast("Move the playhead a little further into the clip");
       return;
     }
-    const srcT = clip.in + offset * clip.speed;
+    const srcT = clip.in + srcOff(clip, offset);
     const second = Object.assign({}, clip, { id: nextId++, in: srcT });
+    if (hasCurve(clip)) {
+      // each half keeps its own part of the speed curve
+      const u = (srcT - clip.in) / (clip.out - clip.in);
+      second.curve = CV().sub(clip.curve, u, 1);
+      clip.curve = CV().sub(clip.curve, 0, u);
+    }
     clip.out = srcT;
     S.clips.splice(S.clips.indexOf(clip) + 1, 0, second);
     S.sel = { type: "clip", id: second.id };
@@ -1089,7 +1107,7 @@
     if (!m || m.type !== "video") return;
     pause();
     syncMedia();
-    const target = c.in + info.offset * c.speed;
+    const target = c.in + srcOff(c, info.offset);
     // the preview must be showing exactly that frame before it is copied
     await new Promise((resolve) => {
       if (!pv.seeking && Math.abs(pv.currentTime - target) < 0.02 && pv.readyState >= 2) { resolve(); return; }
@@ -1406,7 +1424,6 @@
     const out = [];
     let at = 0;
     S.clips.forEach((c) => {
-      const sp = c.speed || 1;
       const mine = spans.filter((s) => s.mediaId === c.mediaId && s.b > c.in + 0.01 && s.a < c.out - 0.01)
         .map((s) => [Math.max(c.in, s.a), Math.min(c.out, s.b)])
         .sort((x, y) => x[0] - y[0]);
@@ -1420,6 +1437,9 @@
       // `at` is where this clip starts on the timeline BEFORE any cut: the
       // ripple below applies the cuts last-first, in those coordinates
       if (!holes.length) { out.push(c); at += dispDur(c); return; }
+      // a clip with a speed curve that gets cut keeps its average speed (its curve no longer fits its pieces)
+      if (hasCurve(c)) { c.speed = avgSpeed(c); delete c.curve; }
+      const sp = c.speed || 1;
       const keep = [];
       let from = c.in;
       holes.forEach((h) => { keep.push([from, h[0]]); from = h[1]; });
@@ -1637,12 +1657,11 @@
     let at = 0;
     S.clips.forEach((c) => {
       const m = mediaById(c.mediaId);
-      const sp = c.speed || 1;
       if (m && m.type === "video") {
         timedWords(m).forEach((w) => {
           const mid = (w.start + w.end) / 2;
           if (mid < c.in || mid >= c.out) return;
-          rows.push({ m: m, w: w, t: at + (Math.max(w.start, c.in) - c.in) / sp, key: m.id + ":" + w.start.toFixed(3) });
+          rows.push({ m: m, w: w, t: at + dispOff(c, Math.max(w.start, c.in) - c.in), key: m.id + ":" + w.start.toFixed(3) });
         });
       }
       at += dispDur(c);
@@ -1876,8 +1895,8 @@
       const start = fr(at), end = fr(at + len);
       at += len;
       if (!m || end <= start) return;
-      vItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "video", c.name));
-      if (m.type === "video" && !c.muted) aItems.push(item(m, start, end, c.in, c.out, c.speed || 1, "audio", c.name));
+      vItems.push(item(m, start, end, c.in, c.out, avgSpeed(c), "video", c.name));
+      if (m.type === "video" && !c.muted) aItems.push(item(m, start, end, c.in, c.out, avgSpeed(c), "audio", c.name));
     });
     S.audio.forEach((a) => {
       const m = mediaById(a.mediaId);
@@ -2532,7 +2551,8 @@
       const media = mediaById(clip.mediaId);
       if (media && media.type === "video" && media.capWords && media.capWords.length) {
         if (T) T.applyVocab(media.capWords, S.capOpts.vocab);
-        mapped.push({ words: media.capWords, in: clip.in, out: clip.out, speed: clip.speed || 1, timelineStart: at, lang: media.capLang });
+        mapped.push({ words: media.capWords, in: clip.in, out: clip.out, speed: clip.speed || 1, timelineStart: at, lang: media.capLang,
+          map: hasCurve(clip) ? ((c) => (s) => dispOff(c, s))(clip) : null });
       }
       at += dispDur(clip);
     });
@@ -3035,7 +3055,7 @@
       const tile = CLIP_TILE;
       const n = Math.min(240, Math.ceil(w / tile));
       for (let i = 0; i < n; i++) {
-        const src = m && m.type === "video" ? frameAt(m, c.in + ((i + 0.5) * tile / S.pps) * c.speed) : m && m.thumb;
+        const src = m && m.type === "video" ? frameAt(m, c.in + srcOff(c, (i + 0.5) * tile / S.pps)) : m && m.thumb;
         const img = document.createElement("img");
         img.draggable = false;
         img.alt = "";
@@ -3473,12 +3493,13 @@
     S.audio.forEach((a) => marks.push(a.start, a.start + audioDur(a)));
     S.sfx.forEach((x) => marks.push(x.start, x.start + sfxDur(x.name)));
 
+    const sp = avgSpeed(clip);   // a speed curve stretches with the trim (it is a shape over the clip)
     const move = (ev) => {
-      const dSrc = ((ev.clientX - startX) / S.pps) * clip.speed;
+      const dSrc = ((ev.clientX - startX) / S.pps) * sp;
       if (side === "l") clip.in = clamp(oIn + dSrc, 0, clip.out - 0.15);
       else {
-        const end = snapPoint(at + (oOut + dSrc - clip.in) / clip.speed, null, null, marks);
-        clip.out = clamp(clip.in + (end - at) * clip.speed, clip.in + 0.15, maxOut);
+        const end = snapPoint(at + (oOut + dSrc - clip.in) / sp, null, null, marks);
+        clip.out = clamp(clip.in + (end - at) * sp, clip.in + 0.15, maxOut);
       }
       renderTimeline();
     };
@@ -4467,7 +4488,7 @@
     const level = wasMuted ? 1 : (typeof c.volume === "number" ? c.volume : 1);
     c.muted = true;
     const a = addAudioClip(m, {
-      at: at, in: c.in, out: c.out, speed: c.speed || 1, gain: level,
+      at: at, in: c.in, out: c.out, speed: avgSpeed(c), gain: level,
       fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0, quiet: true
     });
     if (!a) { c.muted = wasMuted; return null; }
@@ -4930,10 +4951,7 @@
       const m = mediaById(c.mediaId), isVid = m && m.type === "video", idx = S.clips.indexOf(c);
       const list = [act("split", "Split", ICON.split, splitAtPlayhead)];
       if (isVid) {
-        list.push(tool("speed", "Speed", ICON.speed, (box) => {
-          box.appendChild(group("Speed", slider(0.25, 3, 0.05, c.speed, (v) => { c.speed = v; renderTimeline(); }, () => commit(), (v) => v.toFixed(2) + "×")));
-          box.appendChild(chipsRow([[0.5, "0.5×"], [1, "1×"], [1.5, "1.5×"], [2, "2×"], [3, "3×"]], c.speed, (v) => { c.speed = v; renderTimeline(); }));
-        }));
+        list.push(tool("speed", "Speed", ICON.speed, (box) => speedPanel(box, c)));
         list.push(tool("volume", "Volume", ICON.volume, (box) => {
           box.appendChild(group("Volume", slider(0, 1, 0.05, c.volume, (v) => { c.volume = v; }, () => commit(), pct)));
           box.appendChild(group("Sound", chipsRow([[false, "On"], [true, "Muted"]], !!c.muted, (v) => { c.muted = v; })));
@@ -6562,6 +6580,148 @@
     }
   }
 
+  /* ═══════════ SPEED: NORMAL AND CURVE (ccl12, 0.43.0) ═══════════
+     CapCut's Speed has two tabs. Normal is one speed for the whole clip.
+     Curve has the presets (Montage, Hero, Bullet, Jump cut, Flash in,
+     Flash out; each keeps the clip's length) and a curve to shape by hand:
+     drag a point up for faster, down for slower, tap empty space to add
+     one, double-tap one to remove it. The timeline maths is speedcurve.js. */
+  let speedTab = "normal";
+  function speedPanel(box, c) {
+    const C = CV();
+    const tabs = mk("div", "ins-seg anim-kinds");
+    [["normal", "Normal"], ["curve", "Curve"]].forEach(([id, label]) => {
+      const b = mk("button", speedTab === id ? "active" : "", label);
+      b.type = "button";
+      b.addEventListener("click", () => { speedTab = id; renderInspector(); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    const after = () => { renderTimeline(); syncNow(); };
+    if (speedTab === "normal" || !C) {
+      const sp = hasCurve(c) ? null : c.speed;
+      box.appendChild(group("Speed", slider(0.1, 10, 0.05, sp || 1, (v) => { delete c.curve; c.speed = v; after(); }, () => commit(), (v) => v.toFixed(2) + "×")));
+      box.appendChild(chipsRow([[0.5, "0.5×"], [1, "1×"], [1.5, "1.5×"], [2, "2×"], [3, "3×"]], sp, (v) => { delete c.curve; c.speed = v; after(); }));
+      if (hasCurve(c)) box.appendChild(mk("p", "panel-note", "This clip has a speed curve. A speed here replaces it."));
+      return;
+    }
+    const grid = mk("div", "voice-grid");
+    const cur = c.curvePreset || (hasCurve(c) ? "custom" : "none");
+    const tile = (id, label, pts) => {
+      const b = mk("button", "voice-tile curve-tile" + (cur === id ? " selected" : ""));
+      b.type = "button";
+      const cv = document.createElement("canvas");
+      cv.width = 96; cv.height = 48;
+      drawSpeedCurve(cv, pts, null, cur === id);
+      b.appendChild(cv);
+      b.appendChild(mk("span", "", label));
+      b.addEventListener("click", () => {
+        if (id === "none") { delete c.curve; delete c.curvePreset; }
+        else if (id === "custom") { c.curve = hasCurve(c) ? c.curve : [[0, 1], [0.35, 1], [0.5, 0.4], [0.65, 1], [1, 1]]; c.curvePreset = "custom"; }
+        else { c.curve = C.preset(id); c.curvePreset = id; c.speed = 1; }
+        commit(); renderInspector(); after();
+        recordEdit("speed-curve", { preset: id });
+        if (id !== "none") previewSpan(clipStartOf(c), dispDur(c));
+      });
+      grid.appendChild(b);
+    };
+    tile("none", "None", null);
+    C.PRESETS.forEach(([id, label]) => tile(id, label, C.preset(id)));
+    tile("custom", "Custom", hasCurve(c) && cur === "custom" ? c.curve : [[0, 1], [0.35, 1], [0.5, 0.4], [0.65, 1], [1, 1]]);
+    box.appendChild(grid);
+    if (hasCurve(c)) {
+      box.appendChild(speedCurveEditor(c));
+      box.appendChild(mk("p", "panel-note", "Up is faster, down is slower. Drag a point; tap empty space to add one; double-tap a point to remove it. The clip is now " + dispDur(c).toFixed(1) + " s."));
+    }
+  }
+  // speed on a log scale: 0.1× at the bottom, 1× in the middle, 10× at the top
+  const speedY = (v, h, pad) => pad + (1 - (Math.log10(v) + 1) / 2) * (h - pad * 2);
+  const ySpeed = (y, h, pad) => Math.pow(10, (1 - (y - pad) / (h - pad * 2)) * 2 - 1);
+  function drawSpeedCurve(cv, pts, playU, on) {
+    const x = cv.getContext("2d"), W = cv.width, H = cv.height, pad = Math.round(H * 0.12);
+    const cs = getComputedStyle(document.body);
+    const ink = (on ? cs.getPropertyValue("--acc") : cs.getPropertyValue("--text")).trim() || "#eeeae2";
+    x.clearRect(0, 0, W, H);
+    x.strokeStyle = cs.getPropertyValue("--line").trim() || "#333";
+    x.lineWidth = 1;
+    x.setLineDash([3, 3]);
+    x.beginPath(); x.moveTo(0, speedY(1, H, pad)); x.lineTo(W, speedY(1, H, pad)); x.stroke();
+    x.setLineDash([]);
+    if (!pts) { x.strokeStyle = ink; x.lineWidth = Math.max(1.5, W / 60); x.beginPath(); x.moveTo(pad, speedY(1, H, pad)); x.lineTo(W - pad, speedY(1, H, pad)); x.stroke(); return; }
+    x.strokeStyle = ink; x.lineWidth = Math.max(1.5, W / 60);
+    x.beginPath();
+    for (let i = 0; i <= 80; i++) {
+      const u = i / 80, px = pad + u * (W - pad * 2), py = speedY(CV().speedAt(pts, u), H, pad);
+      if (i) x.lineTo(px, py); else x.moveTo(px, py);
+    }
+    x.stroke();
+    if (playU != null) {
+      x.strokeStyle = cs.getPropertyValue("--acc").trim() || "#e11d48";
+      x.beginPath(); x.moveTo(pad + playU * (W - pad * 2), 0); x.lineTo(pad + playU * (W - pad * 2), H); x.stroke();
+    }
+  }
+  function speedCurveEditor(c) {
+    const wrap = mk("div", "curve-wrap");
+    const cv = document.createElement("canvas");
+    cv.className = "curve-cv speed-cv";
+    wrap.appendChild(cv);
+    const pad = () => Math.round(cv.height * 0.12);
+    const toPx = (p) => [pad() + p[0] * (cv.width - pad() * 2), speedY(p[1], cv.height, pad())];
+    const draw = () => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1), r = cv.getBoundingClientRect();
+      if (r.width && cv.width !== Math.round(r.width * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
+      const start = clipStartOf(c), local = S.time - start;
+      const playU = local >= 0 && local <= dispDur(c) ? srcOff(c, local) / Math.max(1e-6, c.out - c.in) : null;
+      drawSpeedCurve(cv, c.curve, playU, true);
+      const x = cv.getContext("2d");
+      c.curve.forEach((p) => {
+        const q = toPx(p);
+        x.fillStyle = "#eeeae2"; x.strokeStyle = "#151614"; x.lineWidth = 1.5;
+        x.beginPath(); x.arc(q[0], q[1], 7 * dpr, 0, Math.PI * 2); x.fill(); x.stroke();
+      });
+    };
+    let drag = -1, lastTap = 0;
+    const at = (e) => { const r = cv.getBoundingClientRect(), k = cv.width / r.width; return [(e.clientX - r.left) * k, (e.clientY - r.top) * k]; };
+    cv.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      const p = at(e), dpr = cv.width / cv.getBoundingClientRect().width;
+      const i = c.curve.findIndex((q) => { const s = toPx(q); return Math.hypot(s[0] - p[0], s[1] - p[1]) < 16 * dpr; });
+      const now = e.timeStamp;
+      if (i > 0 && i < c.curve.length - 1 && now - lastTap < 320) {
+        c.curve.splice(i, 1); c.curvePreset = "custom"; lastTap = 0; draw(); commit(); renderTimeline(); return;
+      }
+      lastTap = now;
+      if (i >= 0) { drag = i; return; }
+      if (c.curve.length >= 10) return;
+      const u = clamp((p[0] - pad()) / (cv.width - pad() * 2), 0.01, 0.99);
+      const v = +clamp(ySpeed(p[1], cv.height, pad()), CV().MIN, CV().MAX).toFixed(2);
+      c.curve.push([+u.toFixed(3), v]);
+      c.curve.sort((a, b) => a[0] - b[0]);
+      drag = c.curve.findIndex((q) => q[0] === +u.toFixed(3));
+      c.curvePreset = "custom";
+      draw();
+    });
+    cv.addEventListener("pointermove", (e) => {
+      if (drag < 0) return;
+      const p = at(e), q = c.curve[drag];
+      q[1] = +clamp(ySpeed(p[1], cv.height, pad()), CV().MIN, CV().MAX).toFixed(2);
+      if (drag > 0 && drag < c.curve.length - 1) {
+        const lo = c.curve[drag - 1][0] + 0.02, hi = c.curve[drag + 1][0] - 0.02;
+        q[0] = +clamp((p[0] - pad()) / (cv.width - pad() * 2), lo, hi).toFixed(3);
+      }
+      c.curvePreset = "custom";
+      draw();
+      renderTimeline();
+      syncNow();
+    });
+    const end = () => { if (drag >= 0) { drag = -1; commit(); renderInspector(); } };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+    requestAnimationFrame(draw);
+    return wrap;
+  }
+
   /* ═══════════ CHROMA KEY (ccl11, 0.42.0) ═══════════
      CapCut's Chroma key, in the overlay bar after Blend: pick the colour by
      tapping it on the picture (or let Auto find a green or blue screen),
@@ -6943,13 +7103,15 @@
         pv.src = m.url;
         pv.dataset.mid = String(m.id);
       }
-      const target = clip.in + offset * clip.speed;
+      const target = clip.in + srcOff(clip, offset);
       // only correct on a real jump (clip boundary), and never while a seek is
       // already in flight — repeated seeks to the same spot cause thrashing
       if (!pv.seeking && Math.abs(pv.currentTime - target) > 0.28) {
         try { pv.currentTime = target; } catch (e) { /* metadata not ready yet */ }
       }
-      pv.playbackRate = clip.speed;
+      // ccl12: along a speed curve the player's rate follows the curve, frame by frame
+      const rate = clamp(rateAt(clip, offset), 0.0625, 16);
+      if (Math.abs(pv.playbackRate - rate) > 0.01) pv.playbackRate = rate;
       pv.volume = clip.volume;
       pv.muted = clip.muted || (EXP.active ? false : S.userMuted);
       if (S.playing && pv.paused) pv.play().catch(() => {});
@@ -8338,7 +8500,7 @@
   // where in its footage a clip is at timeline time t, inside the file
   function srcTimeAt(clip, start, t) {
     const m = mediaById(clip.mediaId);
-    const s = clip.in + (t - start) * (clip.speed || 1);
+    const s = clip.in + srcOff(clip, t - start);
     const max = m && m.duration ? m.duration - 0.04 : clip.out;
     return clamp(s, 0, Math.max(0, max));
   }
@@ -8625,7 +8787,7 @@
     if (pvT.readyState >= 1) {
       const drift = Math.abs(pvT.currentTime - srcT);
       if (S.playing) {
-        pvT.playbackRate = item.speed || 1;
+        pvT.playbackRate = clamp(hasCurve(item) ? CV().speedAt(item.curve, (srcT - item.in) / Math.max(1e-6, item.out - item.in)) : item.speed || 1, 0.0625, 16);
         if (pvT.paused) pvT.play().catch(() => {});
         if (drift > 0.3 && !pvT.seeking) { try { pvT.currentTime = srcT; } catch (e) {} }
       } else {
@@ -8853,7 +9015,7 @@
     if (pv.currentTime >= info.clip.out - 0.03) {
       S.time = info.start + dispDur(info.clip) + 0.001; // clip done → next boundary
     } else {
-      const derived = info.start + (pv.currentTime - info.clip.in) / (info.clip.speed || 1);
+      const derived = info.start + dispOff(info.clip, pv.currentTime - info.clip.in);
       S.time = clamp(derived, info.start, info.start + dispDur(info.clip));
     }
   }
@@ -10322,6 +10484,7 @@
       let best = null;
       pool.forEach((b) => { const d = b.t - acc; if (Math.abs(d) <= win && (best === null || Math.abs(d) < Math.abs(best))) best = d; });
       if (best === null || Math.abs(best) < 0.01) continue;
+      if (hasCurve(c)) continue;   // a speed curve is timed to its own moments: leave its cut alone
       const sp = c.speed || 1, m = mediaById(c.mediaId);
       const out = c.out + best * sp;
       if (out - c.in < 0.3) continue;
@@ -10789,7 +10952,10 @@
       if (s1 - s0 < 2) return;
       const chans = [];
       for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c).subarray(s0, s1));
-      const outCh = F.stretch(chans, speed || 1);
+      // a speed curve (ccl12) is {len, map(timeline s) → footage s}: the stretch follows it, the voice keeps its pitch
+      const outCh = speed && typeof speed === "object"
+        ? F.stretchMap(chans, Math.max(2, Math.round(speed.len * r)), (o) => speed.map(o / r) * r)
+        : F.stretch(chans, speed || 1);
       const seg = ctx.createBuffer(outCh.length, outCh[0].length, r);
       outCh.forEach((d, c) => seg.getChannelData(c).set(d));
       const src = ctx.createBufferSource();
@@ -10851,15 +11017,18 @@
       const d = dispDur(c);
       if (m && m.type === "video" && !c.muted && (c.volume == null || c.volume > 0)) {
         const sp = c.speed || 1;
+        const curved = hasCurve(c);
         /* Across a transition the picture runs on into the footage past the
            cut, so the sound does too: `lead` seconds before this clip's in
-           point, `tail` after its out point, as far as the file has them. */
+           point, `tail` after its out point, as far as the file has them.
+           (Not for a speed curve: its sound is exactly its own stretch.) */
         const hIn = transHalf(i), hOut = transHalf(i + 1);
-        const lead = Math.min(hIn, c.in / sp);
-        const tail = Math.min(hOut, Math.max(0, ((m.duration || c.out) - c.out) / sp));
+        const lead = curved ? 0 : Math.min(hIn, c.in / sp);
+        const tail = curved ? 0 : Math.min(hOut, Math.max(0, ((m.duration || c.out) - c.out) / sp));
         const v = c.volume == null ? 1 : c.volume;
         const level = hIn > 0 || hOut > 0 ? blendLevel(v, hIn, lead, hOut, tail) : flat(v);
-        await place(p1, speech, m, c.in - lead * sp, c.out + tail * sp, at - lead, sp, level, c);
+        if (curved) await place(p1, speech, m, c.in, c.out, at, { len: d, map: (x) => srcOff(c, x) }, level, c);
+        else await place(p1, speech, m, c.in - lead * sp, c.out + tail * sp, at - lead, sp, level, c);
       }
       at += d;
     }
