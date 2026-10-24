@@ -60,9 +60,13 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.43.0";
+  var VERSION = "0.44.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "New: speed curves. A video clip's Speed now has CapCut's two tabs: Normal, and Curve " +
+  var NOTES = "New: Reduce noise, next to Volume on a video or audio clip, as in CapCut. One tap takes " +
+              "wind, traffic, fans and hum out from under the voice, with a Strength slider. It runs on " +
+              "your device (the first time it downloads its 5 MB sound model), the preview plays the " +
+              "cleaned sound and the export has exactly the same. The AI turns it on by itself for " +
+              "noisy footage. 0.43.0: New: speed curves. A video clip's Speed now has CapCut's two tabs: Normal, and Curve " +
               "with Montage, Hero, Bullet, Jump cut, Flash in and Flash out (each keeps the clip's " +
               "length) or Custom, a curve you shape with your finger (up is faster). The voice keeps " +
               "its pitch, and the export matches the preview frame for frame. The AI may put Hero on " +

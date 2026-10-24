@@ -4595,6 +4595,20 @@
       if (v.gain) { v.el.volume = 1; v.gain.gain.value = clamp(level, 0, 2); }
       else v.el.volume = clamp(level, 0, 1);
       if (v.slot) setVoiceSlot(v.slot, a.voice, a.voiceAmt);
+      // ccl14: with Reduce noise on, the element plays the cleaned sound (same timing as the file)
+      {
+        const am = mediaById(a.mediaId);
+        const ce = a.denoise > 0 && am ? cleanedFor(am, a.denoise) : null;
+        const url = ce && ce.state === "ready" && !ce.from ? ce.url : v.url;
+        if (v.el.dataset.playing === undefined) v.el.dataset.playing = v.url;   // what it was made with
+        if (v.el.dataset.playing !== url) {
+          const t = v.el.currentTime, was = !v.el.paused;
+          v.el.dataset.playing = url;
+          v.el.src = url;
+          try { v.el.currentTime = t; } catch (e) {}
+          if (was) v.el.play().catch(() => {});
+        }
+      }
       if (v.el.playbackRate !== sp) v.el.playbackRate = sp;
       const want = a.in + (S.time - a.start) * sp;
       if (S.playing && inside) {
@@ -4783,6 +4797,8 @@
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
     close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // ccl14 reduce noise: a wave with its rough edge smoothed
+    denoise: I('<path d="M2 12h2l1.5-4 2 8 2-10 2 12 2-8 1.5 4H22"/><line x1="3" y1="20" x2="21" y2="20"/>'),
     // ccl11 chroma key: a person's outline in front of a screen
     chroma: I('<rect x="2.5" y="3.5" width="19" height="17" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M6.5 20.5a5.5 5.5 0 0 1 11 0"/>'),
     picker: I('<path d="M14.5 4.5l5 5"/><path d="M17 2.5a2.1 2.1 0 0 1 3 3l-2 2-3-3z"/><path d="M15 7.5L6 16.5 4.5 21 9 19.5l9-9"/>'),
@@ -4956,6 +4972,7 @@
           box.appendChild(group("Volume", slider(0, 1, 0.05, c.volume, (v) => { c.volume = v; }, () => commit(), pct)));
           box.appendChild(group("Sound", chipsRow([[false, "On"], [true, "Muted"]], !!c.muted, (v) => { c.muted = v; })));
         }));
+        list.push(tool("denoise", "Reduce noise", ICON.denoise, (box) => denoisePanel(box, c, true)));
         list.push(tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, c, () => clipStartOf(c), () => dispDur(c))));
       } else {
         list.push(tool("duration", "Duration", ICON.timing, (box) => {
@@ -5095,6 +5112,7 @@
       const list = [
         act("split", "Split", ICON.split, splitAtPlayhead),
         tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 1.5, 0.05, typeof a.gain === "number" ? a.gain : 1, (v) => { a.gain = v; syncAudioClips(); }, () => commit(), pct)))),
+        tool("denoise", "Reduce noise", ICON.denoise, (box) => denoisePanel(box, a, false)),
         tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, a, () => a.start, () => audioDur(a))),
         tool("fade", "Fade", ICON.fade, (box) => {
           box.appendChild(group("Fade in", slider(0, 3, 0.05, a.fadeIn || 0, (v) => { a.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
@@ -6578,6 +6596,87 @@
       renderInspector();
       syncOverlays();
     }
+  }
+
+  /* ═══════════ REDUCE NOISE (ccl14, 0.44.0) ═══════════
+     CapCut's Reduce noise, next to Volume on a video clip and on an audio
+     clip. The footage's whole sound is cleaned once on the device
+     (denoise.js, RNNoise), at the strength chosen, and kept for the session:
+     the preview plays the cleaned sound in step with the picture (#pv's own
+     sound is faded out under it), and the export mixes the very same
+     cleaned sound. */
+  const cleaned = new Map();   // mediaId:strength → {key, state, p, url, blob, promise}
+  const cleanKey = (m, k) => m.id + ":" + Math.round((k == null ? 1 : k) * 10);
+  function cleanedFor(m, k, start) {
+    const key = cleanKey(m, k);
+    let e = cleaned.get(key);
+    if (e || start === false) return e || null;
+    const F = window.SenotelFastExport, D = window.SenotelDenoise;
+    e = { key: key, state: "working", p: 0, url: null, blob: null, from: 0 };
+    cleaned.set(key, e);
+    let last = 0;
+    e.promise = (async () => {
+      if (!F || !D) throw new Error("not available");
+      if ((m.duration || 0) > 20 * 60) throw new Error("This recording is longer than 20 minutes");
+      const a = await F.audioOf(m, 0, m.duration || 0);
+      if (!a || !a.buffer) throw new Error("This footage has no sound");
+      let buf = a.buffer;
+      if (buf.sampleRate !== D.RATE) {
+        const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        const oc = new Ctx(buf.numberOfChannels, Math.ceil(buf.duration * D.RATE), D.RATE);
+        const s = oc.createBufferSource(); s.buffer = buf; s.connect(oc.destination); s.start(0);
+        buf = await oc.startRendering();
+      }
+      const chans = [];
+      for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chans.push(buf.getChannelData(c));
+      const out = await D.clean(chans, k, (p) => {
+        e.p = p;
+        if (performance.now() - last > 400) { last = performance.now(); if (activeTool === "denoise") renderInspector(); }
+      });
+      e.blob = D.wav(out, D.RATE);
+      e.url = URL.createObjectURL(e.blob);
+      e.from = a.startsAt || 0;
+      e.state = "ready";
+      return e;
+    })().catch((err) => {
+      e.state = "failed";
+      e.why = (err && err.message) || "unknown";
+      return e;
+    }).then((r) => { if (activeTool === "denoise") renderInspector(); return r; });
+    return e;
+  }
+  // the cleaned sound as an AudioBuffer, for the export (waits for the cleaning)
+  async function cleanedBuffer(m, k) {
+    const e = cleanedFor(m, k);
+    await e.promise;
+    if (e.state !== "ready") return null;
+    if (!e.decoded) {
+      const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const ctx = new Ctx(2, 1, SenotelDenoise.RATE);
+      const bytes = await e.blob.arrayBuffer();
+      e.decoded = await new Promise((res, rej) => { const pr = ctx.decodeAudioData(bytes, res, rej); if (pr && pr.then) pr.then(res, rej); });
+    }
+    return { buffer: e.decoded, startsAt: e.from };
+  }
+  function denoisePanel(box, item, isClip) {
+    const m = mediaById(item.mediaId);
+    if (!m) return;
+    const on = item.denoise > 0;
+    box.appendChild(group("Reduce noise", chipsRow([[false, "Off"], [true, "On"]], on, (v) => {
+      if (v) { item.denoise = item.denoise > 0 ? item.denoise : 1; cleanedFor(m, item.denoise); }
+      else delete item.denoise;
+      commit();
+      recordEdit("denoise", { on: v, clip: isClip });
+    })));
+    if (!on) {
+      box.appendChild(mk("p", "panel-note", "Takes wind, traffic, fans and hum out from under the voice. Worked out on your device: the first time, it downloads its sound model (about 5 MB)."));
+      return;
+    }
+    box.appendChild(group("Strength", slider(0.2, 1, 0.1, item.denoise, (v) => { item.denoise = v; }, () => { commit(); cleanedFor(m, item.denoise); renderInspector(); }, (v) => Math.round(v * 100) + "%")));
+    const e = cleanedFor(m, item.denoise);
+    const msg = e.state === "ready" ? "Cleaned. Play to hear it." : e.state === "failed" ? "The sound could not be cleaned: " + e.why
+      : "Cleaning the sound… " + Math.round(e.p * 100) + "%";
+    box.appendChild(mk("p", "panel-note", msg));
   }
 
   /* ═══════════ SPEED: NORMAL AND CURVE (ccl12, 0.43.0) ═══════════
@@ -10058,6 +10157,17 @@
       pg.connect(vs.inp);
       pvGain = pg;
       pvVoice = vs;
+      // ccl14: the cleaned sound of a Reduce noise clip, played in step with #pv, into the same voice slot
+      try {
+        dnEl = new Audio();
+        dnEl.preload = "auto";
+        dnEl.preservesPitch = true;
+        const dsrc = ctx.createMediaElementSource(dnEl);
+        dnGain = ctx.createGain();
+        dnGain.gain.value = 0;
+        dsrc.connect(dnGain);
+        dnGain.connect(vs.inp);
+      } catch (e) { dnEl = null; dnGain = null; }
       speech.connect(bus);             // speakers and the export file, through the ceiling
       /* The music listens to the speech stage to know when to step back
          (see mixMusic). An analyser is a tap: nothing it hears changes. */
@@ -10107,6 +10217,11 @@
       other = (mainIsA ? blendIn(tr.p) : blendOut(tr.p)) * vol * (S.userMuted && !EXP.active ? 0 : 1);
     }
     const now = audioCtx.currentTime;
+    // ccl14: a clip with Reduce noise is heard through its cleaned sound, in step with the picture
+    const dn = dnDrive();
+    const dnMain = dn ? main : 0;
+    if (dn) main = 0;
+    if (dnGain) { try { dnGain.gain.setTargetAtTime(dnMain, now, 0.01); } catch (e) { dnGain.gain.value = dnMain; } }
     try { pvGain.gain.setTargetAtTime(main, now, 0.01); } catch (e) { pvGain.gain.value = main; }
     if (pvTGain) { try { pvTGain.gain.setTargetAtTime(other, now, 0.01); } catch (e) { pvTGain.gain.value = other; } }
     // ccl9: the voice effect of the clip being heard
@@ -10120,6 +10235,32 @@
      put in and taken out while it plays. The chain is built on the side
      and swapped in when ready, so the sound never stops. */
   let pvVoice = null;
+  let dnEl = null, dnGain = null;
+  // keeps the cleaned-sound player on the clip under the playhead; true while it is the one heard
+  function dnDrive() {
+    if (!dnEl) return false;
+    const at = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+    const m = at && at.clip.denoise > 0 ? mediaById(at.clip.mediaId) : null;
+    const e = m && m.type === "video" ? cleanedFor(m, at.clip.denoise) : null;
+    if (!e || e.state !== "ready" || pv.dataset.mid !== String(m.id)) {
+      if (!dnEl.paused) dnEl.pause();
+      return false;
+    }
+    if (dnEl.dataset.key !== e.key) { dnEl.src = e.url; dnEl.dataset.key = e.key; }
+    if (dnEl.readyState < 1) return false;
+    const want = pv.currentTime - e.from;
+    if (Math.abs(dnEl.playbackRate - pv.playbackRate) > 0.001) dnEl.playbackRate = pv.playbackRate;
+    dnEl.volume = pv.volume;
+    dnEl.muted = pv.muted;
+    if (!pv.paused) {
+      if (dnEl.paused) dnEl.play().catch(() => {});
+      if (!dnEl.seeking && Math.abs(dnEl.currentTime - want) > 0.08) { try { dnEl.currentTime = want; } catch (err) {} }
+    } else {
+      if (!dnEl.paused) dnEl.pause();
+      if (!dnEl.seeking && Math.abs(dnEl.currentTime - want) > 0.04) { try { dnEl.currentTime = want; } catch (err) {} }
+    }
+    return true;
+  }
   function voiceSlot(ctx, dest) {
     const inp = ctx.createGain();
     inp.connect(dest);
@@ -10944,7 +11085,8 @@
     // Place [from, to] of a sound at timeline `at`, at `speed`, with `gain(t)`,
     // through its voice effect (ccl9: the same chain the preview plays it through).
     async function place(ctx, dest, m, from, to, at, speed, level, voice) {
-      const a = await soundOf(m, from, to);
+      // ccl14: Reduce noise uses the same cleaned sound the preview played
+      const a = (voice && voice.denoise > 0 ? await cleanedBuffer(m, voice.denoise).catch(() => null) : null) || await soundOf(m, from, to);
       if (!a || !a.buffer) return;
       const buf = a.buffer, r = buf.sampleRate;
       const s0 = Math.max(0, Math.round((from - a.startsAt) * r));

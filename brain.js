@@ -751,6 +751,27 @@
     }));
   }
 
+  /* ccl14 (0.44.0): how loud the background is against the voice. The
+     median sound level in the gaps between words, over the median while
+     words are said (both RMS amplitude, aud.energy). 0.18 is about 15 dB:
+     past it the noise is plainly heard under the voice. */
+  function noiseRatio(m) {
+    const aud = m && m.analysis && m.analysis.aud, ws = (m && m.words) || [];
+    if (!aud || !aud.energy || !aud.energy.length || ws.length < 6) return 0;
+    const hop = aud.hop || 0.05, E = aud.energy, gap = [], talk = [];
+    ws.forEach((w, k) => {
+      for (let i = Math.floor(w.start / hop); i < Math.min(E.length, Math.ceil(w.end / hop)); i++) talk.push(E[i]);
+      if (k) {
+        const gs = ws[k - 1].end + 0.08, ge = w.start - 0.08;
+        for (let i = Math.ceil(gs / hop); i < Math.min(E.length, Math.floor(ge / hop)); i++) gap.push(E[i]);
+      }
+    });
+    if (gap.length < 10 || talk.length < 10) return 0;
+    const med = (a) => a.sort((x, y) => x - y)[a.length >> 1];
+    return med(gap) / Math.max(1e-6, med(talk));
+  }
+  const NOISY = 0.18;
+
   /* Gaps between words longer than 0.8s, with whether something audible
      filled them (mean energy over 0.2: laughter, applause, music). For
      Vision-1.0, which reads a filled pause after a line as a punchline. */
@@ -852,6 +873,16 @@
       const v = Math.round(Math.max(-40, Math.min(50, (0.47 - bri) * 180)));
       if (Math.abs(v) >= 5) c.adj = { bright: v };
     });
+    /* ccl14: noisy speech gets Reduce noise by itself (never footage with
+       music in it: the cleaner would take the music out with the noise) */
+    let cleanedClips = 0;
+    clips.forEach((c) => {
+      const m = media.find((x) => x.id === c.mediaId);
+      const aud = m && m.analysis && m.analysis.aud;
+      if (!m || m.type !== "video" || (aud && aud.musical > 0.5)) return;
+      if (noiseRatio(m) > NOISY) { c.denoise = 1; cleanedClips++; }
+    });
+    if (cleanedClips && window.SenotelDiag) window.SenotelDiag.last.denoise = "noise cleaned on " + cleanedClips + (cleanedClips === 1 ? " clip" : " clips");
     // the Director's effects — emphasis only, never decoration
     (ai.effects || []).forEach((ef) => {
       const c = clips[ef.clip];
