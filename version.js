@@ -60,9 +60,15 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.38.1";
+  var VERSION = "0.39.0";
   var RELEASED = "2026-10-24";
-  var NOTES = "Fixed: a tool's panel can now be pulled down by its title bar, so the timeline and " +
+  var NOTES = "New: keyframes, the CapCut diamond next to undo. Select a clip's mask, an overlay or a " +
+              "text, tap the diamond, move the playhead and change it: it changes smoothly between the " +
+              "two moments (the curve button sets the ease). Mask is now the full package: 15 shapes " +
+              "plus Custom (draw your own shape with a finger on the darkened picture), CapCut's " +
+              "handles on the picture for width, height, corners, soft edge and turn, and Track: put the " +
+              "mask on something in a video, tap Track, and it follows it (worked out on your device, " +
+              "free). 0.38.1: Fixed: a tool's panel can now be pulled down by its title bar, so the timeline and " +
               "play row are usable while the tool stays open (the mask keeps its outline on the " +
               "picture). Tap the title bar to bring the panel back. 0.38.0: New: Mask, the CapCut way. Select a clip or an overlay, tap Mask and pick Line, Mirror, " +
               "Circle, Rectangle, Heart or Star; set its size, width, turn, soft edge and corners, " +

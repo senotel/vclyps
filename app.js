@@ -125,6 +125,7 @@
 
   let hist = [], histIdx = -1;
   function commit() {
+    try { kfCapture(); } catch (e) {}   // ccl13: an edit of a keyframed thing is kept as a keyframe
     hist = hist.slice(0, histIdx + 1);
     hist.push(JSON.stringify({ c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
     if (hist.length > 80) hist.shift();
@@ -3028,6 +3029,7 @@
       if (!S.audio.length && !S.sfx.length && !S.music) offer(ut, "Add audio", () => $("tbAudio").click());
     }
     markMulti();
+    try { markKeys(); } catch (e) {}
     updatePlayheadUI();
   }
 
@@ -4625,6 +4627,12 @@
   const ICON = {
     back: I('<polyline points="15 18 9 12 15 6"/>'),
     check: I('<polyline points="20 6 9 17 4 12"/>', ' stroke-width="2.2"'),
+    close: I('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
+    // 0.39.0 mask row: invert (a shape and its outside swapped), track (a target), stop tracking, reset
+    invert: I('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4.5" fill="currentColor"/>'),
+    track: I('<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>'),
+    untrack: I('<circle cx="12" cy="12" r="7"/><line x1="7" y1="7" x2="17" y2="17"/>'),
+    reset: I('<path d="M4 12a8 8 0 1 0 2.4-5.7"/><polyline points="4 4 4 9 9 9"/>'),
     // ccl5 beats: a waveform with dots on its beats
     beats: I('<path d="M3 12h2l2-5 3 10 3-14 3 12 2-3h3"/><circle cx="7" cy="20" r="1"/><circle cx="13" cy="20" r="1"/><circle cx="19" cy="20" r="1"/>'),
     // ccl2 copy and paste style: a brush, and a brush onto a page
@@ -5068,7 +5076,11 @@
     pendingTool = null;
     renderActionBar();
     const ins = $("inspector");
+    // the same tool drawn again keeps its place in the panel
+    const keepScroll = ins.dataset.tool === String(activeTool) ? ins.scrollTop : 0;
+    ins.dataset.tool = String(activeTool);
     ins.innerHTML = "";
+    if (keepScroll) requestAnimationFrame(() => { ins.scrollTop = keepScroll; });
     const t = S.sel && activeTool ? selectionTools().find((x) => x.id === activeTool) : null;
     if (!t || !t.panel) {
       activeTool = null;
@@ -5957,105 +5969,624 @@
     return wrap;
   }
 
-  /* ═══════════ MASK (ccl8, 0.38.0) ═══════════
-     CapCut's Mask, on a clip (after Animation) and on an overlay (after
-     Arrange): shape tiles, then size, width, turn, feather, corners, place
-     and Invert. On a clip the mask is also set on the picture itself: one
-     finger moves it, two make it bigger or smaller and turn it. */
+  /* ═══════════ MASK (ccl8, 0.38.0; handles, Custom and Track in 0.39.0) ═══════════
+     CapCut's Mask, on a clip (after Animation) and on an overlay (before
+     Opacity): Invert and Track on top, a strip of shape tiles, and on the
+     picture the shape with CapCut's handles. Drag inside to move it; the
+     side handles set width and height, the corner one rounds a rectangle,
+     the one below softens the edge and the turning one (or two fingers)
+     turns it. Custom draws a shape with a finger on a full-screen, darkened
+     picture. Track makes a clip's mask follow the thing under it, worked
+     out on the device (tracker.js), so it is free. */
+  const maskItem = () => {
+    if (activeTool !== "mask" || !S.sel) return null;
+    if (S.sel.type === "clip") return clipById(S.sel.id);
+    if (S.sel.type === "broll") return brollById(S.sel.id);
+    return null;
+  };
+  // the mask being set, while its clip or overlay is on screen at the playhead
   function maskEditTarget() {
-    if (activeTool !== "mask" || !S.sel || S.sel.type !== "clip") return null;
-    const c = clipById(S.sel.id);
-    return c && c.mask && c.mask.shape !== "none" ? c : null;
+    const it = maskItem();
+    if (!it || !it.mask || it.mask.shape === "none") return null;
+    const start = isClipItem(it) ? clipStartOf(it) : it.start;
+    const len = isClipItem(it) ? dispDur(it) : it.dur;
+    return S.time >= start - 0.001 && S.time < start + len ? it : null;
   }
-  function maskPanel(box, t, onPicture) {
+  const isClipItem = (it) => S.clips.indexOf(it) >= 0;
+  // the mask as it shows now (a tracked mask follows its path)
+  function maskNow(it) {
+    if (!isClipItem(it) || !window.SenotelMasks) return it.mask;
+    return SenotelMasks.at(it.mask, S.time - clipStartOf(it));
+  }
+  /* Where the mask's picture is on the stage, in CSS pixels: the whole
+     picture for a clip, the overlay's own box (turned) for an overlay. */
+  function maskSpace(it) {
+    const box = pictureBox();
+    if (isClipItem(it)) return { x: box.x, y: box.y, w: box.w, h: box.h, rot: 0 };
+    const g = brollGeom(it, box);
+    return { x: g.cx - g.w / 2, y: g.cy - g.h / 2, w: g.w, h: g.h, rot: g.rot || 0 };
+  }
+  // the outline and handles over the preview while Mask is open (never in the export)
+  function drawMaskOutline(ctx, dpr) {
+    const it = maskEditTarget();
+    $("stage").classList.toggle("mask-on", !!it);
+    if (!it || !window.SenotelMasks) return;
+    const sp = maskSpace(it);
+    ctx.save();
+    ctx.translate((sp.x + sp.w / 2) * dpr, (sp.y + sp.h / 2) * dpr);
+    if (sp.rot) ctx.rotate((sp.rot * Math.PI) / 180);
+    SenotelMasks.outline(ctx, maskNow(it), { x: (-sp.w * dpr) / 2, y: (-sp.h * dpr) / 2, w: sp.w * dpr, h: sp.h * dpr }, dpr);
+    ctx.restore();
+  }
+
+  let maskTracking = null;   // {clipId, p, cancel} while Track runs
+  // a shape tile's picture: the shape outlined, lightly filled, in the theme's colours
+  function maskTileIcon(cv, id, on) {
+    const FM = window.SenotelMasks, x = cv.getContext("2d"), W = cv.width, H = cv.height;
+    const cs = getComputedStyle(document.body);
+    const ink = (on ? cs.getPropertyValue("--acc") : cs.getPropertyValue("--text")).trim() || "#eeeae2";
+    x.clearRect(0, 0, W, H);
+    x.lineWidth = W * 0.035; x.lineJoin = "round"; x.lineCap = "round";
+    x.strokeStyle = ink; x.fillStyle = ink;
+    if (id === "none") {
+      x.beginPath(); x.arc(W / 2, H / 2, W * 0.26, 0, Math.PI * 2);
+      x.moveTo(W / 2 - W * 0.18, H / 2 + W * 0.18); x.lineTo(W / 2 + W * 0.18, H / 2 - W * 0.18); x.stroke();
+      return;
+    }
+    if (id === "custom") {
+      // a pen and the loop it drew
+      x.beginPath();
+      x.moveTo(W * 0.22, H * 0.6); x.bezierCurveTo(W * 0.1, H * 0.25, W * 0.55, H * 0.12, W * 0.62, H * 0.38);
+      x.bezierCurveTo(W * 0.7, H * 0.62, W * 0.4, H * 0.86, W * 0.22, H * 0.6);
+      x.setLineDash([W * 0.06, W * 0.05]); x.stroke(); x.setLineDash([]);
+      x.beginPath(); x.moveTo(W * 0.62, H * 0.78); x.lineTo(W * 0.84, H * 0.56); x.lineTo(W * 0.9, H * 0.62); x.lineTo(W * 0.68, H * 0.84); x.closePath(); x.stroke();
+      return;
+    }
+    const m = Object.assign(FM.fresh(id), { s: id === "mirror" ? 0.34 : id === "rect" || id === "bubble" ? 0.5 : 0.66 });
+    x.save();
+    x.beginPath(); x.rect(W * 0.12, H * 0.12, W * 0.76, H * 0.76); x.clip();
+    FM.path(x, m, W, H);
+    x.globalAlpha = 0.22; x.fill(); x.globalAlpha = 1;
+    x.stroke();
+    if (id === "line" || id === "mirror") {
+      const d = FM.dims(m, W, H);
+      x.beginPath();
+      if (id === "line") { x.moveTo(0, d.cy); x.lineTo(W, d.cy); }
+      else { x.moveTo(0, d.cy - d.h / 2); x.lineTo(W, d.cy - d.h / 2); x.moveTo(0, d.cy + d.h / 2); x.lineTo(W, d.cy + d.h / 2); }
+      x.stroke();
+    }
+    x.restore();
+  }
+  function maskPanel(box, t, isClip) {
     const FM = window.SenotelMasks;
     if (!FM) return;
     const cur = (t.mask && t.mask.shape) || "none";
-    const grid = mk("div", "anim-grid mask-grid");
+    const m = t.mask;
+    // the row CapCut keeps over the shapes: Invert, then Track and Reset
+    const top = mk("div", "mask-top");
+    const act = (icon, label, on, fn, off) => {
+      const b = mk("button", "mask-act" + (on ? " on" : ""), icon);
+      b.type = "button";
+      b.appendChild(mk("span", "", label));
+      b.disabled = !!off;
+      b.addEventListener("click", fn);
+      top.appendChild(b);
+      return b;
+    };
+    act(ICON.invert, "Invert", m && m.invert, () => { m.invert = !m.invert; commit(); syncOverlays(); renderInspector(); }, cur === "none");
+    const vid = isClip && mediaById(t.mediaId) && mediaById(t.mediaId).type === "video";
+    if (vid) {
+      const tracked = m && m.track;
+      act(ICON.track, tracked ? "Track again" : "Track", false, () => trackMask(t), cur === "none" || !!maskTracking);
+      if (tracked) act(ICON.untrack, "Stop tracking", false, () => {
+        const now = maskNow(t);
+        m.x = now.x; m.y = now.y;
+        delete m.track;
+        commit(); syncOverlays(); renderInspector();
+      });
+    }
+    act(ICON.reset, "Reset", false, () => {
+      const keep = cur === "custom" ? { pts: m.pts, ar: m.ar } : {};
+      t.mask = Object.assign(FM.fresh(cur), keep);
+      if (t.kf) Object.keys(t.kf).forEach((k) => { if (k.indexOf("mask.") === 0) delete t.kf[k]; });
+      commit(); syncOverlays(); renderInspector();
+    }, cur === "none");
+    box.appendChild(top);
+    if (maskTracking && maskTracking.clipId === t.id) {
+      const row = mk("div", "mask-progress");
+      const bar = mk("div", "mask-bar");
+      bar.appendChild(mk("i", ""));
+      bar.firstChild.style.width = Math.round(maskTracking.p * 100) + "%";
+      row.appendChild(mk("span", "", "Tracking " + Math.round(maskTracking.p * 100) + "%"));
+      row.appendChild(bar);
+      const stop = mk("button", "fchip", "Cancel");
+      stop.type = "button";
+      stop.addEventListener("click", () => { if (maskTracking) maskTracking.cancel = true; });
+      row.appendChild(stop);
+      box.appendChild(row);
+    }
+    // the shapes, in one row that scrolls sideways, as CapCut lays them out
+    const strip = mk("div", "mask-strip");
     FM.SHAPES.forEach(([id, label]) => {
-      const b = mk("button", "anim-tile" + (cur === id ? " selected" : ""));
+      const b = mk("button", "mask-tile" + (cur === id ? " selected" : ""));
       b.type = "button";
       b.title = label;
       const cv = document.createElement("canvas");
-      cv.width = 120; cv.height = 120;
-      const x = cv.getContext("2d");
-      x.fillStyle = "#2a2b29"; x.fillRect(0, 0, 120, 120);
-      if (id !== "none") { x.fillStyle = "#eeeae2"; FM.path(x, Object.assign(FM.fresh(id), { s: id === "mirror" ? 0.35 : 0.62 }), 120, 120); x.fill(); }
-      else { x.strokeStyle = "#6f6b64"; x.lineWidth = 3; x.beginPath(); x.arc(60, 60, 26, 0, Math.PI * 2); x.moveTo(42, 78); x.lineTo(78, 42); x.stroke(); }
+      cv.width = 96; cv.height = 96;
+      maskTileIcon(cv, id, cur === id);
       b.appendChild(cv);
-      b.appendChild(mk("span", "anim-name", label));
+      b.appendChild(mk("span", "mask-name", label));
       b.addEventListener("click", () => {
-        if (id === "none") delete t.mask;
+        if (id === "custom") { openMaskDraw(t, isClip); return; }
+        if (id === "none") { delete t.mask; if (t.kf) Object.keys(t.kf).forEach((k) => { if (k.indexOf("mask.") === 0) delete t.kf[k]; }); }
         else if (cur !== id) {
-          const keep = t.mask ? { x: t.mask.x, y: t.mask.y, rot: t.mask.rot, feather: t.mask.feather, invert: t.mask.invert } : {};
+          const keep = t.mask ? { x: t.mask.x, y: t.mask.y, rot: t.mask.rot, feather: t.mask.feather, invert: t.mask.invert, track: t.mask.track } : {};
+          if (!keep.track) delete keep.track;
           t.mask = Object.assign(FM.fresh(id), keep);
         }
         commit(); syncOverlays(); renderInspector();
         recordEdit("mask", { shape: id });
       });
-      grid.appendChild(b);
+      strip.appendChild(b);
     });
-    box.appendChild(grid);
+    box.appendChild(strip);
+    requestAnimationFrame(() => { const sel = strip.querySelector(".selected"); if (sel) strip.scrollLeft = Math.max(0, sel.offsetLeft - strip.clientWidth / 2 + sel.clientWidth / 2); });
     if (cur === "none") return;
-    const m = t.mask;
-    const live = (k, f) => (v) => { m[k] = f ? f(v) : v; syncOverlays(); };
+    const live = (k) => (v) => { m[k] = v; syncOverlays(); };
     const pc = (v) => Math.round(v * 100) + "%";
-    box.appendChild(group("Size", slider(0.05, 1.5, 0.01, m.s, live("s"), () => commit(), pc)));
-    if (cur !== "line" && cur !== "mirror") box.appendChild(group("Width", slider(0.2, 4, 0.01, m.ar || 1, live("ar"), () => commit(), (v) => v.toFixed(2) + "×")));
-    box.appendChild(group("Rotate", slider(-180, 180, 1, m.rot || 0, live("rot"), () => commit(), (v) => v + "°")));
     box.appendChild(group("Feather", slider(0, 1, 0.01, m.feather || 0, live("feather"), () => commit(), pc)));
+    box.appendChild(group("Size", slider(0.05, 1.5, 0.01, m.s, live("s"), () => commit(), pc)));
+    if (FM.hasWidth(cur)) box.appendChild(group("Width", slider(0.2, 4, 0.01, m.ar || 1, live("ar"), () => commit(), (v) => v.toFixed(2) + "×")));
+    box.appendChild(group("Rotate", slider(-180, 180, 1, m.rot || 0, live("rot"), () => commit(), (v) => v + "°")));
     if (cur === "rect") box.appendChild(group("Corners", slider(0, 1, 0.01, m.round || 0, live("round"), () => commit(), pc)));
-    box.appendChild(group("Across", slider(0, 1, 0.005, m.x == null ? 0.5 : m.x, live("x"), () => commit(), pc)));
-    box.appendChild(group("Down", slider(0, 1, 0.005, m.y == null ? 0.5 : m.y, live("y"), () => commit(), pc)));
-    box.appendChild(group("Invert", chipsRow([[false, "Off"], [true, "On"]], !!m.invert, (v) => { m.invert = v; commit(); syncOverlays(); })));
-    if (onPicture) box.appendChild(mk("p", "panel-note", "Drag on the picture to move it. Two fingers make it bigger or smaller and turn it."));
+    if (!m.track) {
+      box.appendChild(group("Across", slider(0, 1, 0.005, m.x == null ? 0.5 : m.x, live("x"), () => commit(), pc)));
+      box.appendChild(group("Down", slider(0, 1, 0.005, m.y == null ? 0.5 : m.y, live("y"), () => commit(), pc)));
+    }
+    box.appendChild(mk("p", "panel-note", "Drag the shape on the picture to move it. The handles change its width, height, corners, soft edge and turn; two fingers resize and turn it. The diamond above the timeline keeps the mask's look at that moment, so it can change over time."));
   }
-  // one finger moves the mask on the picture, two resize and turn it
+
+  // one finger moves the mask or works a handle; two resize and turn it
   (function maskGestures() {
     const stage = $("stage");
     const pts = new Map();
     let base = null;
-    const pos = (e) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const GAP = 22;
+    // a stage point in the mask's own space: pixels from its top-left, its turn undone
+    const local = (e, sp) => {
+      const r = stage.getBoundingClientRect();
+      const dx = e.clientX - r.left - (sp.x + sp.w / 2), dy = e.clientY - r.top - (sp.y + sp.h / 2);
+      const a = (-sp.rot * Math.PI) / 180;
+      return { x: dx * Math.cos(a) - dy * Math.sin(a) + sp.w / 2, y: dx * Math.sin(a) + dy * Math.cos(a) + sp.h / 2 };
+    };
+    // the same point in the shape's frame: its centre at 0, its own turn undone
+    const shapeUV = (p, m, sp) => {
+      const d = SenotelMasks.dims(m, sp.w, sp.h), a = (-(m.rot || 0) * Math.PI) / 180;
+      const dx = p.x - d.cx, dy = p.y - d.cy;
+      return { u: dx * Math.cos(a) - dy * Math.sin(a), v: dx * Math.sin(a) + dy * Math.cos(a), d: d };
+    };
+    const rebase = (it, mode) => {
+      const sp = maskSpace(it), shown = maskNow(it);
+      const list = [...pts.values()];
+      base = { mode: mode, m: Object.assign({}, it.mask), shown: shown, sp: sp, pts: list.map((q) => Object.assign({}, q)),
+        uv: list.length ? shapeUV(list[0], shown, sp) : null, tr: it.mask.track ? { dx: it.mask.track.dx || 0, dy: it.mask.track.dy || 0 } : null };
+    };
     stage.addEventListener("pointerdown", (e) => {
-      const c = maskEditTarget();
-      if (!c) return;
+      const it = maskEditTarget();
+      if (!it) return;
       e.preventDefault();
       e.stopPropagation();
       try { stage.setPointerCapture(e.pointerId); } catch (err) {}
-      pts.set(e.pointerId, pos(e));
-      const m = c.mask, list = [...pts.values()];
-      base = { m: Object.assign({}, m), pts: list.map((p) => Object.assign({}, p)) };
+      const sp = maskSpace(it), p = local(e, sp);
+      pts.set(e.pointerId, p);
+      let mode = pts.size >= 2 ? "pinch" : "move";
+      if (pts.size === 1) {
+        const hit = SenotelMasks.handles(maskNow(it), sp.w, sp.h, GAP).find((h) => Math.hypot(h.x - p.x, h.y - p.y) < 20);
+        if (hit) mode = hit.id;
+      }
+      rebase(it, mode);
     }, true);
     stage.addEventListener("pointermove", (e) => {
-      const c = maskEditTarget();
-      if (!c || !pts.has(e.pointerId) || !base) return;
+      const it = maskEditTarget();
+      if (!it || !pts.has(e.pointerId) || !base) return;
       e.preventDefault();
       e.stopPropagation();
-      pts.set(e.pointerId, pos(e));
-      const box = pictureBox(), m = c.mask, list = [...pts.values()];
-      if (list.length === 1 && base.pts.length === 1) {
-        m.x = clamp(base.m.x + (list[0].x - base.pts[0].x) / box.w, 0, 1);
-        m.y = clamp(base.m.y + (list[0].y - base.pts[0].y) / box.h, 0, 1);
-      } else if (list.length >= 2 && base.pts.length >= 2) {
+      const sp = base.sp, p = local(e, sp);
+      pts.set(e.pointerId, p);
+      const m = it.mask, b = base.m, list = [...pts.values()], mn = Math.min(sp.w, sp.h);
+      if (base.mode === "pinch") {
+        if (list.length < 2 || base.pts.length < 2) return;
         const d0 = Math.hypot(base.pts[1].x - base.pts[0].x, base.pts[1].y - base.pts[0].y) || 1;
         const d1 = Math.hypot(list[1].x - list[0].x, list[1].y - list[0].y);
         const a0 = Math.atan2(base.pts[1].y - base.pts[0].y, base.pts[1].x - base.pts[0].x);
         const a1 = Math.atan2(list[1].y - list[0].y, list[1].x - list[0].x);
-        m.s = clamp(base.m.s * (d1 / d0), 0.05, 1.5);
-        m.rot = Math.round(((base.m.rot || 0) + ((a1 - a0) * 180) / Math.PI + 540) % 360 - 180);
+        m.s = clamp(b.s * (d1 / d0), 0.03, 3);
+        m.rot = Math.round((((b.rot || 0) + ((a1 - a0) * 180) / Math.PI + 540) % 360) - 180);
+      } else if (base.mode === "move") {
+        const dx = (p.x - base.pts[0].x) / sp.w, dy = (p.y - base.pts[0].y) / sp.h;
+        if (m.track) { m.track.dx = base.tr.dx + dx; m.track.dy = base.tr.dy + dy; }
+        else { m.x = clamp(b.x + dx, 0, 1); m.y = clamp(b.y + dy, 0, 1); }
+      } else {
+        const q = shapeUV(p, base.shown, sp), d = q.d;
+        if (base.mode === "w") m.ar = clamp(Math.max(4, (Math.abs(q.u) - GAP * 0.6) * 2) / d.h, 0.1, 10);
+        else if (base.mode === "h") {
+          const nh = clamp((Math.abs(q.v) - GAP * 0.6) * 2, 4, mn * 3);
+          m.s = clamp(nh / mn, 0.02, 3);
+          if (SenotelMasks.hasWidth(m.shape)) m.ar = clamp(d.w / nh, 0.1, 10);
+        } else if (base.mode === "round") {
+          const r0 = Math.hypot(base.uv.u, base.uv.v), r1 = Math.hypot(q.u, q.v);
+          m.round = clamp((b.round || 0) + (r0 - r1) / (Math.min(d.w, d.h) / 2), 0, 1);
+        } else if (base.mode === "feather") {
+          const hh = m.shape === "line" ? 0 : d.h / 2;
+          m.feather = clamp((q.v - hh) / GAP - 1, 0, 1);
+        } else if (base.mode === "rot") {
+          const a0 = Math.atan2(base.uv.v, base.uv.u), a1 = Math.atan2(q.v, q.u);
+          m.rot = Math.round((((b.rot || 0) + ((a1 - a0) * 180) / Math.PI + 540) % 360) - 180);
+        }
       }
       syncOverlays();
     }, true);
     const end = (e) => {
       if (!pts.has(e.pointerId)) return;
       pts.delete(e.pointerId);
-      const c = maskEditTarget();
-      if (!pts.size) { base = null; if (c) { commit(); renderInspector(); } }
-      else if (c) base = { m: Object.assign({}, c.mask), pts: [...pts.values()].map((p) => Object.assign({}, p)) };
+      const it = maskEditTarget();
+      if (!pts.size) { base = null; if (it) { commit(); renderInspector(); } }
+      else if (it) rebase(it, pts.size >= 2 ? "pinch" : "move");
     };
     stage.addEventListener("pointerup", end, true);
     stage.addEventListener("pointercancel", end, true);
   })();
+
+  /* Custom: the picture full screen, darker than normal; draw around what
+     should show, and when the finger lifts the line closes into that shape
+     (the inside lights up). Done keeps it, as a mask that moves, sizes and
+     turns like the others. A clip draws on its whole picture (its own mask
+     left off); an overlay on its own box. */
+  function openMaskDraw(t, isClip) {
+    const FM = window.SenotelMasks;
+    const size = exportSize();
+    const k = Math.min(1, 1280 / Math.max(size.w, size.h));
+    let W = Math.round(size.w * k), H = Math.round(size.h * k);
+    if (!isClip) { const g = brollGeom(t, { x: 0, y: 0, w: W, h: H }); W = Math.max(2, Math.round(g.w)); H = Math.max(2, Math.round(g.h)); }
+    const pic = document.createElement("canvas");
+    pic.width = W; pic.height = H;
+    const paintPic = () => {
+      const px = pic.getContext("2d");
+      if (isClip) {
+        const start = clipStartOf(t), local = clamp(S.time - start, 0, dispDur(t) - 0.01);
+        drawClipPicture(px, Object.assign({}, t, { mask: null, kf: null }), previewSrc(t, srcTimeAt(t, start, start + local)), W, H, local);
+      } else {
+        px.fillStyle = "#000"; px.fillRect(0, 0, W, H);
+        const m = mediaById(t.mediaId), src = m ? previewSrc(t, 0) : null;
+        if (src && src.w) {
+          const sc = Math.max(W / src.w, H / src.h), dw = src.w * sc, dh = src.h * sc;
+          const mcx = (m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
+          const dx = dw > W + 1 ? clamp(W / 2 - mcx * dw, W - dw, 0) : (W - dw) / 2;
+          try { px.drawImage(src.el, dx, (H - dh) / 2, dw, dh); } catch (e) {}
+        }
+      }
+    };
+    const wrap = mk("div", "mask-draw");
+    const bar = mk("div", "mask-draw-bar");
+    const cancel = mk("button", "icon-btn", ICON.close);
+    cancel.type = "button"; cancel.setAttribute("aria-label", "Cancel");
+    const done = mk("button", "icon-btn mask-draw-done", ICON.check);
+    done.type = "button"; done.setAttribute("aria-label", "Done");
+    bar.appendChild(cancel); bar.appendChild(mk("span", "mask-draw-title", "Draw a shape")); bar.appendChild(done);
+    const cv = document.createElement("canvas");
+    cv.className = "mask-draw-cv";
+    const hint = mk("p", "mask-draw-hint", "Draw around what you want to show. Draw again to start over.");
+    wrap.appendChild(bar); wrap.appendChild(cv); wrap.appendChild(hint);
+    document.body.appendChild(wrap);
+    let stroke = null, shape = null, raf = 0, fit = null;
+    const place = () => {
+      const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+      cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+      const s = Math.min(cv.width / W, cv.height / H);
+      fit = { x: (cv.width - W * s) / 2, y: (cv.height - H * s) / 2, s: s, dpr: dpr };
+    };
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      paintPic();
+      const x = cv.getContext("2d"), f = fit;
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      x.fillStyle = "#000"; x.fillRect(0, 0, cv.width, cv.height);
+      x.setTransform(f.s, 0, 0, f.s, f.x, f.y);
+      x.drawImage(pic, 0, 0);
+      x.fillStyle = "rgba(0,0,0,0.6)"; x.fillRect(0, 0, W, H);
+      if (shape) {
+        x.save(); FM.path(x, shape, W, H); x.clip(); x.drawImage(pic, 0, 0); x.restore();
+        FM.path(x, shape, W, H);
+        x.setLineDash([6 / f.s, 5 / f.s]); x.lineWidth = 2 / f.s; x.strokeStyle = "#eeeae2"; x.stroke(); x.setLineDash([]);
+      }
+      if (stroke && stroke.length > 1) {
+        x.beginPath(); x.moveTo(stroke[0][0], stroke[0][1]);
+        stroke.forEach((p) => x.lineTo(p[0], p[1]));
+        x.lineWidth = 3 / f.s; x.lineJoin = "round"; x.lineCap = "round"; x.strokeStyle = "#eeeae2"; x.stroke();
+      }
+      done.disabled = !shape;
+    };
+    const at = (e) => { const r = cv.getBoundingClientRect(); return [((e.clientX - r.left) * fit.dpr - fit.x) / fit.s, ((e.clientY - r.top) * fit.dpr - fit.y) / fit.s]; };
+    cv.addEventListener("pointerdown", (e) => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (err) {} stroke = [at(e)]; shape = null; });
+    cv.addEventListener("pointermove", (e) => { if (stroke) stroke.push(at(e)); });
+    const lift = () => {
+      if (!stroke) return;
+      shape = FM.fromStroke(stroke, W, H);
+      stroke = null;
+      if (!shape) toast("Draw a bigger shape");
+    };
+    cv.addEventListener("pointerup", lift);
+    cv.addEventListener("pointercancel", lift);
+    const close = () => { cancelAnimationFrame(raf); window.removeEventListener("resize", place); wrap.remove(); };
+    cancel.addEventListener("click", close);
+    done.addEventListener("click", () => {
+      if (!shape) return;
+      const old = t.mask || {};
+      t.mask = Object.assign(shape, { feather: old.feather || 0, invert: !!old.invert });
+      if (t.kf) Object.keys(t.kf).forEach((kk) => { if (kk.indexOf("mask.") === 0) delete t.kf[kk]; });
+      close();
+      commit(); syncOverlays(); renderInspector();
+      recordEdit("mask", { shape: "custom" });
+    });
+    window.addEventListener("resize", place);
+    requestAnimationFrame(() => { place(); draw(); });
+  }
+
+  /* Track: from the playhead to the end of the clip, the mask follows the
+     thing under it. The clip's own picture (as the edit frames it) is
+     looked at 12 times a second, small, and tracker.js finds the thing in
+     each; the path is kept on the mask (mask.track), so a drag afterwards
+     moves the whole path. */
+  async function trackMask(c) {
+    const T = window.SenotelTracker, FM = window.SenotelMasks, med = mediaById(c.mediaId);
+    if (!T || !FM || !c.mask) return;
+    if (!med || med.type !== "video") { toast("Tracking needs a video clip"); return; }
+    if (maskTracking) return;
+    const start = clipStartOf(c), len = dispDur(c);
+    const t0 = clamp(S.time - start, 0, Math.max(0, len - 0.1));
+    const size = exportSize();
+    const shown = FM.at(c.mask, t0);
+    const d = FM.dims(shown, size.w, size.h);
+    const open = !FM.hasWidth(shown.shape);
+    const a = ((shown.rot || 0) * Math.PI) / 180;
+    // what to follow: the shape's box (a quarter of the picture around the middle of a line)
+    let bw = open ? Math.min(size.w, size.h) * 0.25 : Math.abs(d.w * Math.cos(a)) + Math.abs(d.h * Math.sin(a));
+    let bh = open ? bw : Math.abs(d.w * Math.sin(a)) + Math.abs(d.h * Math.cos(a));
+    // look at it small: the box about 48 pixels across
+    const k = clamp(48 / Math.max(8, bw, bh), 160 / Math.max(size.w, size.h), 480 / Math.max(size.w, size.h));
+    const aw = Math.max(16, Math.round(size.w * k)), ah = Math.max(16, Math.round(size.h * k));
+    const cv = document.createElement("canvas");
+    cv.width = aw; cv.height = ah;
+    const ctx = cv.getContext("2d", { willReadFrequently: true });
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = med.url;
+    const job = { clipId: c.id, p: 0, cancel: false };
+    maskTracking = job;
+    renderInspector();
+    const wait = (ev) => new Promise((res) => { const to = setTimeout(res, 4000); v.addEventListener(ev, () => { clearTimeout(to); res(); }, { once: true }); });
+    const plain = Object.assign({}, c, { mask: null, kf: null, filter: "none", adj: null, animIn: null, animOut: null, animLoop: null });
+    const frameAt = async (local) => {
+      v.currentTime = srcTimeAt(c, start, start + local);
+      await wait("seeked");
+      drawClipPicture(ctx, plain, { el: v, w: v.videoWidth, h: v.videoHeight }, aw, ah, local);
+      return T.gray(ctx.getImageData(0, 0, aw, ah).data, aw, ah);
+    };
+    try {
+      await wait("loadeddata");
+      const g0 = await frameAt(t0);
+      const box = { x: shown.x * aw - (bw * k) / 2, y: shown.y * ah - (bh * k) / 2, w: bw * k, h: bh * k };
+      const tr = T.create(g0, aw, ah, box);
+      const pts = [+t0.toFixed(3), shown.x, shown.y];
+      const step = 1 / 12, n = Math.max(1, Math.floor((len - 0.02 - t0) / step));
+      // the box's centre may sit off the thing's centre: keep that offset
+      const ox = shown.x - (box.x + box.w / 2) / aw, oy = shown.y - (box.y + box.h / 2) / ah;
+      let lost = 0;
+      for (let i = 1; i <= n && !job.cancel; i++) {
+        const local = t0 + i * step;
+        const r = tr.step(await frameAt(local));
+        if (r.lost) lost++;
+        pts.push(+local.toFixed(3), +(r.cx / aw + ox).toFixed(4), +(r.cy / ah + oy).toFixed(4));
+        job.p = i / n;
+        if (i % 3 === 0) renderInspector();
+      }
+      if (job.cancel) toast("Tracking stopped");
+      else {
+        // keep the path from before the playhead, if the mask was tracked already
+        // (with any drag since folded in, as the new path starts from where the mask was seen)
+        const ot = c.mask.track, old = ot && ot.pts ? ot.pts : [];
+        const keep = [];
+        for (let i = 0; i + 2 < old.length; i += 3) if (old[i] < t0 - 0.01) keep.push(old[i], old[i + 1] + (ot.dx || 0), old[i + 2] + (ot.dy || 0));
+        c.mask.track = { pts: keep.concat(pts), dx: 0, dy: 0 };
+        commit();
+        toast(lost > n * 0.4 ? "Tracked, but the thing was often lost: check the path" : "Tracked");
+        recordEdit("mask-track", { frames: n, lost: lost });
+      }
+    } catch (e) {
+      toast("Tracking did not work on this clip");
+    } finally {
+      maskTracking = null;
+      v.removeAttribute("src");
+      try { v.load(); } catch (e) {}
+      renderInspector();
+      syncOverlays();
+    }
+  }
+
+  /* ═══════════ KEYFRAMES (ccl13, 0.39.0) ═══════════
+     CapCut's diamond, in the play row next to undo: with something selected,
+     tap it to keep how that thing looks at the playhead; move the playhead,
+     change the thing, and it changes smoothly between the two moments. On a
+     keyframe the diamond is filled; tap it again to remove that keyframe.
+     The curve button beside it sets how a keyframe eases into the next.
+     Works for a clip's mask; an overlay's place, size, turn, see-through
+     and mask; a text's or sticker's place, size, turn and see-through.
+     The values live in keyframes.js; here is where they are read and set:
+       - the renderer draws every item through kfView(item, seconds in);
+       - the selected item's own values follow the playhead (kfSettle), so
+         an edit starts from what is on screen;
+       - an edit of a keyframed item is kept as a keyframe at the playhead
+         (kfCapture, from commit), as CapCut does. */
+  const KF = () => window.SenotelKeys || null;
+  function kfView(item, t) {
+    const K = KF();
+    return K && item && item.kf ? K.view(item, t) : item;
+  }
+  const MASK_KEYS = ["mask.x", "mask.y", "mask.s", "mask.ar", "mask.rot", "mask.feather", "mask.round"];
+  // the selected thing that can take keyframes: {item, t (seconds into it), inside, paths}
+  function kfTarget() {
+    if (!S.sel) return null;
+    const ty = S.sel.type;
+    const it = ty === "clip" ? clipById(S.sel.id) : ty === "broll" ? brollById(S.sel.id) : ty === "text" ? textById(S.sel.id) : null;
+    if (!it) return null;
+    const mask = it.mask && it.mask.shape && it.mask.shape !== "none" ? MASK_KEYS.filter((p) => p !== "mask.round" || it.mask.shape === "rect") : [];
+    let start, len, paths;
+    if (ty === "clip") { start = clipStartOf(it); len = dispDur(it); paths = mask; }
+    else if (ty === "broll") { start = it.start; len = it.dur; paths = ["x", "y", "scale", "rot", "opacity"].concat(mask); }
+    else { start = it.start; len = it.dur; paths = ["x", "y", "size", "rotate", "opacity"]; }
+    if (!paths.length) return null;
+    const t = S.time - start;
+    return { item: it, type: ty, t: t, inside: t >= -0.001 && t <= len + 0.001, paths: paths, start: start };
+  }
+  // values left unset mean "the default"; a keyframe needs the number itself
+  function kfFill(tg) {
+    const it = tg.item;
+    if (tg.type === "broll") {
+      if (it.x == null) it.x = 0.5;
+      if (it.y == null) it.y = BROLL_CY;
+      if (it.scale == null) it.scale = BROLL_SIZE;
+      if (it.rot == null) it.rot = 0;
+      if (it.opacity == null) it.opacity = 1;
+    } else if (tg.type === "text") {
+      if (it.rotate == null) it.rotate = 0;
+      if (it.opacity == null) it.opacity = 1;
+    }
+    if (it.mask && it.mask.shape !== "none") {
+      ["rot", "feather", "round"].forEach((k) => { if (it.mask[k] == null) it.mask[k] = 0; });
+      if (it.mask.ar == null) it.mask.ar = 1;
+    }
+  }
+  let kfSeen = "", kfSeenT = null, kfSkip = false;
+  // the selected item's own values = what its keyframes say at the playhead
+  function kfSettle() {
+    const K = KF(), tg = kfTarget();
+    const key = tg ? selKey() + "@" + tg.t.toFixed(4) : "";
+    if (key === kfSeen) return;
+    kfSeen = key;
+    kfSeenT = tg ? tg.t : null;
+    if (K && tg && K.has(tg.item)) {
+      K.settle(tg.item, tg.t);
+      // the open panel shows the values at the new moment (not while playing: too often)
+      if (activeTool && !S.playing) {
+        clearTimeout(kfSettle.timer);
+        kfSettle.timer = setTimeout(() => { if (activeTool && !S.playing) renderInspector(); }, 120);
+      }
+    }
+  }
+  // from commit(): an edit of a keyframed item becomes a keyframe at the playhead
+  function kfCapture() {
+    const K = KF();
+    if (!K || kfSkip) return;
+    const tg = kfTarget();
+    if (!tg || !tg.inside || !K.has(tg.item)) return;
+    // the item moved or was trimmed since its values were settled: not an edit of its look
+    if (kfSeenT == null || Math.abs(kfSeenT - tg.t) > 1e-6) { kfSeen = ""; kfSettle(); return; }
+    kfFill(tg);
+    if (K.capture(tg.item, tg.t, tg.paths)) requestAnimationFrame(renderTimeline);
+  }
+  function kfCommit() { kfSkip = true; try { commit(); } finally { kfSkip = false; } }
+  // the diamond and the curve button follow the selection and the playhead (every frame)
+  function kfButtons() {
+    const b = $("kfBtn"), e = $("kfEaseBtn");
+    if (!b) return;
+    const K = KF(), tg = kfTarget();
+    const show = !!(K && tg && tg.inside);
+    const on = show && K.keyAt(tg.item, tg.t) != null;
+    b.classList.toggle("hidden", !show);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-label", on ? "Remove keyframe" : "Add keyframe");
+    b.title = on ? "Remove keyframe" : "Add keyframe";
+    e.classList.toggle("hidden", !on);
+  }
+  function kfToggle() {
+    const K = KF(), tg = kfTarget();
+    if (!K || !tg || !tg.inside) return;
+    const at = K.keyAt(tg.item, tg.t);
+    if (at != null) {
+      K.unmark(tg.item, at);
+      K.settle(tg.item, tg.t);
+      toast("Keyframe removed");
+    } else {
+      kfFill(tg);
+      K.mark(tg.item, tg.t, tg.paths);
+      if (K.times(tg.item).length === 1) toast("Keyframe added. Move the playhead and change it to add another");
+    }
+    kfSeen = "";
+    kfCommit();
+    renderTimeline();
+    syncOverlays();
+    recordEdit("keyframe", { on: at == null, type: tg.type });
+  }
+  function kfEaseMenu() {
+    const K = KF(), tg = kfTarget();
+    if (!K || !tg) return;
+    const at = K.keyAt(tg.item, tg.t);
+    if (at == null) return;
+    const old = document.querySelector(".kf-menu");
+    if (old) { old.remove(); return; }
+    const menu = mk("div", "kf-menu");
+    const cur = K.easeAt(tg.item, at);
+    menu.appendChild(mk("span", "kf-menu-title", "Ease to the next keyframe"));
+    K.EASES.forEach(([id, label]) => {
+      const b = mk("button", "kf-ease" + (cur === id ? " on" : ""));
+      b.type = "button";
+      const cv = document.createElement("canvas");
+      cv.width = 48; cv.height = 32;
+      const x = cv.getContext("2d");
+      x.strokeStyle = getComputedStyle(document.body).getPropertyValue(cur === id ? "--acc" : "--text").trim() || "#eeeae2";
+      x.lineWidth = 2;
+      x.beginPath();
+      for (let i = 0; i <= 24; i++) { const p = i / 24, y = K.EASE[id](p); if (i) x.lineTo(4 + p * 40, 28 - y * 24); else x.moveTo(4, 28); }
+      x.stroke();
+      b.appendChild(cv);
+      b.appendChild(mk("span", "", label));
+      b.addEventListener("click", () => { K.setEase(tg.item, at, id); kfCommit(); syncOverlays(); menu.remove(); });
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    const r = $("kfEaseBtn").getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, r.left + r.width / 2 - menu.offsetWidth / 2)) + "px";
+    menu.style.top = Math.max(8, r.top - menu.offsetHeight - 8) + "px";
+    setTimeout(() => document.addEventListener("pointerdown", function off(ev) {
+      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener("pointerdown", off, true); }
+    }, true), 0);
+  }
+  // the selected item's keyframes as diamonds on it in the timeline; a tap goes there
+  function markKeys() {
+    const K = KF(), tg = kfTarget();
+    if (!K || !tg || !K.has(tg.item)) return;
+    const sel = MULTI_SEL[tg.type];
+    const el = sel && document.querySelector("#" + sel[0] + " ." + sel[1] + '[data-id="' + tg.item.id + '"]');
+    if (!el) return;
+    K.times(tg.item).forEach((t) => {
+      const d = mk("button", "kf-dot");
+      d.type = "button";
+      d.style.left = t * S.pps + "px";
+      d.setAttribute("aria-label", "Go to keyframe at " + fmt1(tg.start + t));
+      d.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+      d.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (S.playing) pause();
+        S.time = clamp(tg.start + t, 0, total());
+        syncNow();
+        updatePlayheadUI();
+      });
+      el.appendChild(d);
+    });
+  }
+  if ($("kfBtn")) {
+    $("kfBtn").addEventListener("click", kfToggle);
+    $("kfEaseBtn").addEventListener("click", kfEaseMenu);
+  }
 
   function pictureFilter(c, blurPx) {
     const parts = [];
@@ -6430,7 +6961,7 @@
      then headings. The preview and the export both call this. */
   function drawTexts(ctx, f, time, hits) {
     const karaoke = S.captions && S.captions.length > 0;
-    const on = S.texts.filter((t) => time >= t.start && time <= t.start + t.dur);
+    const on = S.texts.filter((t) => time >= t.start && time <= t.start + t.dur).map((t) => kfView(t, time - t.start));
     on.forEach((t) => { if (textStyleOf(t) !== "heading") drawStyledText(ctx, t, f, time); });
     if (hits) hits.clear();
     on.forEach((t) => {
@@ -7582,6 +8113,7 @@
      and animation. local is seconds into the clip (it can run past either
      end inside a transition). */
   function drawClipPicture(ctx, clip, src, W, H, local) {
+    clip = kfView(clip, local);   // ccl13: its keyframed values at this moment
     ctx.save();
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
@@ -7664,7 +8196,7 @@
     }
     // ccl8: the clip seen only through its mask; outside it, black
     if (clip.mask && clip.mask.shape && clip.mask.shape !== "none" && window.SenotelMasks) {
-      SenotelMasks.apply(ctx, clip.mask, W, H);
+      SenotelMasks.apply(ctx, SenotelMasks.at(clip.mask, local), W, H);
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;
@@ -7696,8 +8228,9 @@
     };
   }
   function drawBroll(ctx, W, H, t, getSrc) {
-    const b = brollAt(t);
-    if (!b) return;
+    const b0 = brollAt(t);
+    if (!b0) return;
+    const b = kfView(b0, t - b0.start);   // ccl13: its keyframed values at this moment
     const m = mediaById(b.mediaId);
     if (!m) return;
     const local = t - b.start;
@@ -7843,10 +8376,8 @@
     else renderPicture(P.getContext("2d"), W, H, S.time, previewSrc);
     if (!pvTUsed && !pvT.paused) pvT.pause();
     ctx.drawImage(P, Math.round(box.x * dpr), Math.round(box.y * dpr));
-    // ccl8: while a clip's mask is being set, its outline over the picture (never in the export)
-    const mt = maskEditTarget();
-    $("stage").classList.toggle("mask-on", !!mt);
-    if (mt && window.SenotelMasks) SenotelMasks.outline(ctx, mt.mask, { x: Math.round(box.x * dpr), y: Math.round(box.y * dpr), w: W, h: H });
+    // ccl8: while a mask is being set, its outline and handles over the picture (never in the export)
+    drawMaskOutline(ctx, dpr);
   }
 
   /* ═══════════ LAYOUTS: split screen, screen and face ═══════════
@@ -7939,6 +8470,7 @@
      transitions, overlay, fades, effects: drawPreviewPicture), then texts
      and captions on top (drawPreviewCaptions). */
   function syncOverlays() {
+    try { kfSettle(); kfButtons(); } catch (e) {}   // ccl13 (not yet set up during the first moments of loading)
     syncBroll();
     drawPreviewPicture();
     drawPreviewCaptions();
