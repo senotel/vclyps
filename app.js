@@ -5061,11 +5061,13 @@
       const tp = (id, label, icon, tab) => tool(id, label, icon, (box) => textPanel(box, t, tab));
       if (t.sticker) {
         return [tp("stk", "Sticker", ICON.sticker, "stk"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"),
+          tool("tracking", "Tracking", ICON.track, (box) => trackItemPanel(box, t)),
           act("replace", "Replace", ICON.replace, () => openStickers(t))].concat(common());
       }
       const heading = textStyleOf(t) === "heading";
       const list = [tp("edit", "Edit", ICON.rename, "text"), tp("font", "Font", ICON.font, "font")];
-      if (heading) list.push(tp("style", "Style", ICON.style, "style"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"));
+      if (heading) list.push(tp("style", "Style", ICON.style, "style"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"),
+        tool("tracking", "Tracking", ICON.track, (box) => trackItemPanel(box, t)));
       // ccl2: copy this text's whole look, paste it on another (or on every text)
       list.push(act("copystyle", "Copy style", ICON.copyStyle, () => copyTextStyle(t)));
       if (styleClip) {
@@ -5092,6 +5094,7 @@
           }
         }),
         tool("mask", "Mask", ICON.mask, (box) => maskPanel(box, b, false)),
+        tool("tracking", "Tracking", ICON.track, (box) => trackItemPanel(box, b)),
         tool("opacity", "Opacity", ICON.opacity, (box) => box.appendChild(group("Opacity", slider(0, 1, 0.01, b.opacity == null ? 1 : b.opacity, (v) => { b.opacity = v; syncOverlays(); }, () => commit(), pct)))),
         tool("blend", "Blend", ICON.blend, (box) => box.appendChild(group("Blend", chipsRow(BLENDS, b.blend || "normal", (v) => { if (v === "normal") delete b.blend; else b.blend = v; })))),
         tool("chroma", "Chroma key", ICON.chroma, (box) => chromaPanel(box, b)),
@@ -6602,6 +6605,187 @@
     }
   }
 
+  /* ═══════════ TRACKING (ccl18, 0.46.0) ═══════════
+     CapCut's Tracking, in the text, sticker and overlay bars: a box appears
+     on the picture; drag it over the thing to follow (its corner resizes
+     it) and tap Start tracking. From the playhead to the item's end, the
+     video under it is looked at 15 times a second, small, and tracker.js
+     finds the thing in each picture; the item then moves with it
+     (item.track, through itemView). A drag afterwards moves the item and its
+     whole path together. Free: it all runs on the device. */
+  let trackBox = null;       // {id, x, y, w, h} in fractions of the picture, while the panel is open
+  let itemTracking = null;   // {id, p, cancel}
+  const trackTarget = () => {
+    if (activeTool !== "tracking" || !S.sel) return null;
+    return S.sel.type === "text" ? textById(S.sel.id) : S.sel.type === "broll" ? brollById(S.sel.id) : null;
+  };
+  // the item's place now, as numbers (a text never moved has its place worked out from its layout)
+  function itemPlace(it) {
+    const v = itemView(it, S.time - it.start);
+    if (it.mediaId != null) return { x: v.x != null ? v.x : 0.5, y: v.y != null ? v.y : BROLL_CY };
+    const bx = pictureBox();
+    return { x: v.x != null ? v.x : 0.5, y: v.y != null ? v.y : headingLayout(v, bx.w, bx.h).cy / bx.h };
+  }
+  function drawTrackBox(ctx, dpr) {
+    const it = trackTarget();
+    if (!it || itemTracking) { if (!trackTarget()) trackBox = null; return; }
+    if (!trackBox || trackBox.id !== it.id) {
+      const p = itemPlace(it);
+      trackBox = { id: it.id, x: p.x, y: p.y, w: 0.22, h: 0.16 };
+    }
+    const box = pictureBox(), k = dpr;
+    const x = (box.x + (trackBox.x - trackBox.w / 2) * box.w) * k, y = (box.y + (trackBox.y - trackBox.h / 2) * box.h) * k;
+    const w = trackBox.w * box.w * k, h = trackBox.h * box.h * k;
+    ctx.save();
+    ctx.setLineDash([6 * k, 5 * k]);
+    ctx.lineWidth = 2 * k;
+    ctx.strokeStyle = "#eeeae2";
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#eeeae2";
+    ctx.beginPath(); ctx.arc(x + w, y + h, 7 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.font = "600 " + Math.round(12 * k) + "px system-ui, sans-serif";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("Follow this", x, y - 6 * k);
+    ctx.restore();
+  }
+  (function trackBoxGestures() {
+    const stage = $("stage");
+    let drag = null;
+    stage.addEventListener("pointerdown", (e) => {
+      if (!trackTarget() || !trackBox || itemTracking) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+      const box = pictureBox(), r = stage.getBoundingClientRect();
+      const px = (e.clientX - r.left - box.x) / box.w, py = (e.clientY - r.top - box.y) / box.h;
+      const cx = trackBox.x + trackBox.w / 2, cy = trackBox.y + trackBox.h / 2;
+      const corner = Math.hypot((px - cx) * box.w, (py - cy) * box.h) < 24;
+      drag = { id: e.pointerId, corner: corner, px: px, py: py, b: Object.assign({}, trackBox) };
+    }, true);
+    stage.addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.id || !trackBox) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const box = pictureBox(), r = stage.getBoundingClientRect();
+      const px = (e.clientX - r.left - box.x) / box.w, py = (e.clientY - r.top - box.y) / box.h;
+      if (drag.corner) {
+        trackBox.w = clamp(drag.b.w + (px - drag.px) * 2, 0.05, 0.9);
+        trackBox.h = clamp(drag.b.h + (py - drag.py) * 2, 0.04, 0.9);
+      } else {
+        trackBox.x = clamp(drag.b.x + px - drag.px, 0, 1);
+        trackBox.y = clamp(drag.b.y + py - drag.py, 0, 1);
+      }
+      syncOverlays();
+    }, true);
+    const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+    stage.addEventListener("pointerup", end, true);
+    stage.addEventListener("pointercancel", end, true);
+  })();
+  function trackItemPanel(box, it) {
+    const busy = itemTracking && itemTracking.id === it.id;
+    if (busy) {
+      const row = mk("div", "mask-progress");
+      const bar = mk("div", "mask-bar");
+      bar.appendChild(mk("i", ""));
+      bar.firstChild.style.width = Math.round(itemTracking.p * 100) + "%";
+      row.appendChild(mk("span", "", "Tracking " + Math.round(itemTracking.p * 100) + "%"));
+      row.appendChild(bar);
+      const stop = mk("button", "fchip", "Cancel");
+      stop.type = "button";
+      stop.addEventListener("click", () => { if (itemTracking) itemTracking.cancel = true; });
+      row.appendChild(stop);
+      box.appendChild(row);
+      return;
+    }
+    const row = mk("div", "mask-top");
+    const go = mk("button", "mask-act on", ICON.track);
+    go.type = "button";
+    go.appendChild(mk("span", "", it.track ? "Track again" : "Start tracking"));
+    go.addEventListener("click", () => runItemTrack(it));
+    row.appendChild(go);
+    if (it.track) {
+      const off = mk("button", "mask-act", ICON.untrack);
+      off.type = "button";
+      off.appendChild(mk("span", "", "Stop tracking"));
+      off.addEventListener("click", () => {
+        // it stays where it is seen now
+        const p = itemPlace(it);
+        delete it.track;
+        it.x = p.x; it.y = p.y;
+        commit(); syncOverlays(); renderInspector();
+      });
+      row.appendChild(off);
+    }
+    box.appendChild(row);
+    box.appendChild(mk("p", "panel-note", "Move the box over what it should follow, and drag its corner to fit. Tracking starts at the playhead."));
+  }
+  async function runItemTrack(it) {
+    const F = window.SenotelFastExport, T = window.SenotelTracker;
+    if (!F || !T || !trackBox || itemTracking) return;
+    const end = it.start + (it.dur || 0);
+    const t0 = clamp(S.time, it.start, Math.max(it.start, end - 0.1));
+    if (!clipAt(Math.min(t0, Math.max(0, total() - 0.001)))) { toast("Move the playhead over the video first"); return; }
+    const size = exportSize(), mx = Math.max(size.w, size.h);
+    const bw = trackBox.w * size.w, bh = trackBox.h * size.h;
+    const k = clamp(48 / Math.max(8, bw, bh), 160 / mx, 480 / mx);
+    const aw = Math.max(16, Math.round(size.w * k)), ah = Math.max(16, Math.round(size.h * k));
+    const cv = document.createElement("canvas");
+    cv.width = aw; cv.height = ah;
+    const ctx = cv.getContext("2d", { willReadFrequently: true });
+    const job = { id: it.id, p: 0, cancel: false };
+    itemTracking = job;
+    renderInspector();
+    const sources = new Map();
+    // the video under the item at timeline time t, as the edit frames it (no masks, filters or animations)
+    const frame = async (t) => {
+      const info = clipAt(Math.min(t, Math.max(0, total() - 0.001)));
+      if (!info) return null;
+      const m = mediaById(info.clip.mediaId);
+      if (!m) return null;
+      if (!sources.has(m.id)) sources.set(m.id, await F.frameSource(m));
+      const pic = await sources.get(m.id).frameAt(srcTimeAt(info.clip, info.start, t));
+      if (!pic) return null;
+      const plain = Object.assign({}, info.clip, { mask: null, kf: null, filter: "none", adj: null, animIn: null, animOut: null, animLoop: null });
+      drawClipPicture(ctx, plain, pic, aw, ah, info.offset);
+      return T.gray(ctx.getImageData(0, 0, aw, ah).data, aw, ah);
+    };
+    try {
+      const g0 = await frame(t0);
+      if (!g0) throw new Error("no picture");
+      const box = { x: (trackBox.x - trackBox.w / 2) * aw, y: (trackBox.y - trackBox.h / 2) * ah, w: trackBox.w * aw, h: trackBox.h * ah };
+      const tr = T.create(g0, aw, ah, box);
+      const c0x = (box.x + box.w / 2) / aw, c0y = (box.y + box.h / 2) / ah;
+      const local0 = t0 - it.start, step = 1 / 15, n = Math.max(1, Math.floor((end - t0) / step));
+      const pts = [+local0.toFixed(3), 0, 0];
+      let lost = 0;
+      for (let i = 1; i <= n && !job.cancel; i++) {
+        const g = await frame(t0 + i * step);
+        if (!g) break;
+        const r = tr.step(g);
+        if (r.lost) lost++;
+        pts.push(+(local0 + i * step).toFixed(3), +(r.cx / aw - c0x).toFixed(4), +(r.cy / ah - c0y).toFixed(4));
+        job.p = i / n;
+        if (i % 4 === 0) { renderInspector(); syncOverlays(); }
+      }
+      if (job.cancel) { toast("Tracking stopped"); return; }
+      // its place at the start becomes numbers, so the path has something fixed to move
+      const p = itemPlace(Object.assign({}, it, { track: null }));
+      it.x = p.x; it.y = p.y;
+      it.track = { pts: pts };
+      commit();
+      toast(lost > n * 0.4 ? "Tracked, but the thing was often lost: check it, or track again from where it slips" : "Tracked");
+      recordEdit("track-item", { frames: n, lost: lost, type: it.mediaId != null ? "overlay" : it.sticker ? "sticker" : "text" });
+    } catch (e) {
+      toast("Tracking did not work here: " + ((e && e.message) || "unknown"));
+    } finally {
+      sources.forEach((s) => { try { s.close(); } catch (e) {} });
+      itemTracking = null;
+      renderInspector();
+      syncOverlays();
+    }
+  }
+
   /* ═══════════ STABILIZE (ccl17, 0.45.0) ═══════════
      CapCut's Stabilize, near the end of the clip bar: Minimal, Recommended,
      Most stable. The clip's camera movement is measured once (stabilize.js,
@@ -7100,6 +7284,20 @@
   function kfView(item, t) {
     const K = KF();
     return K && item && item.kf ? K.view(item, t) : item;
+  }
+  /* ccl18: a text, sticker or overlay that follows something in the video
+     (item.track, from Tracking) is moved along that path, on top of its
+     own (keyframed) place. */
+  function itemView(item, t) {
+    const v = kfView(item, t);
+    const tr = item.track, T = window.SenotelTracker;
+    if (!tr || !tr.pts || !T) return v;
+    const d = T.pathAt(tr.pts, t);
+    if (!d.x && !d.y) return v;
+    return Object.assign(v === item ? Object.assign({}, item) : v, {
+      x: (v.x == null ? 0.5 : v.x) + d.x,
+      y: (v.y == null ? (item.mediaId != null ? BROLL_CY : 0.5) : v.y) + d.y
+    });
   }
   const MASK_KEYS = ["mask.x", "mask.y", "mask.s", "mask.ar", "mask.rot", "mask.feather", "mask.round"];
   // the selected thing that can take keyframes: {item, t (seconds into it), inside, paths}
@@ -7633,7 +7831,7 @@
      then headings. The preview and the export both call this. */
   function drawTexts(ctx, f, time, hits) {
     const karaoke = S.captions && S.captions.length > 0;
-    const on = S.texts.filter((t) => time >= t.start && time <= t.start + t.dur).map((t) => kfView(t, time - t.start));
+    const on = S.texts.filter((t) => time >= t.start && time <= t.start + t.dur).map((t) => itemView(t, time - t.start));
     on.forEach((t) => { if (textStyleOf(t) !== "heading") drawStyledText(ctx, t, f, time); });
     if (hits) hits.clear();
     on.forEach((t) => {
@@ -8922,7 +9120,7 @@
   function drawBroll(ctx, W, H, t, getSrc) {
     const b0 = brollAt(t);
     if (!b0) return;
-    const b = kfView(b0, t - b0.start);   // ccl13: its keyframed values at this moment
+    const b = itemView(b0, t - b0.start);   // ccl13 + ccl18: its keyframed and tracked place at this moment
     const m = mediaById(b.mediaId);
     if (!m) return;
     const local = t - b.start;
@@ -9080,6 +9278,7 @@
     ctx.drawImage(P, Math.round(box.x * dpr), Math.round(box.y * dpr));
     // ccl8: while a mask is being set, its outline and handles over the picture (never in the export)
     drawMaskOutline(ctx, dpr);
+    drawTrackBox(ctx, dpr);   // ccl18
   }
 
   /* ═══════════ LAYOUTS: split screen, screen and face ═══════════

@@ -106,5 +106,21 @@
     };
   }
 
-  global.SenotelTracker = { gray: gray, create: create, search: search, stats: stats, cut: cut };
+  /* A tracked path, flat [t, dx, dy, t, dx, dy...] (how far the thing has
+     moved since tracking started, in fractions of the frame), at time t:
+     nothing before it starts, the last move after it ends. */
+  function pathAt(pts, t) {
+    if (!pts || pts.length < 3 || t <= pts[0]) return { x: 0, y: 0 };
+    const n = pts.length;
+    if (t >= pts[n - 3]) return { x: pts[n - 2], y: pts[n - 1] };
+    for (let i = 0; i + 3 < n; i += 3) {
+      if (t >= pts[i] && t <= pts[i + 3]) {
+        const f = (t - pts[i]) / Math.max(1e-6, pts[i + 3] - pts[i]);
+        return { x: pts[i + 1] + (pts[i + 4] - pts[i + 1]) * f, y: pts[i + 2] + (pts[i + 5] - pts[i + 2]) * f };
+      }
+    }
+    return { x: pts[n - 2], y: pts[n - 1] };
+  }
+
+  global.SenotelTracker = { gray: gray, create: create, search: search, stats: stats, cut: cut, pathAt: pathAt };
 })(typeof window !== "undefined" ? window : globalThis);

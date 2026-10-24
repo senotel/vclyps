@@ -60,9 +60,12 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "0.45.0";
-  var RELEASED = "2026-10-24";
-  var NOTES = "New: Stabilize, near the end of a video clip's tools as in CapCut: Minimal, " +
+  var VERSION = "0.46.0";
+  var RELEASED = "2026-10-25";
+  var NOTES = "New: Tracking for texts, stickers and overlays, as in CapCut. Select one, tap " +
+              "Tracking, move the box over the thing it should follow (drag its corner to fit) and tap " +
+              "Start tracking: from the playhead on, it moves with that thing. Runs on your device, " +
+              "free. Stop tracking leaves it where it is. 0.45.0: New: Stabilize, near the end of a video clip's tools as in CapCut: Minimal, " +
               "Recommended or Most stable smooths shaky handheld footage (worked out on your device, a " +
               "few seconds per clip; the picture zooms in a little to hide the edges). After an AI edit, " +
               "clips with clear shake are steadied by themselves. 0.44.0: New: Reduce noise, next to Volume on a video or audio clip, as in CapCut. One tap takes " +
