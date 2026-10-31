@@ -407,7 +407,12 @@
           if (pr && pr.then) pr.then(res, rej);
         });
         return { buffer: buf, startsAt: 0 };
-      } catch (e) { return null; }     // no sound track
+      } catch (e) {
+        // Decoder failure alone cannot establish that a recording is silent.
+        const parsed = await parseMp4(await blobOf(item));
+        if (parsed && !(parsed.info.audioTracks || []).length) return null;
+        throw e;
+      }
     }
     return audioRange(item, Math.max(0, from), Math.min(dur, to));
   }
@@ -418,7 +423,10 @@
     const p = await parseMp4(blob);
     if (!p) throw new Error("This recording is too long to export quickly unless it is an MP4 or MOV");
     const track = (p.info.audioTracks || []).find((t) => /^mp4a/.test(t.codec || ""));
-    if (!track) return null;
+    if (!track) {
+      if (!(p.info.audioTracks || []).length) return null;
+      throw new Error("This recording's audio codec needs the standard export");
+    }
     const trak = p.file.getTrackById(track.id);
     const samples = (trak && trak.samples) || [];
     const entry = trak.mdia.minf.stbl.stsd.entries[0];

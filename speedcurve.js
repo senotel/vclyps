@@ -28,6 +28,13 @@
   ];
 
   const clampV = (v) => Math.max(MIN, Math.min(MAX, v));
+  function segment(a, b) {
+    const s = a[2];
+    if (!s || s[4] !== a[0] || s[5] !== b[0]) return null;
+    const value = (f) => clampV(s[0] + (s[1] - s[0]) * f * f * (3 - 2 * f));
+    // Editing either handle replaces the restricted easing with a new segment.
+    return Math.abs(value(s[2]) - a[1]) < 1e-9 && Math.abs(value(s[3]) - b[1]) < 1e-9 ? s : null;
+  }
   function speedAt(curve, u) {
     if (!curve || !curve.length) return 1;
     if (u <= curve[0][0]) return clampV(curve[0][1]);
@@ -36,8 +43,10 @@
       if (u <= b[0]) {
         const f = b[0] > a[0] ? (u - a[0]) / (b[0] - a[0]) : 1;
         // eased between points, so a change of speed is never a jolt
-        const e = f * f * (3 - 2 * f);
-        return clampV(a[1] + (b[1] - a[1]) * e);
+        const seg = segment(a, b);
+        const x = seg ? seg[2] + (seg[3] - seg[2]) * f : f;
+        const e = x * x * (3 - 2 * x);
+        return clampV(seg ? seg[0] + (seg[1] - seg[0]) * e : a[1] + (b[1] - a[1]) * e);
       }
     }
     return clampV(curve[curve.length - 1][1]);
@@ -94,9 +103,18 @@
   // the part [a, b] of a curve (0..1), as a curve of its own (for Split)
   function sub(curve, a, b) {
     if (!curve || b - a < 1e-6) return curve;
-    const out = [[0, +speedAt(curve, a).toFixed(3)]];
-    curve.forEach((q) => { if (q[0] > a + 1e-6 && q[0] < b - 1e-6) out.push([+((q[0] - a) / (b - a)).toFixed(4), q[1]]); });
-    out.push([1, +speedAt(curve, b).toFixed(3)]);
+    // Retain the original easing domain, including through repeated splits.
+    // Segment data is JSON-safe so history and reload preserve the mapping.
+    const cuts = [a, ...curve.filter((q) => q[0] > a && q[0] < b).map((q) => q[0]), b];
+    const out = cuts.map((u) => [(u - a) / (b - a), speedAt(curve, u)]);
+    for (let j = 0; j < cuts.length - 1; j++) {
+      const mid = (cuts[j] + cuts[j + 1]) / 2;
+      const i = curve.findIndex((q, i) => i < curve.length - 1 && mid >= q[0] && mid <= curve[i + 1][0]);
+      if (i < 0) continue;
+      const p = curve[i], q = curve[i + 1], seg = segment(p, q) || [p[1], q[1], 0, 1];
+      const at = (u) => seg[2] + (seg[3] - seg[2]) * (u - p[0]) / (q[0] - p[0]);
+      out[j][2] = [seg[0], seg[1], at(cuts[j]), at(cuts[j + 1]), out[j][0], out[j + 1][0]];
+    }
     return out;
   }
 
