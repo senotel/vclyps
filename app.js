@@ -135,17 +135,49 @@
 
   /* ═══════════ HISTORY (undo / redo) ═══════════ */
 
-  let hist = [], histIdx = -1;
+  let hist = [], histMedia = [], histIdx = -1;
   function commit() {
     try { kfCapture(); } catch (e) {}   // ccl13: an edit of a keyframed thing is kept as a keyframe
     hist = hist.slice(0, histIdx + 1);
-    hist.push(JSON.stringify({ c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
-    if (hist.length > 80) hist.shift();
+    histMedia = histMedia.slice(0, histIdx + 1);
+    // Cache only IDs so releasing removed files never parses project snapshots.
+    const media = new Set(S.media.map((m) => m.id));
+    [...S.clips, ...S.broll, ...S.audio].forEach((c) => {
+      media.add(c.mediaId);
+      if (c.reversed) media.add(c.reversed.mediaId);
+    });
+    histMedia.push(media);
+    hist.push(JSON.stringify({ media: S.media.map((m) => m.id), c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
+    if (hist.length > 80) { hist.shift(); histMedia.shift(); }
     histIdx = hist.length - 1;
+    if (removeMedia.collect) removeMedia.collect();
     saveSession();   // every edit is also a resume point
   }
   function restore(json) {
     const o = JSON.parse(json);
+    if (removeMedia.kept) {
+      if (o.media) {
+        S.media = S.media.filter((m) => {
+          if (o.media.includes(m.id)) return true;
+          removeMedia.kept.set(m.id, m);
+          return false;
+        });
+        o.media.forEach((id) => {
+          if (!mediaById(id) && removeMedia.kept.has(id)) {
+            S.media.push(removeMedia.kept.get(id));
+            removeMedia.kept.delete(id);
+          }
+        });
+      }
+      [...(o.c || []), ...(o.b || []), ...(o.a || [])].forEach((c) => {
+        [c.mediaId, c.reversed && c.reversed.mediaId].forEach((id) => {
+          if (!mediaById(id) && removeMedia.kept.has(id)) {
+            S.media.push(removeMedia.kept.get(id));
+            removeMedia.kept.delete(id);
+          }
+        });
+      });
+    }
     S.clips = o.c;
     S.texts = o.t;
     S.captions = o.cap || []; // captions travel with undo/redo
@@ -161,6 +193,7 @@
     S.time = clamp(S.time, 0, total());
     renderTimeline();
     renderInspector();
+    saveSession();
   }
   function undo() {
     if (histIdx > 0) { histIdx--; restore(hist[histIdx]); }
@@ -860,13 +893,26 @@
   function removeMedia(id) {
     const i = S.media.findIndex((m) => m.id === id);
     if (i === -1) return;
-    URL.revokeObjectURL(S.media[i].url);
-    idbDel("m" + id).catch(() => {});   // stop resuming footage the user removed
-    idbDel("l" + id).catch(() => {});   // and what the clip finder measured in it
+    // History owns removed files until its last reference disappears.
+    if (!removeMedia.kept) removeMedia.kept = new Map();
+    removeMedia.kept.set(id, S.media[i]);
+    removeMedia.collect = () => {
+      if (!removeMedia.kept.size) return;
+      const refs = new Set();
+      const remember = (c) => { refs.add(c.mediaId); if (c.reversed) refs.add(c.reversed.mediaId); };
+      [...S.clips, ...S.broll, ...S.audio].forEach(remember);
+      histMedia.forEach((media) => media.forEach((id) => refs.add(id)));
+      removeMedia.kept.forEach((m, key) => {
+        if (refs.has(key)) return;
+        URL.revokeObjectURL(m.url);
+        idbDel("m" + key).catch(() => {});
+        idbDel("l" + key).catch(() => {});
+        removeMedia.kept.delete(key);
+      });
+    };
     if (S.found && S.found.mediaId === id) { S.found = null; renderClipsChip(); }
     S.media.splice(i, 1);
     saveSession();
-    const before = S.clips.length + S.broll.length;
     S.clips = S.clips.filter((c) => c.mediaId !== id);
     /* Overlays point at media too. This only filtered clips, which was
        invisible while overlays were Director-only and drawn from whatever
@@ -874,9 +920,9 @@
        one renders as an empty box you cannot explain or get rid of. */
     S.broll = S.broll.filter((b) => b.mediaId !== id);
     // and so do audio clips: a sound whose file is gone cannot play
-    const hadAudio = S.audio.length;
     S.audio = S.audio.filter((a) => a.mediaId !== id);
-    if (S.clips.length + S.broll.length !== before || S.audio.length !== hadAudio) commit();
+    commit();
+    removeMedia.collect();
     if (S.sel && S.sel.type === "clip" && !clipById(S.sel.id)) S.sel = null;
     if (S.sel && S.sel.type === "broll" && !brollById(S.sel.id)) S.sel = null;
     if (S.sel && S.sel.type === "uaudio" && !audioById(S.sel.id)) S.sel = null;
@@ -1039,13 +1085,17 @@
     renderTimeline();
   }
 
+  function copyClip(c, changes) {
+    return Object.assign(JSON.parse(JSON.stringify(c)), changes);
+  }
+
   function splitAtPlayhead() {
     /* A selected overlay splits instead of the footage — the playhead is over
        both at once, and the thing you are looking at is the thing you picked. */
     if (S.sel && S.sel.type === "broll") {
       const b = brollById(S.sel.id);
       if (b && S.time > b.start + 0.12 && S.time < b.start + b.dur - 0.12) {
-        const right = Object.assign({}, b, { id: nextId++, start: S.time, dur: b.start + b.dur - S.time });
+        const right = copyClip(b, { id: nextId++, start: S.time, dur: b.start + b.dur - S.time });
         b.dur = S.time - b.start;
         S.broll.push(right);
         S.sel = { type: "broll", id: right.id };
@@ -1060,7 +1110,7 @@
       const a = audioById(S.sel.id);
       if (a && S.time > a.start + 0.1 && S.time < a.start + audioDur(a) - 0.1) {
         const cut = a.in + (S.time - a.start) * (a.speed || 1);
-        const right = Object.assign({}, a, { id: nextId++, start: S.time, in: cut, fadeIn: 0 });
+        const right = copyClip(a, { id: nextId++, start: S.time, in: cut, fadeIn: 0 });
         a.out = cut;
         a.fadeOut = 0;
         S.audio.push(right);
@@ -1079,7 +1129,7 @@
       return;
     }
     const srcT = clip.in + srcOff(clip, offset);
-    const second = Object.assign({}, clip, { id: nextId++, in: srcT });
+    const second = copyClip(clip, { id: nextId++, in: srcT });
     if (hasCurve(clip)) {
       // each half keeps its own part of the speed curve
       const u = (srcT - clip.in) / (clip.out - clip.in);
@@ -1130,9 +1180,25 @@
     S.media.push(item);
     keepFile(item, file);
 
+    const picture = copyClip(window.SenotelKeys ? window.SenotelKeys.view(c, info.offset) : c);
+    if (picture.mask && window.SenotelMasks) {
+      picture.mask = copyClip(window.SenotelMasks.at(picture.mask, info.offset));
+      delete picture.mask.track;
+    }
+    if (picture.kb) {
+      const k = picture.kb, p = clamp(info.offset / Math.max(dispDur(c), 0.01), 0, 1);
+      ["s", "x", "y"].forEach((key) => {
+        k[key + "0"] = k[key + "1"] = k[key + "0"] + (k[key + "1"] - k[key + "0"]) * p;
+      });
+    }
     let at = S.clips.indexOf(c);
     if (info.offset > 0.05 && dispDur(c) - info.offset > 0.05) {
-      const second = Object.assign({}, c, { id: nextId++, in: target });
+      const second = copyClip(c, { id: nextId++, in: target });
+      if (hasCurve(c)) {
+        const u = (target - c.in) / (c.out - c.in);
+        second.curve = CV().sub(c.curve, u, 1);
+        c.curve = CV().sub(c.curve, 0, u);
+      }
       delete second.name;
       c.out = target;
       S.clips.splice(at + 1, 0, second);
@@ -1140,11 +1206,12 @@
     } else if (info.offset > 0.05) {
       at += 1;   // at the very end: the still goes after the clip
     }
-    const still = {
+    const still = copyClip(picture, {
       id: nextId++, mediaId: item.id, in: 0, out: 3, speed: 1, volume: 1, muted: true,
-      filter: c.filter, fadeIn: 0, fadeOut: 0, freeze: true
-    };
-    ["adj", "rot", "flipH", "flipV"].forEach((k) => { if (c[k] != null) still[k] = k === "adj" ? Object.assign({}, c[k]) : c[k]; });
+      fadeIn: 0, fadeOut: 0, freeze: true
+    });
+    // Hold the settled look without replaying motion or source timing.
+    ["curve", "kf", "reversed", "stab", "voice", "voiceAmt", "denoise", "animIn", "animOut", "animLoop", "transition"].forEach((k) => { delete still[k]; });
     S.clips.splice(at, 0, still);
     S.sel = { type: "clip", id: still.id };
     commit();
@@ -1172,7 +1239,8 @@
     if (c.reversed) {
       const o = c.reversed;
       if (!mediaById(o.mediaId)) { toast("The original footage is no longer here"); return; }
-      c.mediaId = o.mediaId; c.in = o.in; c.out = o.out;
+      const from = o.out - c.out, to = o.out - c.in;
+      c.mediaId = o.mediaId; c.in = from; c.out = to;
       delete c.reversed;
       commit(); renderTimeline(); renderInspector(); syncNow();
       toast("Plays forwards again");
@@ -2035,7 +2103,7 @@
     if (S.sel.type === "broll") {
       const b = brollById(S.sel.id);
       if (!b) return;
-      const copy = Object.assign({}, b, { id: nextId++, start: b.start + b.dur });
+      const copy = copyClip(b, { id: nextId++, start: b.start + b.dur });
       S.broll.push(copy);
       S.sel = { type: "broll", id: copy.id };
       commit(); renderTimeline(); renderInspector();
@@ -2044,7 +2112,7 @@
     if (S.sel.type === "sfx") {
       const x = sfxById(S.sel.id);
       if (!x) return;
-      const copy = Object.assign({}, x, { id: nextId++, start: x.start + sfxDur(x.name) + 0.2 });
+      const copy = copyClip(x, { id: nextId++, start: x.start + sfxDur(x.name) + 0.2 });
       delete copy.by;   // a copy you made is yours: the next generate leaves it alone
       S.sfx.push(copy);
       S.sel = { type: "sfx", id: copy.id };
@@ -2058,7 +2126,7 @@
     if (S.sel.type === "effect") {
       const e = effectById(S.sel.id);
       if (!e) return;
-      const copy = Object.assign({}, e, { id: nextId++, start: e.start + e.dur });
+      const copy = copyClip(e, { id: nextId++, start: e.start + e.dur });
       S.effects.push(copy);
       S.sel = { type: "effect", id: copy.id };
       commit(); renderTimeline(); renderInspector(); syncOverlays();
@@ -2067,7 +2135,7 @@
     if (S.sel.type === "uaudio") {
       const a = audioById(S.sel.id);
       if (!a) return;
-      const copy = Object.assign({}, a, { id: nextId++, start: a.start + audioDur(a) });
+      const copy = copyClip(a, { id: nextId++, start: a.start + audioDur(a) });
       S.audio.push(copy);
       S.sel = { type: "uaudio", id: copy.id };
       commit(); renderTimeline(); renderInspector();
@@ -2076,13 +2144,13 @@
     if (S.sel.type === "clip") {
       const c = clipById(S.sel.id);
       if (!c) return;
-      const copy = Object.assign({}, c, { id: nextId++ });
+      const copy = copyClip(c, { id: nextId++ });
       S.clips.splice(S.clips.indexOf(c) + 1, 0, copy);
       S.sel = { type: "clip", id: copy.id };
     } else {
       const t = textById(S.sel.id);
       if (!t) return;
-      const copy = Object.assign({}, t, { id: nextId++, start: t.start + t.dur });
+      const copy = copyClip(t, { id: nextId++, start: t.start + t.dur });
       S.texts.push(copy);
       S.sel = { type: "text", id: copy.id };
     }
@@ -3344,7 +3412,7 @@
     multi.items.filter((x) => x.type === "clip").forEach((x) => {
       const c = clipById(x.id);
       if (!c) return;
-      const copy = Object.assign({}, c, { id: nextId++ });
+      const copy = Object.assign(JSON.parse(JSON.stringify(c)), { id: nextId++ });
       S.clips.splice(S.clips.indexOf(c) + 1, 0, copy);
       copies.push({ type: "clip", id: copy.id });
     });
@@ -7888,9 +7956,17 @@
         pv.dataset.mid = String(m.id);
       }
       const target = clip.in + srcOff(clip, offset);
-      // only correct on a real jump (clip boundary), and never while a seek is
-      // already in flight — repeated seeks to the same spot cause thrashing
-      if (!pv.seeking && Math.abs(pv.currentTime - target) > 0.28) {
+      // Paused scrubs need frame accuracy; playback only corrects audible drift.
+      const tolerance = S.playing ? 0.28 : 0.001;
+      if (pv.seeking) {
+        if (!pv._syncPending) {
+          pv._syncPending = true;
+          pv.addEventListener("seeked", () => {
+            pv._syncPending = false;
+            syncMedia();   // use the latest playhead after the old seek
+          }, { once: true });
+        }
+      } else if (Math.abs(pv.currentTime - target) > tolerance) {
         try { pv.currentTime = target; } catch (e) { /* metadata not ready yet */ }
       }
       // ccl12: along a speed curve the player's rate follows the curve, frame by frame
@@ -11742,14 +11818,13 @@
             const m = mediaById(item.mediaId);
             if (!m) continue;
             const s = await sourceFor(m);
-            /* Two clips of one recording in a transition need two different
-               frames of it; the source hands out one at a time, so copy the
-               first before asking for the second. */
+            /* A source owns only its latest frame. Keep every earlier use
+               before another clip or overlay asks that source for a frame. */
             const f = await s.frameAt(at);
-            if (f && want.length > 1 && got.size === 0 && want.some(([o]) => o !== item && o.mediaId === item.mediaId)) {
+            if (f && want.slice(want.findIndex(([o]) => o === item) + 1).some(([o]) => o.mediaId === item.mediaId)) {
               const keep = document.createElement("canvas");
               keep.width = f.w; keep.height = f.h;
-              try { keep.getContext("2d").drawImage(f.el, 0, 0); } catch (e) {}
+              keep.getContext("2d").drawImage(f.el, 0, 0);
               got.set(item, { el: keep, w: f.w, h: f.h });
             } else got.set(item, f);
           }
@@ -11820,7 +11895,7 @@
     const audioCache = new Map();
     const soundOf = async (m, from, to) => {
       const key = m.id + (m.duration > 480 ? ":" + from.toFixed(2) + "-" + to.toFixed(2) : "");
-      if (!audioCache.has(key)) audioCache.set(key, F.audioOf(m, from, to).catch(() => null));
+      if (!audioCache.has(key)) audioCache.set(key, F.audioOf(m, from, to));
       return audioCache.get(key);
     };
     const edge = 0.008;   // a few milliseconds of fade at every cut, so no clicks
@@ -12790,7 +12865,7 @@
         // snapshot it can no longer read, instead of restoring it wrongly
         by: window.SenotelVersion ? window.SenotelVersion.stamp() : null,
         name: $("projectName").value,
-        format: S.format, mode: S.mode, brief: S.brief, vertical: S.vertical, nextId: nextId,
+        format: S.format, mode: S.mode, brief: S.brief, vertical: S.vertical, aspect: S.aspect, nextId: nextId,
         media: S.media.map((m) => ({ id: m.id, name: m.name, type: m.type, duration: m.duration, w: m.w, h: m.h,
           fromVideo: !!m.fromVideo, soundSaved: !!m.soundSaved,
           // the transcript, so captions can be restyled after a reload without listening again
@@ -12872,6 +12947,7 @@
     S.brief = Object.assign({ name: "", what: "", cta: "", tone: "polished" }, snap.brief && typeof snap.brief === "object" ? snap.brief : {});
     applyModeUI();
     S.vertical = !!snap.vertical;
+    S.aspect = Object.prototype.hasOwnProperty.call(ASPECTS, snap.aspect) ? snap.aspect : "9:16";
     if (snap.find && typeof snap.find === "object") S.find = Object.assign({ on: false, len: "auto", genre: "auto", from: "", to: "" }, snap.find);
     // found clips only mean something while their recording is still here
     S.found = snap.found && have[snap.found.mediaId] ? snap.found : null;
