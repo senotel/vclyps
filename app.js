@@ -118,6 +118,34 @@
     return 0;
   }
 
+  // Move animation and tracking with an edit of the item's time window.
+  function shiftItemTime(item, dt, len, map) {
+    const K = window.SenotelKeys;
+    if (map) {
+      if (item.kf) Object.values(item.kf).forEach((keys) => keys.forEach((k) => { k[0] = map(k[0]); }));
+      [item.track, item.mask && item.mask.track].forEach((tr) => { if (tr && tr.pts) tr.pts.forEach((p) => { p[0] = map(p[0]); }); });
+    }
+    if (K && K.shift) K.shift(item, dt, len);
+    [item.track, item.mask && item.mask.track].forEach((tr) => {
+      if (!tr || !tr.pts || !tr.pts.length) return;
+      const pts = tr.pts;
+      const at = (t) => {
+        let i = 0;
+        while (i < pts.length - 1 && pts[i + 1][0] <= t) i++;
+        const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
+        const f = b[0] === a[0] ? 0 : clamp((t - a[0]) / (b[0] - a[0]), 0, 1);
+        return [t - dt, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+      };
+      tr.pts = [at(dt), ...pts.filter((p) => p[0] > dt && p[0] < dt + len).map((p) => [p[0] - dt, p[1], p[2]]), at(dt + len)];
+    });
+  }
+  function retimeItem(item, before) {
+    shiftItemTime(item, 0, dispDur(item), (t) => dispOff(item, srcOff(before, t)));
+  }
+  function overlayTime(b, m, local) {
+    const t = (b.in || 0) + local;
+    return m.type === "video" ? (m.duration ? ((t % m.duration) + m.duration) % m.duration : t) : 0;
+  }
   function fmt(sec) {
     if (!isFinite(sec) || sec < 0) sec = 0;
     const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
@@ -1096,7 +1124,10 @@
       const b = brollById(S.sel.id);
       if (b && S.time > b.start + 0.12 && S.time < b.start + b.dur - 0.12) {
         const right = copyClip(b, { id: nextId++, start: S.time, dur: b.start + b.dur - S.time });
+        right.in = (b.in || 0) + S.time - b.start;
+        shiftItemTime(right, S.time - b.start, right.dur);
         b.dur = S.time - b.start;
+        shiftItemTime(b, 0, b.dur);
         S.broll.push(right);
         S.sel = { type: "broll", id: right.id };
         commit(); renderTimeline(); renderInspector();
@@ -1137,6 +1168,8 @@
       clip.curve = CV().sub(clip.curve, 0, u);
     }
     clip.out = srcT;
+    shiftItemTime(second, offset, dispDur(second));
+    shiftItemTime(clip, 0, offset);
     S.clips.splice(S.clips.indexOf(clip) + 1, 0, second);
     S.sel = { type: "clip", id: second.id };
     commit();
@@ -1201,6 +1234,8 @@
       }
       delete second.name;
       c.out = target;
+      shiftItemTime(second, info.offset, dispDur(second));
+      shiftItemTime(c, 0, info.offset);
       S.clips.splice(at + 1, 0, second);
       at += 1;
     } else if (info.offset > 0.05) {
@@ -3550,7 +3585,7 @@
     const startX = e.clientX;
     const m = mediaById(clip.mediaId);
     const maxOut = m && m.type === "video" && m.duration ? m.duration : 120;
-    const oIn = clip.in, oOut = clip.out;
+    const oIn = clip.in, oOut = clip.out, before = copyClip(clip);
     /* The end of a trimmed clip snaps to the playhead and to the texts,
        overlays and sounds above it. Not to the cuts after it: those move
        with the trim, so they are no place to aim for. */
@@ -3576,6 +3611,7 @@
       window.removeEventListener("pointerup", up);
       hideSnap();
       S.time = clamp(S.time, 0, total());
+      shiftItemTime(clip, dispOff(before, clip.in - oIn), dispDur(clip));
       commit();
       recordEdit("trim", {
         mediaId: clip.mediaId,
@@ -4227,7 +4263,7 @@
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const at0 = b.start, dur0 = b.dur;
+    const at0 = b.start, dur0 = b.dur, in0 = b.in || 0;
     const MIN = 0.3;
 
     const move = (ev) => {
@@ -4235,6 +4271,7 @@
       if (side === "l") {
         const at = clamp(snapPoint(at0 + d, b), 0, at0 + dur0 - MIN);
         b.start = at;
+        b.in = in0 + at - at0;
         b.dur = dur0 + (at0 - at);
       } else {
         b.dur = Math.max(MIN, snapPoint(at0 + dur0 + d, b) - at0);
@@ -4249,6 +4286,7 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       hideSnap();
+      shiftItemTime(b, b.start - at0, b.dur);
       commit();
       renderTimeline();
       renderInspector();
@@ -4666,8 +4704,10 @@
       // ccl14: with Reduce noise on, the element plays the cleaned sound (same timing as the file)
       {
         const am = mediaById(a.mediaId);
-        const ce = a.denoise > 0 && am ? cleanedFor(am, a.denoise) : null;
-        const url = ce && ce.state === "ready" && !ce.from ? ce.url : v.url;
+        const ce = a.denoise > 0 && am ? cleanedFor(am, a.denoise, false) : null;
+        const ready = ce && ce.state === "ready";
+        v.cleanFrom = ready ? ce.from : 0;
+        const url = ready ? ce.url : v.url;
         if (v.el.dataset.playing === undefined) v.el.dataset.playing = v.url;   // what it was made with
         if (v.el.dataset.playing !== url) {
           const t = v.el.currentTime, was = !v.el.paused;
@@ -4678,7 +4718,7 @@
         }
       }
       if (v.el.playbackRate !== sp) v.el.playbackRate = sp;
-      const want = a.in + (S.time - a.start) * sp;
+      const want = a.in + (S.time - a.start) * sp - (v.cleanFrom || 0);
       if (S.playing && inside) {
         if (!v.el.seeking && Math.abs(v.el.currentTime - want) > 0.25) { try { v.el.currentTime = want; } catch (e) {} }
         if (v.el.paused) v.el.play().catch(() => {});
@@ -5750,7 +5790,7 @@
   function drawOverlayHandle(ctx, box) {
     const b = brollAt(S.time);
     if (!b || b.mode === "cover") return;
-    const g = brollGeom(b, box);
+    const g = brollGeom(itemView(b, S.time - b.start), box);
     textHits.set("b" + b.id, { x: g.cx, y: g.cy, w: g.w, h: g.h, rot: g.rot });
     if (!(S.sel && S.sel.type === "broll" && S.sel.id === b.id)) return;
     ctx.save();
@@ -6277,7 +6317,7 @@
   function maskSpace(it) {
     const box = pictureBox();
     if (isClipItem(it)) return { x: box.x, y: box.y, w: box.w, h: box.h, rot: 0 };
-    const g = brollGeom(it, box);
+    const g = brollGeom(itemView(it, S.time - it.start), box);
     return { x: g.cx - g.w / 2, y: g.cy - g.h / 2, w: g.w, h: g.h, rot: g.rot || 0 };
   }
   // the outline and handles over the preview while Mask is open (never in the export)
@@ -6876,9 +6916,8 @@
       box.appendChild(group(label, slider(0, 1, 0.05, cur, (v) => {
         c.retouch = Object.assign({}, c.retouch || {}, { [k]: v });
         if (!retouchOn(c.retouch)) delete c.retouch;
-        if (v > 0 && !RT.ready()) RT.load().then(() => { syncOverlays(); renderInspector(); }).catch(() => renderInspector());
         syncOverlays();
-      }, () => { commit(); recordEdit("retouch", { what: k }); }, (v) => Math.round(v * 100) + "%")));
+      }, () => { commit(); if (retouchOn(c.retouch) && !RT.ready()) RT.load().then(() => { syncOverlays(); renderInspector(); }).catch(() => renderInspector()); recordEdit("retouch", { what: k }); }, (v) => Math.round(v * 100) + "%")));
     });
     box.appendChild(mk("p", "panel-note", RT.failed() ? "The face and body models could not be loaded. Check the connection and try again."
       : retouchOn(c.retouch) && !RT.ready() ? "Getting the face and body models ready (first time only, about 9 MB)…"
@@ -6900,6 +6939,7 @@
   const ttsWaits = new Map();
   function ttsW() {
     if (ttsWorker) return ttsWorker;
+    ttsState.error = null; ttsState.ready = false; ttsState.p = 0;
     ttsWorker = new Worker("tts-worker.js", { type: "module" });
     ttsWorker.onmessage = (e) => {
       const m = e.data || {};
@@ -6911,6 +6951,13 @@
         ttsWaits.delete(m.id);
         if (w) { if (m.type === "audio") w.res(m.samples); else w.rej(new Error(m.message)); }
       }
+    };
+    ttsWorker.onerror = (event) => {
+      const error = new Error(event.message || "The voice worker stopped");
+      ttsWaits.forEach((w) => w.rej(error)); ttsWaits.clear();
+      ttsWorker.terminate(); ttsWorker = null;
+      ttsState.ready = false; ttsState.busy = null; ttsState.error = error.message;
+      if (activeTool === "tts") renderInspector();
     };
     ttsWorker.postMessage({ type: "load" });
     return ttsWorker;
@@ -6959,10 +7006,20 @@
     renderInspector();
   }
   function ttsPanel(box, t) {
-    ttsW();
+    if (!ttsState.error) ttsW();
     if (!ttsState.ready) {
       box.appendChild(mk("p", "panel-note", ttsState.error ? "The voices could not be downloaded: " + ttsState.error
         : "Natural voices, made on your device. Downloading them, once (about 90 MB): " + Math.round(ttsState.p * 100) + "%"));
+      if (ttsState.error) {
+        const retry = mk("button", "mask-act", "Try again");
+        retry.type = "button";
+        retry.addEventListener("click", () => {
+          ttsState.error = null; ttsState.p = 0;
+          if (ttsWorker) ttsWorker.postMessage({ type: "load" }); else ttsW();
+          renderInspector();
+        });
+        box.appendChild(retry);
+      }
       const bar = mk("div", "mask-bar");
       bar.appendChild(mk("i", ""));
       bar.firstChild.style.width = Math.round(ttsState.p * 100) + "%";
@@ -6997,7 +7054,14 @@
      Auto finds the person and everything behind them goes, no green screen
      needed (cutout.js, MediaPipe, on the device). On an overlay that puts
      the person over the video underneath; on the main track, over black. */
-  function cutoutHere(ctx, W, H, item, stream, srcT) {
+  function pictureCacheKey(item, W, H, local) {
+    return JSON.stringify([W, H, item.mediaId, item.crop, item.fit, item.rot, item.flipH, item.flipV,
+      item.x, item.y, item.scale, item.shape, item.mode, item.layout, item.kb, item.bg,
+      item.filter, item.filterAmt, item.adj, item.cutout, item.retouch,
+      clipAnimAt(item, local), item.stab ? stabAt(item, local) : null,
+      item.kb ? local / Math.max(dispDur(item), 0.01) : null]);
+  }
+  function cutoutHere(ctx, W, H, item, stream, srcT, local) {
     const C = window.SenotelCutout;
     if (!C.ready()) {
       if (!C.failed()) { C.load().then(() => syncOverlays()).catch(() => {}); }
@@ -7005,7 +7069,7 @@
     }
     const idx = Math.round(srcT * 30);
     // a frame's cutout is worked out once per look (crop, framing, turn and size can change what is in it)
-    const look = [W, H, item.crop ? item.crop.x + "," + item.crop.y + "," + item.crop.w : "", item.fit || "", item.rot || 0, item.flipH ? 1 : 0, item.scale || "", item.shape || ""].join("|");
+    const look = pictureCacheKey(item, W, H, local);
     try {
       return C.apply(ctx, W, H, stream + ":" + idx + ":" + look, { stream: stream, index: idx, soft: item.cutout.soft });
     } catch (e) { return false; }
@@ -7344,14 +7408,20 @@
      the preview plays the cleaned sound in step with the picture (#pv's own
      sound is faded out under it), and the export mixes the very same
      cleaned sound. */
-  const cleaned = new Map();   // mediaId:strength → {key, state, p, url, blob, promise}
-  const cleanKey = (m, k) => m.id + ":" + Math.round((k == null ? 1 : k) * 10);
+  const cleaned = new Map();   // media URL:strength → {key, state, p, url, blob, promise}
+  const cleanKey = (m, k) => m.url + ":" + Math.round((k == null ? 1 : k) * 10);
   function cleanedFor(m, k, start) {
     const key = cleanKey(m, k);
     let e = cleaned.get(key);
     if (e || start === false) return e || null;
     const F = window.SenotelFastExport, D = window.SenotelDenoise;
     e = { key: key, state: "working", p: 0, url: null, blob: null, from: 0 };
+    e.mediaUrl = m.url;
+    cleaned.forEach((old, oldKey) => {
+      if (old.mediaUrl !== m.url) return;
+      if (old.url) URL.revokeObjectURL(old.url);
+      old.blob = null; cleaned.delete(oldKey);
+    });
     cleaned.set(key, e);
     let last = 0;
     e.promise = (async () => {
@@ -7372,6 +7442,7 @@
         e.p = p;
         if (performance.now() - last > 400) { last = performance.now(); if (activeTool === "denoise") renderInspector(); }
       });
+      if (cleaned.get(key) !== e) return e; // a newer strength or project replaced this job
       e.blob = D.wav(out, D.RATE);
       e.url = URL.createObjectURL(e.blob);
       e.from = a.startsAt || 0;
@@ -7412,9 +7483,9 @@
       return;
     }
     box.appendChild(group("Strength", slider(0.2, 1, 0.1, item.denoise, (v) => { item.denoise = v; }, () => { commit(); cleanedFor(m, item.denoise); renderInspector(); }, (v) => Math.round(v * 100) + "%")));
-    const e = cleanedFor(m, item.denoise);
+    const e = cleanedFor(m, item.denoise, false) || { state: "idle" };
     const msg = e.state === "ready" ? "Cleaned. Play to hear it." : e.state === "failed" ? "The sound could not be cleaned: " + e.why
-      : "Cleaning the sound… " + Math.round(e.p * 100) + "%";
+      : e.state === "idle" ? "Release Strength to clean the sound." : "Cleaning the sound… " + Math.round(e.p * 100) + "%";
     box.appendChild(mk("p", "panel-note", msg));
   }
 
@@ -7435,7 +7506,8 @@
       tabs.appendChild(b);
     });
     box.appendChild(tabs);
-    const after = () => { renderTimeline(); syncNow(); };
+    let before = copyClip(c);
+    const after = () => { retimeItem(c, before); before = copyClip(c); renderTimeline(); syncNow(); };
     if (speedTab === "normal" || !C) {
       const sp = hasCurve(c) ? null : c.speed;
       box.appendChild(group("Speed", slider(0.1, 10, 0.05, sp || 1, (v) => { delete c.curve; c.speed = v; after(); }, () => commit(), (v) => v.toFixed(2) + "×")));
@@ -7457,7 +7529,7 @@
         if (id === "none") { delete c.curve; delete c.curvePreset; }
         else if (id === "custom") { c.curve = hasCurve(c) ? c.curve : [[0, 1], [0.35, 1], [0.5, 0.4], [0.65, 1], [1, 1]]; c.curvePreset = "custom"; }
         else { c.curve = C.preset(id); c.curvePreset = id; c.speed = 1; }
-        commit(); renderInspector(); after();
+        after(); commit(); renderInspector();
         recordEdit("speed-curve", { preset: id });
         if (id !== "none") previewSpan(clipStartOf(c), dispDur(c));
       });
@@ -7518,7 +7590,7 @@
         x.beginPath(); x.arc(q[0], q[1], 7 * dpr, 0, Math.PI * 2); x.fill(); x.stroke();
       });
     };
-    let drag = -1, lastTap = 0;
+    let drag = -1, lastTap = 0, before = copyClip(c);
     const at = (e) => { const r = cv.getBoundingClientRect(), k = cv.width / r.width; return [(e.clientX - r.left) * k, (e.clientY - r.top) * k]; };
     cv.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -7527,7 +7599,7 @@
       const i = c.curve.findIndex((q) => { const s = toPx(q); return Math.hypot(s[0] - p[0], s[1] - p[1]) < 16 * dpr; });
       const now = e.timeStamp;
       if (i > 0 && i < c.curve.length - 1 && now - lastTap < 320) {
-        c.curve.splice(i, 1); c.curvePreset = "custom"; lastTap = 0; draw(); commit(); renderTimeline(); return;
+        c.curve.splice(i, 1); c.curvePreset = "custom"; lastTap = 0; retimeItem(c, before); before = copyClip(c); draw(); commit(); renderTimeline(); return;
       }
       lastTap = now;
       if (i >= 0) { drag = i; return; }
@@ -7549,11 +7621,12 @@
         q[0] = +clamp((p[0] - pad()) / (cv.width - pad() * 2), lo, hi).toFixed(3);
       }
       c.curvePreset = "custom";
+      retimeItem(c, before); before = copyClip(c);
       draw();
       renderTimeline();
       syncNow();
     });
-    const end = () => { if (drag >= 0) { drag = -1; commit(); renderInspector(); } };
+    const end = () => { if (drag >= 0) { drag = -1; retimeItem(c, before); before = copyClip(c); commit(); renderInspector(); } };
     cv.addEventListener("pointerup", end);
     cv.addEventListener("pointercancel", end);
     requestAnimationFrame(draw);
@@ -7623,7 +7696,26 @@
         : "Tap Pick colour, then tap the colour to remove on the picture."));
     }
   }
-  // the tap that picks the colour: read from the preview, where the overlay shows unkeyed while picking
+  // Read the overlay before opacity, blending, masks and effects are applied.
+  function overlayPixel(b, clientX, clientY) {
+    const r = $("layoutCanvas").getBoundingClientRect();
+    const view = itemView(b, S.time - b.start), g = brollGeom(view, pictureBox());
+    const angle = -(g.rot || 0) * Math.PI / 180;
+    const x = clientX - r.left - g.cx, y = clientY - r.top - g.cy;
+    const u = x * Math.cos(angle) - y * Math.sin(angle) + g.w / 2;
+    const v = x * Math.sin(angle) + y * Math.cos(angle) + g.h / 2;
+    if (u < 0 || v < 0 || u >= g.w || v >= g.h) throw new Error("Outside overlay");
+    const el = overlayStill(b), m = mediaById(b.mediaId);
+    const w = el.videoWidth || el.naturalWidth || el.width, h = el.videoHeight || el.naturalHeight || el.height;
+    const sc = Math.max(g.w / w, g.h / h), dw = w * sc, dh = h * sc;
+    const mcx = (m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
+    const dx = dw > g.w + 1 ? clamp(g.w / 2 - mcx * dw, g.w - dw, 0) : (g.w - dw) / 2;
+    const sample = document.createElement("canvas"); sample.width = sample.height = 1;
+    const sx = sample.getContext("2d");
+    sx.drawImage(el, clamp((u - dx) / sc, 0, w - 1), clamp((v - (g.h - dh) / 2) / sc, 0, h - 1), 1, 1, 0, 0, 1, 1);
+    return sx.getImageData(0, 0, 1, 1).data;
+  }
+  // Pick from the overlay itself, mapped through its current place on the stage.
   $("stage").addEventListener("pointerdown", (e) => {
     if (!chromaPicking) return;
     const b = S.sel && S.sel.type === "broll" ? brollById(S.sel.id) : null;
@@ -7632,9 +7724,8 @@
     chromaPicking = false;
     $("stage").classList.remove("picking");
     if (!b) { renderInspector(); return; }
-    const cv = $("layoutCanvas"), r = cv.getBoundingClientRect();
     try {
-      const px = cv.getContext("2d").getImageData(Math.round(((e.clientX - r.left) / r.width) * cv.width), Math.round(((e.clientY - r.top) / r.height) * cv.height), 1, 1).data;
+      const px = overlayPixel(b, e.clientX, e.clientY);
       b.chroma = Object.assign({ strength: 0.5, soft: 0.3, spill: 0.5 }, b.chroma || {}, { color: SenotelChroma.toHex(px[0], px[1], px[2]) });
       commit();
       recordEdit("chroma", { auto: false });
@@ -8114,7 +8205,7 @@
     const m = ctx.getTransform ? ctx.getTransform() : { a: 1, b: 0 };
     const px = Math.hypot(m.a, m.b) || 1;
     const canBlur = "filter" in ctx;
-    if (A.blur > 0.005 && canBlur) ctx.filter = "blur(" + (A.blur * size * px / (window.devicePixelRatio > 1 ? Math.min(2, window.devicePixelRatio) : 1)).toFixed(1) + "px)";
+    if (A.blur > 0.005 && canBlur) ctx.filter = "blur(" + (A.blur * size * px).toFixed(1) + "px)";
     // a wipe uncovers the text from one side (or the middle)
     if (A.wipe && A.wipe.f < 1) {
       const wx = -blockW / 2 - pad, wy = -blockH / 2 - pad - sag, ww = blockW + pad * 2, wh = blockH + pad * 2 + sag * 2;
@@ -8165,7 +8256,7 @@
       if (q.s !== 1 || q.sx !== 1 || q.sy !== 1) ctx.scale(q.s * q.sx, q.s * q.sy);
       if (q.kx) ctx.transform(1, 0, q.kx, 1, 0, 0);
       if (q.a < 1) ctx.globalAlpha *= q.a;
-      if (q.blur > 0.005 && canBlur) ctx.filter = "blur(" + (q.blur * size * px / (window.devicePixelRatio > 1 ? Math.min(2, window.devicePixelRatio) : 1)).toFixed(1) + "px)";
+      if (q.blur > 0.005 && canBlur) ctx.filter = "blur(" + (q.blur * size * px).toFixed(1) + "px)";
       draw(c, 0, 0);
       ctx.restore();
     }
@@ -9183,15 +9274,28 @@
     drawHeading(ctx, sample, { x: 0, y: 0, w: cv.width, h: cv.height }, null, null);
   }
 
-  // Before an export: the fonts every text uses, four seconds at most
+  // Before an export: wait for each text and emoji face before drawing.
   function textFontsReady() {
     const SF = window.SenotelFonts;
-    if (!SF) return Promise.resolve();
     const jobs = S.texts.filter((t) => t.font).map((t) => {
       const k = textLook(t);
-      return SF.load(k.font, k.weight, k.italic);
+      return SF ? SF.load(k.font, k.weight, k.italic) : Promise.resolve();
     });
-    return Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, 4000))]);
+    const emoji = S.texts.filter((t) => t.sticker === "emoji");
+    if (emoji.length && document.fonts) {
+      // Wait for the stylesheet before asking FontFaceSet to load a face it defines.
+      if (window.SenotelStickers) SenotelStickers.loadEmojiFont();
+      const sheet = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find((l) => l.href.includes("family=Noto+Color+Emoji"));
+      const loaded = !sheet || sheet.sheet ? Promise.resolve() : new Promise((resolve, reject) => {
+        sheet.addEventListener("load", resolve, { once: true });
+        sheet.addEventListener("error", () => reject(new Error("The emoji font could not be loaded")), { once: true });
+      });
+      jobs.push(loaded.then(() => Promise.all(emoji.map((t) => document.fonts.load('70px "Noto Color Emoji"', t.text)))));
+    }
+    let timer;
+    return Promise.race([Promise.all(jobs), new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("The text fonts could not be loaded. Check the connection and try again")), 15000);
+    })]).finally(() => clearTimeout(timer));
   }
 
   /* ═══════════ LOWER THIRDS AND TITLE CARDS ═══════════
@@ -9521,12 +9625,12 @@
       const RT = window.SenotelRetouch, srcT = clip.in + srcOff(clip, local), idx = Math.round(srcT * 30);
       if (!RT.ready()) { if (!RT.failed()) RT.load().then(() => syncOverlays()).catch(() => {}); }
       else {
-        const look = [W, H, clip.crop ? clip.crop.x + "," + clip.crop.y + "," + clip.crop.w : "", clip.fit || "", clip.rot || 0, clip.flipH ? 1 : 0].join("|");
+        const look = pictureCacheKey(clip, W, H, local);
         try { RT.apply(ctx, W, H, "r" + clip.id + ":" + idx + ":" + look, clip.retouch, { stream: "r" + clip.id, index: idx }); } catch (e) {}
       }
     }
     // ccl16: Remove background: only the person is kept (black behind, as with a mask)
-    const cut = clip.cutout && window.SenotelCutout ? cutoutHere(ctx, W, H, clip, "c" + clip.id, clip.in + srcOff(clip, local)) : false;
+    const cut = clip.cutout && window.SenotelCutout ? cutoutHere(ctx, W, H, clip, "c" + clip.id, clip.in + srcOff(clip, local), local) : false;
     if (cut && !(clip.mask && clip.mask.shape && clip.mask.shape !== "none")) {
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -9576,7 +9680,7 @@
     const m = mediaById(b.mediaId);
     if (!m) return;
     const local = t - b.start;
-    const src = getSrc(b, m.type === "video" && m.duration ? local % m.duration : 0);
+    const src = getSrc(b0, overlayTime(b, m, local));
     if (!src || !src.w || !src.h) return;
     const g = brollGeom(b, { x: 0, y: 0, w: W, h: H });
     ctx.save();
@@ -9608,7 +9712,7 @@
       ox.clearRect(0, 0, ow, oh);
       try { ox.drawImage(src.el, dx, (g.h - dh) / 2, dw, dh); } catch (e) {}
       // ccl16: the person cut out of the overlay
-      if (cutting) cutoutHere(ox, ow, oh, b, "b" + b.id, m.type === "video" && m.duration ? local % m.duration : 0);
+      if (cutting) cutoutHere(ox, ow, oh, b, "b" + b.id, overlayTime(b, m, local), local);
       if (keyed) {
         const out = SenotelChroma.key(brollMaskCv, b.chroma);
         if (out !== brollMaskCv) {
@@ -10183,7 +10287,7 @@
     }
     if (pvB.readyState < 1) return;
     const local = S.time - b.start;
-    const want = m.duration ? local % m.duration : local;
+    const want = overlayTime(b, m, local);
     const drift = Math.abs(pvB.currentTime - want);
     if (S.playing) {
       if (pvB.paused) pvB.play().catch(() => {});
@@ -11048,7 +11152,7 @@
     if (!dnEl) return false;
     const at = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
     const m = at && at.clip.denoise > 0 ? mediaById(at.clip.mediaId) : null;
-    const e = m && m.type === "video" ? cleanedFor(m, at.clip.denoise) : null;
+    const e = m && m.type === "video" ? cleanedFor(m, at.clip.denoise, false) : null;
     if (!e || e.state !== "ready" || pv.dataset.mid !== String(m.id)) {
       if (!dnEl.paused) dnEl.pause();
       return false;
@@ -11811,7 +11915,7 @@
             const bm = mediaById(b.mediaId);
             // an overlay loops, as it does in the preview
             const local = S.time - b.start;
-            if (bm) want.push([b, bm.type === "video" && bm.duration ? local % bm.duration : 0]);
+            if (bm) want.push([b, overlayTime(b, bm, local)]);
           }
           const got = new Map();
           for (const [item, at] of want) {
@@ -12214,10 +12318,28 @@
     $("expBar").style.width = "0%";
     $("expPct").textContent = "0%";
 
-    await captionFontReady();
-    await textFontsReady();
-    await soundsReady();
-    await primeFirstFrame();
+    try {
+      await captionFontReady();
+      await textFontsReady();
+      await soundsReady();
+      // ccl19: retouch needs its face and body models before the first frame is drawn
+      if (window.SenotelRetouch && S.clips.some((c) => retouchOn(c.retouch))) {
+        $("expStatus").textContent = "getting the retouch ready…";
+        try { await SenotelRetouch.load(); } catch (e) { toast("Retouch could not be loaded, so this export is without it", 6000); }
+        if (run !== EXP.run || EXP.cancelled) return;
+      }
+      // ccl16 + ccl19 body effects: a cutout in the edit needs its model before the first frame is drawn
+      if (window.SenotelCutout && (S.clips.some((c) => c.cutout) || S.broll.some((b) => b.cutout) || S.effects.some((e) => /^body-/.test(e.type)))) {
+        $("expStatus").textContent = "getting the cutout ready…";
+        try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
+        if (run !== EXP.run || EXP.cancelled) return;
+      }
+
+      await primeFirstFrame();
+    } catch (e) {
+      abortExport("Export could not get ready: " + ((e && e.message) || "an error"));
+      return;
+    }
     if (run !== EXP.run) return;
 
     let stream;
@@ -12993,6 +13115,11 @@
 
     pause();
     stopSfx();
+    cleaned.forEach((e) => { if (e.url) URL.revokeObjectURL(e.url); e.blob = null; });
+    cleaned.clear();
+    if (dnEl) { dnEl.pause(); dnEl.removeAttribute("src"); delete dnEl.dataset.key; dnEl.load(); }
+    if (window.SenotelCutout && SenotelCutout.clear) SenotelCutout.clear();
+    if (window.SenotelRetouch && SenotelRetouch.clear) SenotelRetouch.clear();
 
     /* Release the footage. revokeObjectURL frees the blob; the IndexedDB copy
        is what would otherwise resurrect the whole project on the next visit. */
