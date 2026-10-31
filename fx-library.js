@@ -5,11 +5,11 @@
 
    TRANSITIONS mix two whole pictures across a cut, as CapCut's do: A is
    the outgoing clip, B the incoming one, each already drawn to fill the
-   frame on its own canvas; p runs 0 → 1 across the transition. 56 of them
+   frame on its own canvas; p runs 0 → 1 across the transition. 80 of them
    in six groups.
 
-   EFFECTS are laid over the finished picture for as long as an effect
-   clip lasts on its own lane (shake, VHS, old film, glitch, light leaks,
+   EFFECTS (100 in twelve groups) are laid over the finished picture for as
+   long as an effect clip lasts on its own lane (shake, VHS, old film, light leaks,
    snow...). Each reads the frame drawn so far and changes it. local is the
    seconds since the effect began, amount 0 to 1 how strong it is.
 
@@ -643,9 +643,267 @@
     c.filter = "none";
   };
 
+  // Families share primitives, never past frames. Scrubbing and export therefore
+  // have the same result, and each loop has a small fixed upper bound.
+  function addEffects(group, rows, draw) {
+    var g = EFFECTS.filter(function (g) { return g[0] === group; })[0];
+    if (!g) { g = [group, []]; EFFECTS.push(g); }
+    rows.forEach(function (row, i) {
+      g[1].push(row);
+      E[row[0]] = function (c, W, H, t, a) { draw(c, W, H, t, a, i); };
+    });
+  }
+  function starPath(c, x, y, r, points, inner) {
+    for (var j = 0; j < points * 2; j++) {
+      var angle = j * Math.PI / points - Math.PI / 2, radius = j % 2 ? r * inner : r;
+      if (!j) c.moveTo(x, y - r);
+      else c.lineTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+    }
+    c.closePath();
+  }
+  function wash(c, W, H, x, y, radius, colour, a) {
+    var g = c.createRadialGradient(x, y, 0, x, y, radius);
+    g.addColorStop(0, "rgba(" + colour + "," + a + ")");
+    g.addColorStop(1, "rgba(" + colour + ",0)");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+  }
+  addEffects("Lens", [["bulge", "Bulge"], ["edge-prism", "Chromatic edge"], ["tilt-shift", "Tilt shift"], ["lens-flare", "Lens flare"],
+    ["soft-focus", "Soft focus"], ["glass-ripple", "Glass ripple"], ["anamorphic", "Anamorphic flare"], ["kaleidoscope", "Kaleidoscope"]],
+    function (c, W, H, t, a, i) {
+      var S = copyOf(c, W, H), j, y, h = H / 32;
+      if (i === 0 || i === 5) {
+        c.globalAlpha = a;
+        for (j = 0; j < 32; j++) {
+          y = j * h;
+          var k = i === 0 ? Math.sin((j + 0.5) / 32 * Math.PI) * 0.2 : Math.sin(j * 0.6 + t * 3) * 0.035;
+          c.drawImage(S, 0, y, W, h, -W * k / 2, y, W * (1 + k), h + 0.5);
+        }
+      } else if (i === 1) {
+        c.globalAlpha = a;
+        clipThen(c, function () { c.rect(0, 0, W * 0.18, H); c.rect(W * 0.82, 0, W * 0.18, H); }, function () { rgbShift(c, S, W, H, W * 0.025 * a); });
+      } else if (i === 2 || i === 4) {
+        c.globalAlpha = a * (i === 4 ? 0.65 : 1);
+        filtered(c, "blur(" + (Math.min(W, H) * 0.018).toFixed(1) + "px)");
+        if (i === 2) clipThen(c, function () { c.rect(0, 0, W, H * 0.26); c.rect(0, H * 0.74, W, H * 0.26); }, function () { c.drawImage(S, 0, 0); });
+        else c.drawImage(S, 0, 0);
+      } else if (i === 3 || i === 6) {
+        c.globalCompositeOperation = "screen";
+        var x = W * (0.3 + 0.25 * Math.sin(t * 0.4)), cy = H * 0.3;
+        wash(c, W, H, x, cy, Math.min(W, H) * 0.35, "255,210,140", a * 0.7);
+        if (i === 6) { c.fillStyle = "rgba(140,200,255," + a * 0.45 + ")"; c.fillRect(0, cy, W, Math.max(1, H * 0.004)); }
+        else for (j = 1; j < 5; j++) { c.strokeStyle = "rgba(160,210,255," + a * 0.3 + ")"; c.beginPath(); c.arc(W - x * j / 5, H - cy * j / 5, W * 0.02 * j, 0, Math.PI * 2); c.stroke(); }
+      } else {
+        c.globalAlpha = a;
+        for (j = 0; j < 6; j++) {
+          c.save(); c.translate(W / 2, H / 2); c.rotate(j * Math.PI / 3);
+          clipThen(c, function () { c.moveTo(0, 0); c.lineTo(R(W, H) * 2, 0); c.lineTo(R(W, H), R(W, H) * 1.74); c.closePath(); }, function () { c.drawImage(S, -W / 2, -H / 2, W, H); }); c.restore();
+        }
+      }
+    });
+  addEffects("Light", [["sun-rays", "Sun rays"], ["neon-flicker", "Neon flicker"], ["flashlight", "Flashlight sweep"], ["prism", "Prism"],
+    ["golden-hour", "Golden hour"], ["light-sweep", "Light sweep"], ["aurora", "Aurora"], ["stage-lights", "Stage lights"]],
+    function (c, W, H, t, a, i) {
+      var j, g, x = (0.5 + 0.5 * Math.sin(t * 0.8)) * W;
+      if (i === 2) {
+        var S = copyOf(c, W, H); shade(c, W, H, a * 0.7);
+        var L = scratch("flashlight", W, H), l = L.getContext("2d"); l.drawImage(S, 0, 0);
+        l.globalCompositeOperation = "destination-in";
+        wash(l, W, H, x, H * 0.45, Math.min(W, H) * 0.65, "255,255,255", 1);
+        c.globalAlpha = a; c.drawImage(L, 0, 0); return;
+      }
+      c.globalCompositeOperation = "screen";
+      if (i === 0 || i === 7) {
+        c.globalAlpha = a * 0.18; c.fillStyle = i === 0 ? "#ffe4a0" : "#80bfff";
+        c.translate(W * 0.5, -H * 0.1);
+        for (j = 0; j < 9; j++) { c.save(); c.rotate((j - 4) * 0.22 + Math.sin(t * 0.3) * 0.12); c.beginPath(); c.moveTo(0, 0); c.lineTo(-W * 0.055, H * 1.3); c.lineTo(W * 0.055, H * 1.3); c.closePath(); c.fill(); c.restore(); }
+      } else if (i === 1) wash(c, W, H, W * 0.1, H * 0.5, Math.max(W, H), "255,40,100", a * (0.15 + 0.4 * rnd(Math.floor(t * 12), 31)));
+      else if (i === 4) wash(c, W, H, W, 0, Math.max(W, H), "255,170,65", a * 0.65);
+      else {
+        g = c.createLinearGradient(0, 0, W, i === 6 ? H : 0);
+        for (j = 0; j <= 6; j++) g.addColorStop(j / 6, "hsla(" + ((j * 55 + t * 25) % 360) + ",85%,65%," + a * (i === 3 ? 0.18 : 0.3) + ")");
+        c.fillStyle = g;
+        if (i === 5) { c.translate(x, H / 2); c.rotate(-0.3); c.fillRect(-W * 0.1, -H, W * 0.2, H * 2); }
+        else c.fillRect(0, 0, W, H);
+      }
+    });
+  addEffects("Motion", [["zoom-blur", "Zoom blur"], ["motion-echo", "Motion echo"], ["freeze-flash", "Freeze flash"], ["speed-lines", "Speed lines"],
+    ["wobble", "Wobble"], ["roll", "Camera roll"], ["vertical-drift", "Vertical drift"], ["horizontal-trail", "Horizontal trail"], ["tunnel", "Tunnel"], ["impact", "Impact"]],
+    function (c, W, H, t, a, i) {
+      var j, S;
+      if (i === 3) {
+        c.strokeStyle = "rgba(255,255,255," + a * 0.65 + ")"; c.lineWidth = Math.max(1, W / 500);
+        for (j = 0; j < 36; j++) { var angle = rnd(j, 71) * Math.PI * 2, r = R(W, H) * (0.45 + rnd(j, 72) * 0.3 + (t * 0.7 % 0.3)); c.beginPath(); c.moveTo(W / 2 + Math.cos(angle) * r, H / 2 + Math.sin(angle) * r); c.lineTo(W / 2 + Math.cos(angle) * r * 1.6, H / 2 + Math.sin(angle) * r * 1.6); c.stroke(); } return;
+      }
+      if (i === 2) { c.fillStyle = "rgba(255,255,255," + a * 0.75 * Math.pow(Math.max(0, Math.cos(t * 5)), 18) + ")"; c.fillRect(0, 0, W, H); return; }
+      S = copyOf(c, W, H);
+      if (i === 4 || i === 5 || i === 6 || i === 9) {
+        var wave = Math.sin(t * (i === 9 ? 17 : 3));
+        c.globalAlpha = a;
+        place(c, S, W, H, { s: 1 + a * 0.08, rot: i === 5 ? wave * a * 0.08 : 0, dx: i === 4 || i === 9 ? wave * a * W * 0.025 : 0, dy: i === 6 ? wave * a * H * 0.035 : 0 });
+      } else for (j = 1; j <= 5; j++) place(c, S, W, H, { alpha: a * (6 - j) / 35, s: i === 0 || i === 8 ? 1 + j * a * (i === 8 ? 0.16 : 0.025) : 1, dx: i === 1 || i === 7 ? j * W * a * 0.015 : 0, dy: i === 1 ? j * H * a * 0.008 : 0 });
+    });
+  addEffects("Retro", [["crt-lines", "CRT lines"], ["burn-edges", "Burn edges"], ["sepia-flicker", "Sepia flicker"], ["halftone", "Halftone"], ["newsprint", "Newsprint"],
+    ["film-scratches", "Film scratches"], ["projector", "Projector"], ["faded-film", "Faded film"], ["gate-weave", "Gate weave"], ["tv-roll", "TV roll"]],
+    function (c, W, H, t, a, i) {
+      var j, S;
+      if (i === 0 || i === 9) {
+        c.fillStyle = "rgba(0,0,0," + a * 0.35 + ")";
+        for (j = 0; j < 90; j++) c.fillRect(0, j * H / 90, W, H / 240);
+        if (i === 9) { c.fillStyle = "rgba(255,255,255," + a * 0.2 + ")"; c.fillRect(0, (t * 0.23 % 1) * H, W, H * 0.09); }
+      } else if (i === 1) { leak(c, W, H, t, a); vignette(c, W, H, a * 0.9); }
+      else if (i === 3 || i === 4) {
+        S = copyOf(c, W, H); filtered(c, i === 4 ? "grayscale(1) contrast(1.6)" : "contrast(1.25)"); c.globalAlpha = a; c.drawImage(S, 0, 0); c.filter = "none";
+        // An eight-pixel pattern is tiled by canvas, avoiding frame-sized loops.
+        var P = scratch("print-pattern", 8, 8), x = P.getContext("2d"); x.fillStyle = "rgba(0,0,0,0.5)"; x.beginPath(); x.arc(4, 4, i === 3 ? 1.5 : 1, 0, Math.PI * 2); x.fill();
+        c.fillStyle = c.createPattern(P, "repeat"); c.fillRect(0, 0, W, H);
+      } else if (i === 5) {
+        c.strokeStyle = "rgba(255,240,210," + a * 0.5 + ")";
+        for (j = 0; j < 8; j++) { var xx = rnd(j + Math.floor(t * 8) * 17, 41) * W; c.beginPath(); c.moveTo(xx, 0); c.lineTo(xx + W * 0.005, H); c.stroke(); }
+      } else if (i === 8) { S = copyOf(c, W, H); place(c, S, W, H, { s: 1.025, dx: (rnd(Math.floor(t * 18), 1) - 0.5) * W * 0.015 * a, alpha: a }); }
+      else {
+        S = copyOf(c, W, H); c.globalAlpha = a; filtered(c, i === 2 ? "sepia(0.8)" : i === 7 ? "saturate(0.55) contrast(0.8)" : "sepia(0.25)"); c.drawImage(S, 0, 0); c.filter = "none";
+        shade(c, W, H, a * (i === 6 ? 0.16 : 0.06) * rnd(Math.floor(t * 18), 19));
+      }
+    });
+  addEffects("Party", [["disco", "Disco lights"], ["balloons", "Balloons"], ["floating-hearts", "Floating hearts"], ["falling-stars", "Falling stars"],
+    ["glitter", "Glitter"], ["streamers", "Streamers"], ["bubbles", "Bubbles"], ["fireworks", "Fireworks"]],
+    function (c, W, H, t, a, kind) {
+      c.globalAlpha = a;
+      for (var j = 0; j < (kind === 4 ? 80 : 24); j++) {
+        var r = rnd(j, 52), x = rnd(j, 51) * W, y = ((rnd(j, 53) - t * (0.04 + r * 0.08)) % 1 + 1) % 1 * H, size = Math.min(W, H) * (0.012 + r * 0.025);
+        c.fillStyle = "hsl(" + (j * 47 % 360) + ",80%,75%)"; c.strokeStyle = c.fillStyle;
+        c.save(); c.translate(x, y); c.beginPath();
+        if (kind === 0) { c.restore(); c.globalCompositeOperation = "screen"; wash(c, W, H, x, y, size * 6, j % 2 ? "255,60,110" : "70,170,255", a * 0.12 * (0.5 + 0.5 * Math.sin(t * 3 + j))); continue; }
+        if (kind === 2) { c.moveTo(0, size); c.bezierCurveTo(-size * 2, -size * 0.2, -size, -size * 1.7, 0, -size * 0.5); c.bezierCurveTo(size, -size * 1.7, size * 2, -size * 0.2, 0, size); }
+        else if (kind === 3 || kind === 4) { c.rotate(t + j); starPath(c, 0, 0, kind === 4 ? size * 0.3 * Math.abs(Math.sin(t * 3 + j)) : size, kind === 4 ? 4 : 5, 0.4); }
+        else if (kind === 5) { c.moveTo(0, 0); c.bezierCurveTo(size * 2, size, -size * 2, size * 2, 0, size * 4); c.stroke(); }
+        else if (kind === 7) {
+          var phase = (t * 0.6 + r) % 1; c.globalAlpha = a * (1 - phase);
+          for (var q = 0; q < 10; q++) { var angle = q * Math.PI / 5; c.moveTo(Math.cos(angle) * size * phase * 4, Math.sin(angle) * size * phase * 4); c.lineTo(Math.cos(angle) * size * phase * 5, Math.sin(angle) * size * phase * 5); } c.stroke();
+        } else { c.ellipse(0, 0, size, size * (kind === 1 ? 1.3 : 1), 0, 0, Math.PI * 2); if (kind === 6) c.stroke(); }
+        if (kind !== 5 && kind !== 6 && kind !== 7) c.fill();
+        if (kind === 1) { c.beginPath(); c.moveTo(0, size * 1.3); c.lineTo(size * 0.1, size * 3); c.stroke(); }
+        c.restore();
+      }
+    });
+  addEffects("Frame", [["film-strip", "Film strip"], ["polaroid", "Polaroid"], ["bars-sweep", "Bars sweep"], ["rounded-vignette", "Rounded vignette"],
+    ["countdown", "Countdown"], ["viewfinder", "Viewfinder"], ["postcard", "Postcard"], ["double-border", "Double border"]],
+    function (c, W, H, t, a, i) {
+      var m = Math.min(W, H) * 0.045, j;
+      c.globalAlpha = a; c.fillStyle = i === 1 || i === 6 ? "#fff8ec" : "#000"; c.strokeStyle = "#ffffff"; c.lineWidth = Math.max(1, m * 0.1);
+      if (i === 3) { c.globalAlpha = 1; vignette(c, W, H, a * 0.95); return; }
+      if (i === 2) { var bar = H * 0.12 * (0.5 + 0.5 * Math.sin(t)); c.fillRect(0, 0, W, bar); c.fillRect(0, H - bar, W, bar); }
+      else if (i === 4) {
+        c.beginPath(); c.arc(W / 2, H / 2, Math.min(W, H) * 0.3, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.moveTo(W / 2, 0); c.lineTo(W / 2, H); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
+        c.fillStyle = "#ffffff"; c.font = "bold " + Math.round(Math.min(W, H) * 0.3) + "px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(String(3 - Math.floor(t % 3)), W / 2, H / 2);
+      } else if (i === 5) {
+        for (j = 0; j < 4; j++) { c.save(); c.translate(j % 2 ? W - m : m, j < 2 ? m : H - m); c.scale(j % 2 ? -1 : 1, j < 2 ? 1 : -1); c.beginPath(); c.moveTo(0, m * 2); c.lineTo(0, 0); c.lineTo(m * 2, 0); c.stroke(); c.restore(); }
+      } else {
+        c.fillRect(0, 0, W, m); c.fillRect(0, H - m * (i === 1 ? 3 : 1), W, m * (i === 1 ? 3 : 1)); c.fillRect(0, 0, m, H); c.fillRect(W - m, 0, m, H);
+        if (i === 0) { c.fillStyle = "#e8e8e8"; for (j = 0; j < 16; j++) { c.fillRect(m * 0.25, (j + t % 1) * H / 16, m * 0.5, H / 28); c.fillRect(W - m * 0.75, (j + t % 1) * H / 16, m * 0.5, H / 28); } }
+        if (i === 7) { c.strokeRect(m * 1.5, m * 1.5, W - m * 3, H - m * 3); c.strokeRect(m * 2, m * 2, W - m * 4, H - m * 4); }
+      }
+    });
+  addEffects("Glitch", [["scan-jitter", "Scan jitter"], ["block-jump", "Block jump"], ["signal-loss", "Signal loss"], ["digital-smear", "Digital smear"], ["colour-tear", "Colour tear"], ["compression", "Compression"]],
+    function (c, W, H, t, a, i) {
+      var S = copyOf(c, W, H), seed = Math.floor(t * 12);
+      if (i === 2) { shade(c, W, H, rnd(seed, 90) * a * 0.8); return; }
+      if (i === 5) { c.globalAlpha = a; pixel(c, S, W, H, 3 + rnd(seed, 91) * 24); return; }
+      for (var j = 0; j < 12; j++) {
+        var y = rnd(j + seed * 13, 92) * H, h = Math.min(H - y, H * (0.01 + rnd(j, 93) * 0.05)), dx = (rnd(j + seed, 94) - 0.5) * W * 0.18 * a;
+        c.globalAlpha = i === 3 ? a * 0.5 : a;
+        c.drawImage(S, 0, y, W, h, dx, y, W, h);
+        if (i === 4) { c.globalCompositeOperation = "screen"; c.fillStyle = "rgba(255,40,100," + a * 0.25 + ")"; c.fillRect(0, y, W, h); c.globalCompositeOperation = "source-over"; }
+        if (i === 1) c.drawImage(S, W * 0.25, y, W * 0.25, h, W * 0.5, y, W * 0.25, h);
+      }
+    });
+  addEffects("Colour", [["duotone", "Duotone"], ["warm-fade", "Warm fade"], ["cool-fade", "Cool fade"], ["bleach", "Bleach bypass"]],
+    function (c, W, H, t, a, i) {
+      var S = copyOf(c, W, H); c.globalAlpha = a;
+      filtered(c, i === 0 ? "grayscale(1) contrast(1.3)" : i === 3 ? "saturate(0.3) contrast(1.5)" : "saturate(0.75) contrast(0.9)"); c.drawImage(S, 0, 0); c.filter = "none";
+      if (i < 3) { c.globalCompositeOperation = i === 0 ? "multiply" : "screen"; c.globalAlpha = a * 0.3; c.fillStyle = i === 2 ? "#7ca9df" : i === 1 ? "#edb77c" : "#e0a5bd"; c.fillRect(0, 0, W, H); }
+    });
+
+  // Exact endpoints also work when a renderer seeks straight to the cut edge.
+  function addTransition(group, id, name, draw) {
+    T[id] = function (c, A, B, p, W, H) {
+      if (p <= 0 || p >= 1) { c.drawImage(p <= 0 ? A : B, 0, 0, W, H); return; }
+      draw(c, A, B, p, W, H);
+    };
+    var g = TRANSITIONS.filter(function (g) { return g[0] === group; })[0];
+    g[1].push([id, name]);
+  }
+  [["ink", "Ink dissolve"], ["luma", "Luma dissolve"], ["cloud", "Cloud dissolve"]].forEach(function (row, kind) {
+    addTransition("Effects", row[0], row[1], function (c, A, B, p, W, H) {
+      c.drawImage(A, 0, 0, W, H);
+      // Read only a thumbnail for luma; ink and cloud use procedural masks.
+      var M = scratch("ink-mask", 96, 96), x = M.getContext("2d");
+      var light;
+      if (kind === 1) {
+        var thumb = scratch("luma-thumb", 8, 8), tx = thumb.getContext("2d");
+        tx.drawImage(B, 0, 0, 8, 8);
+        try { light = tx.getImageData(0, 0, 8, 8).data; } catch (err) { light = null; }
+      }
+      for (var j = 0; j < 64; j++) {
+        var xx = rnd(j, 101) * 96, yy = rnd(j, 102) * 96;
+        if (kind === 1) {
+          var brightness = light ? (light[j * 4] * 0.2126 + light[j * 4 + 1] * 0.7152 + light[j * 4 + 2] * 0.0722) / 255 : rnd(j, 103);
+          x.fillStyle = "rgba(0,0,0," + clamp((p - (1 - brightness) * 0.8) * 5, 0, 1) + ")"; x.fillRect(j % 8 * 12, Math.floor(j / 8) * 12, 13, 13);
+        }
+        else { x.fillStyle = "#000"; x.beginPath(); x.arc(xx, yy, Math.max(0, p - rnd(j, 104) * 0.6) * (kind === 2 ? 70 : 45), 0, Math.PI * 2); x.fill(); }
+      }
+      var S = scratch("ink-picture", W, H), y = S.getContext("2d"); y.drawImage(B, 0, 0, W, H); y.globalCompositeOperation = "destination-in"; y.drawImage(M, 0, 0, W, H); c.drawImage(S, 0, 0);
+    });
+  });
+  [["swirl", "Swirl"], ["ripple", "Ripple"], ["stretch-h", "Stretch across"], ["stretch-v", "Stretch up"], ["zoom-smear", "Zoom smear"], ["elastic", "Elastic zoom"]].forEach(function (row, kind) {
+    addTransition("Camera", row[0], row[1], function (c, A, B, p, W, H) {
+      var k = Math.sin(p * Math.PI);
+      if (kind === 1) {
+        place(c, A, W, H, {}); place(c, B, W, H, { alpha: inOut(p) });
+        var S = scratch("ripple-picture", W, H), x = S.getContext("2d"); x.drawImage(A, 0, 0, W, H); x.globalAlpha = inOut(p); x.drawImage(B, 0, 0, W, H);
+        for (var j = 0; j < 32; j++) { var h = H / 32, dx = Math.sin(j * 0.6 - p * 12) * W * 0.06 * k; c.drawImage(S, 0, j * h, W, h, dx - W * 0.07 * k, j * h, W * (1 + 0.14 * k), h + 0.5); }
+      } else {
+        place(c, A, W, H, { s: 1 + k * 0.3, sx: kind === 2 ? 1 + k * 1.5 : null, sy: kind === 3 ? 1 + k * 1.5 : null, rot: kind === 0 ? p * Math.PI : 0, blur: kind === 4 ? k * Math.min(W, H) * 0.025 : 0 });
+        place(c, B, W, H, { alpha: inOut(p), s: 1 + k * (kind === 5 ? 0.55 : 0.3), rot: kind === 0 ? (p - 1) * Math.PI : 0, sx: kind === 2 ? 1 + k * 1.5 : null, sy: kind === 3 ? 1 + k * 1.5 : null, blur: kind === 4 ? k * Math.min(W, H) * 0.025 : 0 });
+      }
+    });
+  });
+  [["star-wipe", "Star wipe"], ["triangle-wipe", "Triangle wipe"], ["diagonal-slices", "Diagonal slices"], ["staggered-slices", "Staggered slices"], ["zigzag", "Zigzag wipe"], ["page-curl", "Page curl"], ["page-peel", "Page peel"]].forEach(function (row, kind) {
+    addTransition("Wipe", row[0], row[1], function (c, A, B, p, W, H) {
+      var e = inOut(p); c.drawImage(A, 0, 0, W, H);
+      clipThen(c, function () {
+        var j, x;
+        if (kind === 0) starPath(c, W / 2, H / 2, R(W, H) * 3.3 * e, 5, 0.4);
+        else if (kind === 1) { var r = R(W, H) * 4 * e; c.moveTo(W / 2, H / 2 - r); c.lineTo(W / 2 + r, H / 2 + r); c.lineTo(W / 2 - r, H / 2 + r); c.closePath(); }
+        else if (kind === 2 || kind === 3) {
+          for (j = 0; j < 10; j++) { var k = clamp(e * 1.5 - j * 0.05, 0, 1); if (kind === 2) { c.moveTo(0, j * H / 10); c.lineTo(W * k, j * H / 10); c.lineTo(W * k + W * 0.1, (j + 1) * H / 10); c.lineTo(0, (j + 1) * H / 10); c.closePath(); } else c.rect(0, j * H / 10, W * k, H / 10 + 1); }
+        } else if (kind === 4) {
+          c.moveTo(0, 0); c.lineTo(W * e, 0); for (j = 0; j <= 20; j++) c.lineTo(W * e + (j % 2 ? 1 : -1) * W * 0.035, j * H / 20); c.lineTo(0, H); c.closePath();
+        } else { x = W * e; c.rect(kind === 5 ? 0 : W - x, 0, x, H); }
+      }, function () { c.drawImage(B, 0, 0, W, H); });
+      if (kind >= 5) {
+        var edge = kind === 5 ? W * e : W * (1 - e), width = W * 0.13 * Math.sin(p * Math.PI), g = c.createLinearGradient(edge - width, 0, edge + width, 0);
+        g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.5, "rgba(0,0,0,0.45)"); g.addColorStop(0.55, "rgba(255,255,255,0.8)"); g.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = g; c.fillRect(edge - width, 0, width * 2, H);
+      }
+    });
+  });
+  [["warm-flash", "Warm flash"], ["cool-flash", "Cool flash"], ["prism-flash", "Prism flash"], ["shutter-flash", "Shutter flash"], ["glitch-bars", "Glitch bars"], ["rgb-flash", "RGB flash"], ["pixel-wave", "Pixel wave"]].forEach(function (row, kind) {
+    addTransition("Effects", row[0], row[1], function (c, A, B, p, W, H) {
+      var k = Math.sin(Math.PI * p), img = p < 0.5 ? A : B;
+      c.drawImage(img, 0, 0, W, H);
+      if (kind === 4) {
+        for (var j = 0; j < 16; j++) { var h = H / 16; c.drawImage(img, 0, j * h, W, h, (rnd(j + Math.floor(p * 20), 111) - 0.5) * W * 0.3 * k, j * h, W, h + 1); }
+      } else if (kind === 5) rgbShift(c, img, W, H, W * 0.06 * k);
+      else if (kind === 6) pixel(c, img, W, H, 1 + Math.pow(k, 3) * 48);
+      else if (kind === 3) { c.fillStyle = "rgba(0,0,0," + k + ")"; c.fillRect(0, 0, W, H * k / 2); c.fillRect(0, H * (1 - k / 2), W, H * k / 2); }
+      else { c.globalCompositeOperation = "screen"; c.fillStyle = kind === 0 ? "rgba(255,195,105," + k + ")" : kind === 1 ? "rgba(155,210,255," + k + ")" : "hsla(" + Math.round(p * 360) + ",90%,80%," + k + ")"; c.fillRect(0, 0, W, H); }
+    });
+  });
+
   function effect(id, c, W, H, local, amount) {
     var fn = E[id];
-    if (!fn) return;
+    if (!fn || amount <= 0) return;
     c.save();
     c.setTransform(1, 0, 0, 1, 0, 0);
     try { fn(c, W, H, Math.max(0, local), clamp(amount == null ? 1 : amount, 0, 1)); } catch (e) {}
