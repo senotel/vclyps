@@ -135,12 +135,20 @@
 
   /* ═══════════ HISTORY (undo / redo) ═══════════ */
 
-  let hist = [], histIdx = -1;
+  let hist = [], histMedia = [], histIdx = -1;
   function commit() {
     try { kfCapture(); } catch (e) {}   // ccl13: an edit of a keyframed thing is kept as a keyframe
     hist = hist.slice(0, histIdx + 1);
+    histMedia = histMedia.slice(0, histIdx + 1);
+    // Cache only IDs so releasing removed files never parses project snapshots.
+    const media = new Set(S.media.map((m) => m.id));
+    [...S.clips, ...S.broll, ...S.audio].forEach((c) => {
+      media.add(c.mediaId);
+      if (c.reversed) media.add(c.reversed.mediaId);
+    });
+    histMedia.push(media);
     hist.push(JSON.stringify({ media: S.media.map((m) => m.id), c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
-    if (hist.length > 80) hist.shift();
+    if (hist.length > 80) { hist.shift(); histMedia.shift(); }
     histIdx = hist.length - 1;
     if (removeMedia.collect) removeMedia.collect();
     saveSession();   // every edit is also a resume point
@@ -889,14 +897,11 @@
     if (!removeMedia.kept) removeMedia.kept = new Map();
     removeMedia.kept.set(id, S.media[i]);
     removeMedia.collect = () => {
+      if (!removeMedia.kept.size) return;
       const refs = new Set();
       const remember = (c) => { refs.add(c.mediaId); if (c.reversed) refs.add(c.reversed.mediaId); };
       [...S.clips, ...S.broll, ...S.audio].forEach(remember);
-      hist.forEach((json) => {
-        const h = JSON.parse(json);
-        (h.media || []).forEach((id) => refs.add(id));
-        [...(h.c || []), ...(h.b || []), ...(h.a || [])].forEach(remember);
-      });
+      histMedia.forEach((media) => media.forEach((id) => refs.add(id)));
       removeMedia.kept.forEach((m, key) => {
         if (refs.has(key)) return;
         URL.revokeObjectURL(m.url);
