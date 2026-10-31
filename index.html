@@ -225,7 +225,6 @@
        dismiss; settings are somewhere you go, read, and change deliberately. -->
   <section class="screen" id="screen-settings">
     <div class="page-wrap">
-      <p class="page-eyebrow">vClyps</p>
       <h2 class="page-title">Settings</h2>
 
       <div class="set-group">
@@ -243,7 +242,7 @@
         <label>Notify me when it's ready
           <span class="set-note">A notification when an edit or export finishes, even while you are in another app.</span>
         </label>
-        <div class="ins-seg" id="notifySeg">
+        <div class="ins-seg seg-switch" id="notifySeg" role="group" aria-label="Notify me when it's ready">
           <button data-n="0" class="active">Off</button>
           <button data-n="1">On</button>
         </div>
@@ -257,12 +256,12 @@
         <label>Delete by dragging to the bin
           <span class="set-note">Drag a text, sticker or overlay to the bottom of the picture and a bin appears. Let go over it to delete.</span>
         </label>
-        <div class="ins-seg" id="binSeg">
+        <div class="ins-seg seg-switch" id="binSeg" role="group" aria-label="Delete by dragging to the bin">
           <button data-b="0">Off</button>
           <button data-b="1" class="active">On</button>
         </div>
         <label class="set-sub">Ask before deleting</label>
-        <div class="ins-seg" id="binAskSeg">
+        <div class="ins-seg seg-switch" id="binAskSeg" role="group" aria-label="Ask before deleting">
           <button data-a="0">Off</button>
           <button data-a="1" class="active">On</button>
         </div>
@@ -279,8 +278,6 @@
           <button class="ghost-btn danger-btn" id="resetProject">Start a new video</button>
         </div>
       </div>
-
-      <p class="set-soon">More controls are on the way.</p>
 
       <!-- About: the only place the version is shown. Deliberately kept out of
            the editor chrome — it is for support and debugging, not decoration. -->
