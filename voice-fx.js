@@ -48,12 +48,15 @@
         const i = Math.floor(p), f = p - i;
         return b[i] * (1 - f) + b[(i + 1) % L] * f;
       }
-      // in/out: arrays of channel data (Float32Array), same length
+      // in/out: arrays of channel data (Float32Array), same length. A mono
+      // input (a voiceover, a text-to-speech voice) feeds every output, or
+      // the right side would be silent
       run(ins, outs, ratio) {
         const N = this.N, L = this.len, n = outs[0].length;
         const step = (1 - ratio) / N;
+        const one = ins.length === 1 ? ins[0] : null;
         for (let s = 0; s < n; s++) {
-          for (let c = 0; c < outs.length; c++) this.buf[c][this.w] = ins[c] ? ins[c][s] || 0 : 0;
+          for (let c = 0; c < outs.length; c++) { const src = one || ins[c]; this.buf[c][this.w] = src ? src[s] || 0 : 0; }
           let pa = this.phase, pb = pa + 0.5; if (pb >= 1) pb -= 1;
           const ga = Math.sin(Math.PI * pa) ** 2, gb = Math.sin(Math.PI * pb) ** 2;
           const da = pa * N + 2, db = pb * N + 2;
@@ -71,12 +74,17 @@
   const WORKLET = "const PitchCore = (" + pitchCore.toString() + ")();\n" +
     "class SenotelPitch extends AudioWorkletProcessor {\n" +
     "  static get parameterDescriptors() { return [{ name: 'ratio', defaultValue: 1, minValue: 0.25, maxValue: 4, automationRate: 'k-rate' }]; }\n" +
-    "  constructor() { super(); this.core = null; }\n" +
+    "  constructor() { super(); this.core = null; this.quiet = 0; }\n" +
     "  process(inputs, outputs, params) {\n" +
     "    const out = outputs[0]; if (!out || !out.length) return true;\n" +
     "    if (!this.core) this.core = new PitchCore(sampleRate, out.length);\n" +
-    "    this.core.run(inputs[0] || [], out, params.ratio[0]);\n" +
-    "    return true;\n" +
+    "    const ins = inputs[0] || [];\n" +
+    // nothing coming in (the chain was rebuilt, the clip ended): play out
+    // what is still in the delay line, then return false so the browser stops
+    // calling this node and can collect it. It wakes again if a source starts.
+    "    this.quiet = ins.length ? 0 : this.quiet + out[0].length;\n" +
+    "    this.core.run(ins, out, params.ratio[0]);\n" +
+    "    return this.quiet < this.core.len;\n" +
     "  }\n" +
     "}\n" +
     "registerProcessor('senotel-pitch', SenotelPitch);\n";

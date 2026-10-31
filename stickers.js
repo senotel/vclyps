@@ -226,11 +226,13 @@
     c.restore();
     return w;
   }
-  // how wide a shape is for its height, without drawing it
+  // how wide a shape is for its height, without drawing it on screen: drawn
+  // on one small measuring canvas kept for good (this runs every frame)
+  var measure = null;
   function shapeWidth(id, s) {
     if (typeof document === "undefined") return s;
-    var cv = document.createElement("canvas").getContext("2d");
-    return drawShape(cv, id, s, "#000");
+    if (!measure) { var cv = document.createElement("canvas"); cv.width = cv.height = 1; measure = cv.getContext("2d"); }
+    return drawShape(measure, id, s, "#000");
   }
 
   var emojiFontAdded = false;

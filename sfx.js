@@ -1153,13 +1153,19 @@
           for (var k = 0; k < v.src.length; k++) { try { v.src[k].n.stop(n + 0.05); } catch (e) {} }
         }
       };
-      live.push(voice);
-
-      setTimeout(function () {
-        try { out.disconnect(); } catch (e) {}
-        var at = live.indexOf(voice);
-        if (at >= 0) live.splice(at, 1);
-      }, Math.max(0, (stopAt - ctx.currentTime) * 1000) + 150);
+      /* An offline mix (the fast export) runs on its own clock, not the
+         wall's: rendering can be slower than real time, so a timer would
+         take late sounds out before they are rendered. Its whole graph goes
+         when the render is done, so it needs no teardown and no stopAll. */
+      var O = global.OfflineAudioContext || global.webkitOfflineAudioContext;
+      if (!(O && ctx instanceof O)) {
+        live.push(voice);
+        setTimeout(function () {
+          try { out.disconnect(); } catch (e) {}
+          var at = live.indexOf(voice);
+          if (at >= 0) live.splice(at, 1);
+        }, Math.max(0, (stopAt - ctx.currentTime) * 1000) + 150);
+      }
 
       return voice;
     } catch (e) {

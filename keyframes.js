@@ -158,11 +158,23 @@
     return true;
   }
 
-  // drop keyframes past an item's (new) length, and move them with a trim of its start
+  /* Move keyframes with a trim of the item's start (dt seconds cut off) and
+     drop the ones past its (new) length. What is on screen at the kept
+     moments must not change, so a keyframe cut off at either end leaves one
+     in its place at the new edge, holding the value that was there. */
   function shift(item, dt, len) {
     if (!has(item)) return;
     Object.keys(item.kf).forEach((p) => {
-      item.kf[p] = item.kf[p].map((k) => [k[0] - dt, k[1], k[2]]).filter((k) => k[0] >= -EPS && (len == null || k[0] <= len + EPS));
+      const all = item.kf[p].map((k) => [k[0] - dt, k[1], k[2]]);
+      const keep = all.filter((k) => k[0] >= -EPS && (len == null || k[0] <= len + EPS));
+      const near = (t) => keep.some((k) => Math.abs(k[0] - t) < EPS);
+      const before = all.filter((k) => k[0] < -EPS);
+      if (before.length && !near(0)) keep.unshift([0, valueAt(all, 0), before[before.length - 1][2]]);
+      if (len != null && all.some((k) => k[0] > len + EPS) && !near(len)) {
+        const prev = all.filter((k) => k[0] < len);
+        keep.push([len, valueAt(all, len), prev.length ? prev[prev.length - 1][2] : "linear"]);
+      }
+      item.kf[p] = keep;
       if (!item.kf[p].length) delete item.kf[p];
     });
     if (!Object.keys(item.kf).length) delete item.kf;

@@ -28,10 +28,15 @@
   const BROW_L = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46];
   const BROW_R = [300, 293, 334, 296, 336, 285, 295, 282, 283, 276];
 
-  let face = null, pose = null, loading = null, failed = null;
+  /* A failed download is not final: load() always tries again (and clears
+     the failure), and after RETRY ms failed() goes quiet so the next frame
+     tries by itself, for a connection that was only down for a moment. */
+  const RETRY = 20000;
+  let face = null, pose = null, loading = null, failed = null, failedAt = 0;
   function load() {
     if (face && pose) return Promise.resolve();
     if (!loading) {
+      failed = null;
       loading = (async () => {
         const V = await import(BASE + "/vision_bundle.mjs");
         const fs = await V.FilesetResolver.forVisionTasks(BASE + "/wasm");
@@ -39,13 +44,44 @@
           try { return await Task.createFromOptions(fs, Object.assign({ baseOptions: { modelAssetPath: model, delegate: "GPU" }, runningMode: "IMAGE" }, extra)); }
           catch (e) { return Task.createFromOptions(fs, Object.assign({ baseOptions: { modelAssetPath: model, delegate: "CPU" }, runningMode: "IMAGE" }, extra)); }
         };
-        face = await make(V.FaceLandmarker, FACE, { numFaces: 3 });
-        pose = await make(V.PoseLandmarker, POSE, { numPoses: 2 });
-      })().catch((e) => { failed = e; loading = null; throw e; });
+        // a model that loaded on an earlier try is kept, never made twice
+        if (!face) face = await make(V.FaceLandmarker, FACE, { numFaces: 3 });
+        if (!pose) pose = await make(V.PoseLandmarker, POSE, { numPoses: 2 });
+      })().catch((e) => { failed = e; failedAt = Date.now(); loading = null; throw e; });
     }
     return loading;
   }
   const ready = () => !!(face && pose);
+  const failedNow = () => (failed && Date.now() - failedAt < RETRY ? failed : null);
+
+  /* Faces (and bodies) by place, not by list position: the model does not
+     keep two people in the same order from frame to frame, so each one is
+     steadied toward the nearest one of the last frame, and only when that
+     one is close enough to be the same person. */
+  function centre(pts) {
+    let x = 0, y = 0, x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    pts.forEach((p) => { x += p.x; y += p.y; x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); });
+    return { x: x / pts.length, y: y / pts.length, size: Math.max(x1 - x0, y1 - y0) };
+  }
+  function steady(now, before) {
+    if (!before || !before.length) return;
+    const was = before.map((b) => (b.length ? centre(b) : null));
+    const used = new Set();
+    now.forEach((a) => {
+      if (!a.length) return;
+      const c = centre(a);
+      let best = -1, bd = Infinity;
+      was.forEach((w, j) => {
+        if (!w || used.has(j) || before[j].length !== a.length) return;
+        const d = Math.hypot(w.x - c.x, w.y - c.y);
+        if (d < bd) { bd = d; best = j; }
+      });
+      if (best < 0 || bd > Math.max(c.size, was[best].size) * 0.5) return;
+      used.add(best);
+      const b = before[best];
+      a.forEach((p, i) => { p.x = p.x * 0.6 + b[i].x * 0.4; p.y = p.y * 0.6 + b[i].y * 0.4; });
+    });
+  }
 
   /* ─── where the faces and bodies are (cached per frame, steadied over neighbours) ─── */
   let small = null;
@@ -70,9 +106,8 @@
     // a little of the last frame, so points don't jitter
     const prev = last.get(stream);
     if (prev && Math.abs(prev.i - index) === 1) {
-      const blend = (a, b) => a.forEach((p, i) => { if (b[i]) { p.x = p.x * 0.6 + b[i].x * 0.4; p.y = p.y * 0.6 + b[i].y * 0.4; } });
-      out.faces.forEach((f, i) => { if (prev.m.faces[i] && prev.m.faces[i].length === f.length) blend(f, prev.m.faces[i]); });
-      out.poses.forEach((b, i) => { if (prev.m.poses[i] && prev.m.poses[i].length === b.length) blend(b, prev.m.poses[i]); });
+      steady(out.faces, prev.m.faces);
+      steady(out.poses, prev.m.poses);
     }
     last.set(stream, { i: index, m: out });
     if (cache.size > 600) cache.delete(cache.keys().next().value);
@@ -227,7 +262,7 @@
 
   function apply(ctx, W, H, key, r, opts) {
     if (!r) return false;
-    if (!ready()) { if (!failed) load().catch(() => {}); return false; }
+    if (!ready()) { if (!failedNow()) load().catch(() => {}); return false; }
     const o = opts || {};
     const needPose = r.body > 0 || r.legs > 0;
     const m = marks(ctx.canvas, W, H, key, o.stream || "r", o.index || 0, needPose);
@@ -240,5 +275,8 @@
     return true;
   }
 
-  global.SenotelRetouch = { load: load, ready: ready, apply: apply, failed: () => failed, _faceOps: faceOps, _bodyOps: bodyOps, _warp: warp };
+  // a new project: no face points from the last one (ids start again at 1)
+  function clear() { cache.clear(); last.clear(); }
+
+  global.SenotelRetouch = { load: load, ready: ready, apply: apply, failed: failedNow, clear: clear, _faceOps: faceOps, _bodyOps: bodyOps, _warp: warp, _steady: steady };
 })(typeof window !== "undefined" ? window : globalThis);

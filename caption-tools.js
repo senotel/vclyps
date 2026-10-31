@@ -251,9 +251,14 @@
 
   /* Rewrites the words in place: each word keeps its raw text, and its
      shown text is the term where one matched. Called again whenever the
-     list changes, from the raw text, so taking a term out undoes it. */
+     list changes, from the raw text, so taking a term out undoes it. A
+     merged word takes the end of the last word it swallowed; its own end is
+     kept in rawEnd and given back here. */
   function applyVocab(ws, list) {
-    ws.forEach(function (w) { w.text = w.raw != null ? w.raw : w.text; w.merged = 0; w.hide = false; });
+    ws.forEach(function (w) {
+      w.text = w.raw != null ? w.raw : w.text; w.merged = 0; w.hide = false;
+      if (w.rawEnd != null) { w.end = w.rawEnd; delete w.rawEnd; }
+    });
     var vocab = compileVocab(list);
     if (!vocab.length || !ws.length) return ws;
     var taken = new Array(ws.length).fill(false);
@@ -285,6 +290,7 @@
       var lead = (String(ws[h.i].text).match(/^[^\p{L}\p{N}]+/u) || [""])[0];
       var first = ws[h.i];
       first.text = lead + h.v.term + tail;
+      if (h.n > 1) first.rawEnd = first.end;
       first.end = last.end;
       first.merged = h.n - 1;
       for (var r = h.i + 1; r < h.i + h.n; r++) ws[r].hide = true;

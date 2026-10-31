@@ -42,8 +42,12 @@ function load() {
   return loading;
 }
 
+// a failed download is forgotten, so the next try fetches it again
 async function voiceData(v) {
-  if (!voices.has(v)) voices.set(v, fetch(VOICE_URL(v)).then((r) => { if (!r.ok) throw new Error("voice " + v); return r.arrayBuffer(); }).then((b) => new Float32Array(b)));
+  if (!voices.has(v)) {
+    voices.set(v, fetch(VOICE_URL(v)).then((r) => { if (!r.ok) throw new Error("voice " + v); return r.arrayBuffer(); }).then((b) => new Float32Array(b))
+      .catch((e) => { voices.delete(v); throw e; }));
+  }
   return voices.get(v);
 }
 
@@ -59,11 +63,20 @@ function numberWords(n) {
   }
   return String(n);
 }
+// $3.50 is "three dollars and fifty cents", $1,500 "one thousand five hundred
+// dollars": the whole amount is read here, before the year and comma rules
+// below can take it apart
+function money(m, whole, dec) {
+  const a = +whole.replace(/,/g, "");
+  if (dec && dec.length !== 2) return numberWords(a) + " point " + dec.split("").map((d) => ONES[+d]).join(" ") + " dollars";
+  const c = dec ? +dec : 0;
+  return numberWords(a) + (a === 1 ? " dollar" : " dollars") + (c ? " and " + numberWords(c) + (c === 1 ? " cent" : " cents") : "");
+}
 function normalize(text) {
   return String(text)
     .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
     .replace(/&/g, " and ").replace(/%/g, " percent").replace(/@/g, " at ")
-    .replace(/\$(\d+(?:\.\d+)?)/g, "$1 dollars")
+    .replace(/\$(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?/g, money)
     .replace(/\b(\d{4})s\b/g, (m, y) => y + "s")
     .replace(/\b(1[1-9]|20)(\d\d)\b/g, (m, a, b) => (b === "00" ? numberWords(+a) + " hundred" : numberWords(+a) + " " + (b[0] === "0" ? "oh " + numberWords(+b[1]) : numberWords(+b))))
     .replace(/(\d),(?=\d{3})/g, "$1")
@@ -146,7 +159,8 @@ function phonemize(text) {
 
 // sentences, so each fits the model (and long scripts don't run out of breath)
 function sentences(text) {
-  return (String(text).match(/[^.!?…]+[.!?…]*/g) || [text]).map((s) => s.trim()).filter(Boolean);
+  // a point between digits ($3.50, 2.5) is not the end of a sentence
+  return (String(text).match(/(?:[^.!?…]|\.(?=\d))+[.!?…]*/g) || [text]).map((s) => s.trim()).filter(Boolean);
 }
 
 async function speak(id, text, voice, speed) {
