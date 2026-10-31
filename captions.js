@@ -418,6 +418,12 @@
         .forEach(function (c) { c.lang = lang; out.push(c); });
     });
     out.sort(function (a, b) { return a.start - b.start; });
+    /* Each clip's cues get their hold on their own, so the last line of a
+       clip would hang 0.4 s into the next clip over its first words. After a
+       cut the new clip's line wins. */
+    for (var k = 0; k < out.length - 1; k++) {
+      if (out[k].end > out[k + 1].start && out[k + 1].start > out[k].start) out[k].end = out[k + 1].start;
+    }
     var T = Tools();
     if (T) T.markKeywords(out, opts.lang);
     /* Emojis are chosen only once the whole timeline exists, because the

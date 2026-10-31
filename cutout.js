@@ -20,12 +20,18 @@
   const BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
   const MODEL = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite";
   const SIDE = 256;
-  let seg = null, loading = null, failed = null;
+  /* A failed download is not final: load() always tries again (and clears
+     the failure), and after RETRY ms failed() goes quiet so the next frame
+     tries by itself, for a connection that was only down for a moment. */
+  const RETRY = 20000;
+  let seg = null, loading = null, failed = null, failedAt = 0;
   const listeners = [];
+  const failedNow = () => (failed && Date.now() - failedAt < RETRY ? failed : null);
 
   function load() {
     if (seg) return Promise.resolve(seg);
     if (!loading) {
+      failed = null;
       loading = (async () => {
         const V = await import(BASE + "/vision_bundle.mjs");
         const fs = await V.FilesetResolver.forVisionTasks(BASE + "/wasm");
@@ -40,7 +46,7 @@
         for (let i = 0; i < 3; i++) { const r = seg.segment(warm); r.confidenceMasks.forEach((m) => m.close()); }
         listeners.splice(0).forEach((f) => { try { f(); } catch (e) {} });
         return seg;
-      })().catch((e) => { failed = e; loading = null; throw e; });
+      })().catch((e) => { failed = e; failedAt = Date.now(); loading = null; throw e; });
     }
     return loading;
   }
@@ -50,9 +56,14 @@
   // small working canvases
   let inCv = null, maskCv = null;
   const cache = new Map();          // key → Uint8ClampedArray of alpha (mw x mh)
-  const last = new Map();           // stream → {i, alpha}
-  function alphaFor(source, W, H, key, stream, index) {
-    const hit = cache.get(key);
+  const last = new Map();           // stream → {t, alpha}
+  /* Frames this close in the source are neighbours and share a little of
+     their edge. By source time, not frame number: on a sped-up clip the
+     frame number jumps by 2 or more between frames that follow each other. */
+  const NEAR = 0.15;
+  // key null: worked out afresh and never kept (the body effects)
+  function alphaFor(source, W, H, key, stream, t) {
+    const hit = key != null ? cache.get(key) : null;
     if (hit) return hit;
     const k = SIDE / Math.max(W, H);
     const mw = Math.max(8, Math.round(W * k)), mh = Math.max(8, Math.round(H * k));
@@ -69,21 +80,27 @@
     for (let i = 0; i < a.length; i++) a[i] = (1 - bg[i]) * 255;
     // one frame after another: a little of the last frame's edge, so it holds still
     const prev = last.get(stream);
-    if (prev && prev.alpha.length === a.length && Math.abs(index - prev.i) === 1) {
+    const gap = prev ? Math.abs(t - prev.t) : 0;
+    if (prev && prev.alpha.length === a.length && gap > 1e-4 && gap <= NEAR) {
       for (let i = 0; i < a.length; i++) a[i] = a[i] * 0.65 + prev.alpha[i] * 0.35;
     }
-    last.set(stream, { i: index, alpha: a });
-    if (cache.size > 900) cache.delete(cache.keys().next().value);
-    cache.set(key, a);
+    last.set(stream, { t: t, alpha: a });
+    if (key != null) {
+      if (cache.size > 900) cache.delete(cache.keys().next().value);
+      cache.set(key, a);
+    }
     a.mw = mw; a.mh = mh;
     return a;
   }
+  // the source time of a frame: opts.time (seconds), else its frame number at 30 a second
+  const timeOf = (o) => (o.time != null ? o.time : (o.index || 0) / 30);
 
-  /* opts: {stream (an id), index (frame number), soft (0..1 edge softness)} */
+  /* opts: {stream (an id), time (source seconds) or index (frame number at
+     30 a second), soft (0..1 edge softness)} */
   function apply(ctx, W, H, key, opts) {
-    if (!seg) { if (!failed) load().catch(() => {}); return false; }
+    if (!seg) { if (!failedNow()) load().catch(() => {}); return false; }
     const o = opts || {};
-    const a = alphaFor(ctx.canvas, W, H, key, o.stream || "x", o.index || 0);
+    const a = alphaFor(ctx.canvas, W, H, key, o.stream || "x", timeOf(o));
     const mw = a.mw || Math.round(W * SIDE / Math.max(W, H)), mh = a.mh || Math.round(H * SIDE / Math.max(W, H));
     if (!maskCv) maskCv = document.createElement("canvas");
     if (maskCv.width !== mw) maskCv.width = mw;
@@ -110,10 +127,9 @@
      key may be null to always work it out afresh. Null when not ready. */
   let outMask = null;
   function mask(source, W, H, key, opts) {
-    if (!seg) { if (!failed) load().catch(() => {}); return null; }
+    if (!seg) { if (!failedNow()) load().catch(() => {}); return null; }
     const o = opts || {};
-    const a = alphaFor(source, W, H, key || ("fx" + Math.random()), o.stream || "fx", o.index || 0);
-    if (!key) cache.delete(cache.size ? [...cache.keys()].pop() : null);
+    const a = alphaFor(source, W, H, key || null, o.stream || "fx", timeOf(o));
     const mw = a.mw, mh = a.mh;
     if (!outMask) outMask = document.createElement("canvas");
     if (outMask.width !== mw) outMask.width = mw;
@@ -125,5 +141,8 @@
     return outMask;
   }
 
-  global.SenotelCutout = { load: load, ready: ready, onReady: onReady, apply: apply, mask: mask, failed: () => failed };
+  // a new project: no masks from the last one (ids start again at 1)
+  function clear() { cache.clear(); last.clear(); }
+
+  global.SenotelCutout = { load: load, ready: ready, onReady: onReady, apply: apply, mask: mask, failed: failedNow, clear: clear };
 })(typeof window !== "undefined" ? window : globalThis);

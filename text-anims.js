@@ -40,6 +40,9 @@
   var rnd = function (i, k) { var x = Math.sin(i * 12.9898 + (k || 0) * 78.233) * 43758.5453; return x - Math.floor(x); };
 
   function base() { return { a: 1, dx: 0, dy: 0, s: 1, sx: 1, sy: 1, r: 0, kx: 0, blur: 0 }; }
+  // a wipe In and a wipe Out both write o.wipe; the Out runs second, mostly
+  // at p = 1, so the one that covers more wins and the In still shows
+  function wipeTo(o, dir, f) { if (!o.wipe || f < o.wipe.f) o.wipe = { dir: dir, f: f }; }
 
   /* ─── Motions: p from 0 (gone) to 1 (in place) ─── */
   var M = {
@@ -62,9 +65,9 @@
     roll: function (o, p) { var e = out3(p); o.dx -= (1 - e) * 3; o.r -= (1 - e) * 360; o.a *= e; },
     tilt: function (o, p) { var e = out3(p); o.r += (1 - e) * 18; o.dy += (1 - e) * 0.5; o.a *= e; },
     skate: function (o, p) { var e = out3(p); o.dx -= (1 - e) * 2; o.kx += (1 - e) * 0.6; o.a *= e; },
-    wipe: function (o, p) { o.wipe = { dir: "x", f: out3(p) }; },
-    wipeup: function (o, p) { o.wipe = { dir: "y", f: out3(p) }; },
-    unfold: function (o, p) { o.wipe = { dir: "c", f: out3(p) }; },
+    wipe: function (o, p) { wipeTo(o, "x", out3(p)); },
+    wipeup: function (o, p) { wipeTo(o, "y", out3(p)); },
+    unfold: function (o, p) { wipeTo(o, "c", out3(p)); },
     glitch: function (o, p) {
       if (p >= 1) return;
       var step = Math.floor(p * 18);
