@@ -7030,8 +7030,11 @@
     TTS_VOICES.forEach(([id, label, g]) => {
       const b = mk("button", "voice-tile" + (ttsVoice === id ? " selected" : ""));
       b.type = "button";
-      b.innerHTML = I(VOICE_GROUP_ICON.Character);
+      // a person, so a monogram as in a contact list, not one microphone fourteen times
+      b.classList.add("voice-person");
+      b.appendChild(mk("span", "voice-mono", label.charAt(0)));
       b.appendChild(mk("span", "", label));
+      b.appendChild(mk("span", "voice-sub", g === "F" ? "Female" : "Male"));
       b.title = (g === "F" ? "Female" : "Male") + " voice";
       b.addEventListener("click", () => { ttsVoice = id; playVoiceSample(id); });
       grid.appendChild(b);
@@ -7744,6 +7747,27 @@
     Device: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><line x1="11" y1="18.5" x2="13" y2="18.5"/>',
     Wobble: '<path d="M2 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0"/>'
   };
+  /* A drawing per effect (round 2): sixteen tiles wearing one microphone read
+     as a template, and the picture is how a thumb finds Robot without
+     reading. Same 24 grid and stroke as every other tool icon. */
+  const VOICE_ICON = {
+    chipmunk: '<path d="M3 15l3-3 3 3 3-3 3 3"/><path d="M18 14V5"/><polyline points="15 8 18 5 21 8"/>',
+    elf: '<path d="M5 20L12 3l7 17z"/><path d="M8 14h8"/><circle cx="12" cy="3" r="0.8"/>',
+    deep: '<path d="M3 9l3 3 3-3 3 3 3-3"/><path d="M18 5v9"/><polyline points="15 11 18 14 21 11"/><path d="M3 19h18"/>',
+    monster: '<path d="M4 8h16v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M4 8l2.5 4L9 8l3 4 3-4 2.5 4L20 8"/>',
+    robot: '<rect x="5" y="8" width="14" height="11" rx="2"/><line x1="12" y1="4" x2="12" y2="8"/><circle cx="12" cy="3.5" r="1"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><line x1="9" y1="16.5" x2="15" y2="16.5"/>',
+    alien: '<path d="M12 3c4.5 0 7.5 3.2 7.5 7.5 0 5-4.5 10.5-7.5 10.5S4.5 15.5 4.5 10.5C4.5 6.2 7.5 3 12 3z"/><path d="M7.5 11c1.5 0 3 1 3 2.5-1.5 0-3-1-3-2.5zM16.5 11c-1.5 0-3 1-3 2.5 1.5 0 3-1 3-2.5z"/>',
+    echo: '<circle cx="5" cy="12" r="1.5"/><path d="M9 8a5.5 5.5 0 0 1 0 8"/><path d="M13 5a10 10 0 0 1 0 14" opacity="0.7"/><path d="M17 3a13 13 0 0 1 0 18" opacity="0.4"/>',
+    hall: '<path d="M3 9l9-6 9 6"/><line x1="6" y1="10" x2="6" y2="18"/><line x1="10" y1="10" x2="10" y2="18"/><line x1="14" y1="10" x2="14" y2="18"/><line x1="18" y1="10" x2="18" y2="18"/><path d="M3 21h18"/>',
+    cave: '<path d="M2 20c1-8 5-15 10-15s9 7 10 15"/><path d="M8 20c0-4 1.8-7 4-7s4 3 4 7"/>',
+    underwater: '<path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><circle cx="9" cy="8" r="1.5"/><circle cx="14" cy="5" r="1"/><circle cx="15" cy="10" r="2"/>',
+    phone: '<path d="M6.5 3h3l1.5 4.5-2 1.5a11 11 0 0 0 6 6l1.5-2L21 14.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5a2 2 0 0 1 2-2z"/>',
+    megaphone: '<path d="M3 10v4h4l9 5V5L7 10z"/><path d="M7 14l1.5 5h2.5l-1.5-5"/><path d="M19 9.5a3.5 3.5 0 0 1 0 5"/>',
+    radio: '<rect x="3" y="9" width="18" height="12" rx="2"/><line x1="7" y1="9" x2="17" y2="3"/><circle cx="15.5" cy="15" r="2.5"/><line x1="6.5" y1="13" x2="10" y2="13"/><line x1="6.5" y1="17" x2="10" y2="17"/>',
+    lofi: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><circle cx="16" cy="11" r="2"/><path d="M6 19l2-4h8l2 4"/>',
+    vibrato: '<path d="M2 12c1.5-4 3-4 4.5 0s3 4 4.5 0 3-4 4.5 0 3 4 4.5 0"/>',
+    tremolo: '<line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="5" x2="16" y2="19"/><line x1="20" y1="10" x2="20" y2="14"/>'
+  };
   function voicePanel(box, item, startOf, lenOf) {
     const V = window.SenotelVoice;
     if (!V) return;
@@ -7762,7 +7786,7 @@
       }
       const b = mk("button", "voice-tile" + (cur === id ? " selected" : ""));
       b.type = "button";
-      b.innerHTML = id === "none" ? ICON.close : I(VOICE_GROUP_ICON[grp] || "");
+      b.innerHTML = id === "none" ? ICON.close : I(VOICE_ICON[id] || VOICE_GROUP_ICON[grp] || "");
       b.appendChild(mk("span", "", label));
       b.addEventListener("click", () => {
         if (id === "none") { delete item.voice; delete item.voiceAmt; }
