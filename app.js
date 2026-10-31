@@ -10187,6 +10187,25 @@
        no `by` mark and stays exactly where it is. */
     S.sfx = S.sfx.filter((x) => x.by !== "director");
     if (S.music && S.music.by === "director") { S.music = null; loadMusicElement(); }
+    /* The Director's video effects arrive as a mark on a clip (brain.js _fx)
+       and become ~1 s effect clips at that clip's start. A clip split by
+       sentence snapping carries the mark twice: the first one wins. Effects
+       added by hand carry no "by" mark and stay. */
+    S.effects = S.effects.filter((x) => x.by !== "director");
+    {
+      const FX = window.SenotelFX, ids = FX ? FX.effectIds : [];
+      let at = 0, placed = 0, last = null;
+      S.clips.forEach((c) => {
+        const id = c._fx;
+        delete c._fx;
+        if (id && id !== last && placed < 2 && ids.includes(id)) {
+          S.effects.push({ id: nextId++, type: id, start: at, dur: Math.min(1.2, Math.max(0.4, dispDur(c))), amount: 0.6, by: "director" });
+          placed++;
+        }
+        last = id || null;
+        at += dispDur(c);
+      });
+    }
     S.sel = null;
     S.time = 0;
     commit();

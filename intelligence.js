@@ -647,6 +647,11 @@
        have: a joke's tool, never decoration, never in a serious edit. */
     // ccl12 (0.43.0): the speed curve, for the one moment of real action
     L.push("SPEED CURVE: at most once per edit, an effect of type 'hero' on the clip with the single most striking physical action (a jump, a trick, a catch, a fall) — it slows the middle of that clip dramatically and keeps its length. Never on a talking clip.");
+    /* Round 2: the video effects lane (fx-library.js), with the same restraint
+       as the sound effects: a beat's punctuation, never wallpaper. The list is
+       short on purpose: these are the ones that read as edited, not as a filter
+       left on. */
+    L.push("VIDEO EFFECTS: optional, at most 2 of type 'fx' (about one second on that clip's start), with 'fx' chosen by what the moment is: a punchline or a reveal = impact, freeze-flash or zoom-pulse; a high-energy action beat = speed-lines, zoom-blur or shake; nostalgia or a memory = film-grain, super-8 or old-film; a travel or golden moment = light-leak, golden-hour or sun-rays; a celebration = confetti, streamers or fireworks; a gaming or tech glitch moment = rgb-split or glitch (e.g. {clip: 4, type: 'fx', fx: 'impact'}). Never on the hook line, never two in a row, none in a serious, sad or informative edit; zero is often right.");
     L.push("VOICE EFFECTS: only when the edit is comedy, at most 2 effects of type 'voice' on a short clip that is a reaction line or the punchline, with 'voice' one of chipmunk, deep, monster, robot, echo (e.g. {clip: 3, type: 'voice', voice: 'chipmunk'}). Never in a serious, emotional, informative or sad edit, never on the hook line, never on two clips in a row.");
     /* Phrased as an EXPECTATION, not an option. The earlier wording ended with
        "skip b-roll entirely rather than forcing it", and the model took that
@@ -1247,14 +1252,18 @@
       .map((t) => normText(t, defPos, defSize));
 
     const COMIC_VOICES = ["chipmunk", "deep", "monster", "robot", "echo"];
-    let voiced = 0, heroes = 0;
+    const VIDEO_FX = ["impact", "freeze-flash", "zoom-pulse", "speed-lines", "zoom-blur", "shake", "film-grain", "super-8", "old-film",
+      "light-leak", "golden-hour", "sun-rays", "confetti", "streamers", "fireworks", "rgb-split", "glitch"];
+    let voiced = 0, heroes = 0, fxed = 0;
     const effects = (Array.isArray(plan.effects) ? plan.effects : [])
       .filter((e) => e && (["punch-in", "slow-mo", "speed-up"].includes(e.type) ||
         (e.type === "hero" && ++heroes <= 1) ||   // ccl12: one speed curve at most
-        (e.type === "voice" && COMIC_VOICES.includes(e.voice) && ++voiced <= 2)))   // ccl9: two at most
+        (e.type === "voice" && COMIC_VOICES.includes(e.voice) && ++voiced <= 2) ||   // ccl9: two at most
+        (e.type === "fx" && VIDEO_FX.includes(e.fx) && ++fxed <= 2)))   // round 2: two video effects at most
       .slice(0, 12)
       .map((e) => (e.type === "voice"
         ? { clip: Math.max(0, Math.floor(+e.clip || 0)), type: "voice", voice: e.voice }
+        : e.type === "fx" ? { clip: Math.max(0, Math.floor(+e.clip || 0)), type: "fx", fx: e.fx }
         : { clip: Math.max(0, Math.floor(+e.clip || 0)), type: e.type }));
 
     // texts must include the chosen hook line even if the model only put it in `hook`

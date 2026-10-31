@@ -892,6 +892,8 @@
       else if (ef.type === "punch-in") c.kb = { s0: 1, s1: 1.09, x0: 0, x1: 0, y0: 0, y1: 0 };
       // ccl9: a comic voice on a reaction line (asked for in comedy only, two at most: intelligence.js)
       else if (ef.type === "voice" && ef.voice) c.voice = ef.voice;
+      // round 2: a video effect at this clip's start; app.js puts it on the effects lane
+      else if (ef.type === "fx" && ef.fx) c._fx = ef.fx;
       // ccl12: Hero, the speed curve that slows the middle of the action and keeps the clip's length
       else if (ef.type === "hero" && window.SenotelCurve) { c.curve = window.SenotelCurve.preset("hero"); c.curvePreset = "hero"; }
     });
