@@ -5123,6 +5123,8 @@
           box.appendChild(all);
         }
       }));
+      // round 2: the clip's own place and size, keyframable (the diamond marks all four)
+      list.push(tool("position", "Position", ICON.place, (box) => clipPlacePanel(box, c)));
       list.push(tool("rotate", "Rotate", ICON.rotate, (box) => {
         const row = mk("div", "filter-chips");
         const flip = (label, key) => { const b = mk("button", "fchip" + (c[key] ? " active" : ""), label); b.addEventListener("click", () => { if (c[key]) delete c[key]; else c[key] = true; redrawPanel(); }); row.appendChild(b); };
@@ -5274,6 +5276,22 @@
       ].concat(common());
     }
     return [];
+  }
+
+  /* Position (round 2): across, down, zoom and turn for a clip, as CapCut's
+     Basic section has. With keyframes, a slow zoom between two diamonds is
+     the push-in creators use most. */
+  function clipPlacePanel(box, c) {
+    const live = () => { renderTimeline(); syncOverlays(); };
+    box.appendChild(group("Across", slider(-1, 1, 0.01, c.tx || 0, (v) => { c.tx = v; live(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
+    box.appendChild(group("Down", slider(-1, 1, 0.01, c.ty || 0, (v) => { c.ty = v; live(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
+    box.appendChild(group("Zoom", slider(0.2, 4, 0.01, c.zoom == null ? 1 : c.zoom, (v) => { c.zoom = v; live(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
+    box.appendChild(group("Turn", slider(-180, 180, 1, c.turn || 0, (v) => { c.turn = v; live(); }, () => commit(), (v) => v + "°")));
+    const reset = mk("button", "fchip", "Reset");
+    reset.type = "button";
+    reset.addEventListener("click", () => { delete c.tx; delete c.ty; delete c.zoom; delete c.turn; if (c.kf) ["tx", "ty", "zoom", "turn"].forEach((p) => delete c.kf[p]); commit(); renderInspector(); syncOverlays(); });
+    box.appendChild(group("", reset));
+    box.appendChild(mk("p", "panel-note", "For a slow push in: tap the diamond at the start, move the playhead, raise Zoom."));
   }
 
   // the crop tool opens the crop box on the picture straight away
@@ -7059,7 +7077,7 @@
      the person over the video underneath; on the main track, over black. */
   function pictureCacheKey(item, W, H, local) {
     return JSON.stringify([W, H, item.mediaId, item.crop, item.fit, item.rot, item.flipH, item.flipV,
-      item.x, item.y, item.scale, item.shape, item.mode, item.layout, item.kb, item.bg,
+      item.x, item.y, item.scale, item.shape, item.tx, item.ty, item.zoom, item.turn, item.mode, item.layout, item.kb, item.bg,
       item.filter, item.filterAmt, item.adj, item.cutout, item.retouch,
       clipAnimAt(item, local), item.stab ? stabAt(item, local) : null,
       item.kb ? local / Math.max(dispDur(item), 0.01) : null]);
@@ -7847,7 +7865,7 @@
     if (!it) return null;
     const mask = it.mask && it.mask.shape && it.mask.shape !== "none" ? MASK_KEYS.filter((p) => p !== "mask.round" || it.mask.shape === "rect") : [];
     let start, len, paths;
-    if (ty === "clip") { start = clipStartOf(it); len = dispDur(it); paths = mask; }
+    if (ty === "clip") { start = clipStartOf(it); len = dispDur(it); paths = ["tx", "ty", "zoom", "turn"].concat(mask); }
     else if (ty === "broll") { start = it.start; len = it.dur; paths = ["x", "y", "scale", "rot", "opacity"].concat(mask); }
     else { start = it.start; len = it.dur; paths = ["x", "y", "size", "rotate", "opacity"]; }
     if (!paths.length) return null;
@@ -7857,7 +7875,12 @@
   // values left unset mean "the default"; a keyframe needs the number itself
   function kfFill(tg) {
     const it = tg.item;
-    if (tg.type === "broll") {
+    if (tg.type === "clip") {
+      if (it.tx == null) it.tx = 0;
+      if (it.ty == null) it.ty = 0;
+      if (it.zoom == null) it.zoom = 1;
+      if (it.turn == null) it.turn = 0;
+    } else if (tg.type === "broll") {
       if (it.x == null) it.x = 0.5;
       if (it.y == null) it.y = BROLL_CY;
       if (it.scale == null) it.scale = BROLL_SIZE;
@@ -9561,6 +9584,7 @@
      the background), layout, flip and turn, slow zoom, look, adjustments
      and animation. local is seconds into the clip (it can run past either
      end inside a transition). */
+  const hasPlace = (c) => !!(c && (c.tx || c.ty || c.turn || (c.zoom != null && c.zoom !== 1)));
   function drawClipPicture(ctx, clip, src, W, H, local) {
     clip = kfView(clip, local);   // ccl13: its keyframed values at this moment
     ctx.save();
@@ -9588,6 +9612,16 @@
         else ctx.rect(0, 0, W * f, H);
         ctx.clip();
       }
+    }
+    /* Round 2: the clip's own place (Position, keyframable): moved by a
+       fraction of the frame, zoomed and turned about the frame's centre. What
+       it uncovers is black, as in CapCut. */
+    if (hasPlace(clip)) {
+      ctx.translate(W / 2 + (clip.tx || 0) * W, H / 2 + (clip.ty || 0) * H);
+      if (clip.turn) ctx.rotate((clip.turn * Math.PI) / 180);
+      const z = clip.zoom == null ? 1 : clip.zoom;
+      if (z !== 1) ctx.scale(z, z);
+      ctx.translate(-W / 2, -H / 2);
     }
     const blur = anim && anim.blur > 0.005 ? anim.blur * H * 0.06 : 0;
     const L = isVid && !cr ? layoutOf(clip) : null;
