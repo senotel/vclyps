@@ -3,7 +3,7 @@
    window.SenotelVoice
 
    CapCut's Voice effects: make a voice sound like a chipmunk, a monster, a
-   robot, on the phone, in a cave... 16 effects, each a small chain of the
+   robot, on the phone, in a cave... 23 effects, each a small chain of the
    browser's own audio nodes. The pitch effects use one pitch shifter
    written here (an AudioWorklet), so nothing is downloaded and it is free.
 
@@ -23,10 +23,13 @@
     ["monster", "Monster", "Character"], ["robot", "Robot", "Character"], ["alien", "Alien", "Character"],
     ["echo", "Echo", "Space"], ["hall", "Hall", "Space"], ["cave", "Cave", "Space"], ["underwater", "Underwater", "Space"],
     ["phone", "Phone", "Device"], ["megaphone", "Megaphone", "Device"], ["radio", "Radio", "Device"], ["lofi", "Lo-fi", "Device"],
-    ["vibrato", "Vibrato", "Wobble"], ["tremolo", "Tremolo", "Wobble"]
+    ["vibrato", "Vibrato", "Wobble"], ["tremolo", "Tremolo", "Wobble"],
+    ["giant", "Giant", "Character"], ["baby", "Baby", "Character"],
+    ["higher", "Higher voice", "Character"], ["lower", "Lower voice", "Character"],
+    ["walkie", "Walkie-talkie", "Device"], ["stadium", "Stadium", "Space"], ["bathroom", "Bathroom", "Space"]
   ];
   // semitones for the pitch effects (scaled by amount)
-  const SEMI = { chipmunk: 7, elf: 4, deep: -5, monster: -9, alien: 5 };
+  const SEMI = { chipmunk: 7, elf: 4, deep: -5, monster: -9, alien: 5, giant: -12, baby: 10, higher: 3, lower: -3 };
 
   /* The pitch shifter's core, kept as plain code so the tests can run it
      without a browser: two read heads sweep a short delay line at the new
@@ -163,7 +166,8 @@
       return node;
     };
     switch (id) {
-      case "chipmunk": case "elf": case "deep": {
+      case "chipmunk": case "elf": case "deep":
+      case "giant": case "baby": case "higher": case "lower": {
         const p = await pitch(SEMI[id]);
         if (!p) { input.connect(output); break; }
         if (id === "deep") chain(ctx, [input, p, filt(ctx, "lowshelf", 220, null, 3), output]);   // a little more chest
@@ -202,6 +206,22 @@
         const tone = filt(ctx, "lowpass", 3800, 0.7);
         dl.connect(tone); tone.connect(fb); fb.connect(dl);
         mix(dl);
+        break;
+      }
+      case "stadium": case "bathroom": {
+        // A long pre-delay suggests a distant stand; short reflections a tiled room.
+        const cv = ctx.createConvolver(), pre = ctx.createDelay(0.3), g = ctx.createGain();
+        cv.buffer = roomIR(ctx, id === "stadium" ? 4.2 : 0.65, id === "stadium" ? 0.35 : 0.85);
+        pre.delayTime.value = id === "stadium" ? 0.16 : 0.012;
+        g.gain.value = id === "stadium" ? 0.65 : 0.4;
+        chain(ctx, [pre, cv, g]); mix(g, pre);
+        break;
+      }
+      case "walkie": {
+        const hp = filt(ctx, "highpass", 600, 0.8), lp = filt(ctx, "lowpass", 2400, 1), d = shaper(ctx, 3);
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -30; comp.ratio.value = 8; comp.attack.value = 0.004; comp.release.value = 0.09;
+        chain(ctx, [hp, lp, d, comp]); swap(hp, comp);
         break;
       }
       case "hall": case "cave": {
