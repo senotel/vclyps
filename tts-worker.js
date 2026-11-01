@@ -5,6 +5,10 @@
    become sounds here, from the CMU Pronouncing Dictionary (ISC package of
    CMU's free dictionary), with a few spelling rules for words it does not
    know. (The usual helper for this, eSpeak NG, is GPL and is not used.)
+   British voices (bf_*, bm_*, T12) get British sounds: the same American
+   dictionary, turned into RP the way misaki's British lexicon (Apache-2.0,
+   the G2P Kokoro was trained with) writes it. Nothing of misaki is bundled;
+   its conventions were read and the rules below written from them.
 
    Messages in:  {type: "load"} | {type: "speak", id, text, voice, speed}
    Messages out: {type: "progress", p, what} | {type: "ready"}
@@ -54,34 +58,46 @@ async function voiceData(v) {
 /* ─── words to sounds (American English, the IPA Kokoro was trained on) ─── */
 const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-function numberWords(n) {
+// gb: British English says "and" after hundred and before a last part under
+// a hundred: one hundred and five, two thousand and twenty six
+function numberWords(n, gb) {
   if (n < 20) return ONES[n];
   if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
-  if (n < 1000) return ONES[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + numberWords(n % 100) : "");
+  if (n < 1000) return ONES[Math.floor(n / 100)] + " hundred" + (n % 100 ? (gb ? " and " : " ") + numberWords(n % 100, gb) : "");
   for (const [v, w] of [[1e9, "billion"], [1e6, "million"], [1e3, "thousand"]]) {
-    if (n >= v) return numberWords(Math.floor(n / v)) + " " + w + (n % v ? " " + numberWords(n % v) : "");
+    if (n >= v) return numberWords(Math.floor(n / v), gb) + " " + w + (n % v ? (gb && n % v < 100 ? " and " : " ") + numberWords(n % v, gb) : "");
   }
   return String(n);
 }
 // $3.50 is "three dollars and fifty cents", $1,500 "one thousand five hundred
 // dollars": the whole amount is read here, before the year and comma rules
 // below can take it apart
-function money(m, whole, dec) {
+function money(m, whole, dec, gb) {
   const a = +whole.replace(/,/g, "");
-  if (dec && dec.length !== 2) return numberWords(a) + " point " + dec.split("").map((d) => ONES[+d]).join(" ") + " dollars";
+  if (dec && dec.length !== 2) return numberWords(a, gb) + " point " + dec.split("").map((d) => ONES[+d]).join(" ") + " dollars";
   const c = dec ? +dec : 0;
-  return numberWords(a) + (a === 1 ? " dollar" : " dollars") + (c ? " and " + numberWords(c) + (c === 1 ? " cent" : " cents") : "");
+  return numberWords(a, gb) + (a === 1 ? " dollar" : " dollars") + (c ? " and " + numberWords(c) + (c === 1 ? " cent" : " cents") : "");
 }
-function normalize(text) {
+// £3.50 is "three pounds fifty", £1 "one pound", £0.30 "thirty pence", the
+// way it is said in Britain (before this, the £ sign was skipped)
+function pounds(m, whole, dec, gb) {
+  const a = +whole.replace(/,/g, "");
+  if (dec && dec.length !== 2) return numberWords(a, gb) + " point " + dec.split("").map((d) => ONES[+d]).join(" ") + " pounds";
+  const c = dec ? +dec : 0;
+  if (!a && c) return numberWords(c) + (c === 1 ? " penny" : " pence");
+  return numberWords(a, gb) + (a === 1 ? " pound" : " pounds") + (c ? " " + numberWords(c) : "");
+}
+function normalize(text, gb) {
   return String(text)
     .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
     .replace(/&/g, " and ").replace(/%/g, " percent").replace(/@/g, " at ")
-    .replace(/\$(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?/g, money)
+    .replace(/\$(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?/g, (m, a, b) => money(m, a, b, gb))
+    .replace(/£(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?/g, (m, a, b) => pounds(m, a, b, gb))
     .replace(/\b(\d{4})s\b/g, (m, y) => y + "s")
     .replace(/\b(1[1-9]|20)(\d\d)\b/g, (m, a, b) => (b === "00" ? numberWords(+a) + " hundred" : numberWords(+a) + " " + (b[0] === "0" ? "oh " + numberWords(+b[1]) : numberWords(+b))))
     .replace(/(\d),(?=\d{3})/g, "$1")
-    .replace(/\d+\.\d+/g, (m) => { const [a, b] = m.split("."); return numberWords(+a) + " point " + b.split("").map((d) => ONES[+d]).join(" "); })
-    .replace(/\d+/g, (m) => numberWords(+m))
+    .replace(/\d+\.\d+/g, (m) => { const [a, b] = m.split("."); return numberWords(+a, gb) + " point " + b.split("").map((d) => ONES[+d]).join(" "); })
+    .replace(/\d+/g, (m) => numberWords(+m, gb))
     .replace(/\s+/g, " ").trim();
 }
 const VOWEL = { AA: "ɑː", AE: "æ", AH: "ʌ", AO: "ɔː", AW: "aʊ", AY: "aɪ", EH: "ɛ", ER: "ɜː", EY: "eɪ", IH: "ɪ", IY: "iː", OW: "oʊ", OY: "ɔɪ", UH: "ʊ", UW: "uː" };
@@ -147,11 +163,160 @@ function wordIpa(raw) {
   if (/^[A-Z]{2,5}$/.test(raw)) return raw.toLowerCase().split("").map((ch) => LETTERS[ch] || "").join(" ");   // an acronym: its letters
   return spell(w);
 }
-function phonemize(text) {
-  const parts = normalize(text).match(/[A-Za-z]+(?:'[A-Za-z]+)?|[.,!?;:—…"]/g) || [];
-  let out = "";
+
+/* ─── British English (RP-leaning), for the bf_* and bm_* voices ───
+   The American dictionary is the start; these rules turn its sounds into
+   the ones misaki's British lexicon uses, which is what Kokoro's British
+   voices learned from: TRAP is "a" not "æ", LOT "ɒ", GOAT "əʊ", no flapped t,
+   and r is only said before a vowel (car kˈɑː, care kˈɛː, near nˈɪə). */
+const isGB = (voice) => /^b[fm]_/.test(String(voice || ""));
+// a word, or the same word with an everyday ending (passes, dancing, asked)
+function hasStem(set, w) {
+  if (set.has(w)) return true;
+  for (const suf of ["s", "es", "ed", "d", "ing", "er", "ers", "est", "ly", "y"]) {
+    if (w.length > suf.length + 2 && w.endsWith(suf)) {
+      const st = w.slice(0, -suf.length);
+      if (set.has(st) || set.has(st + "e")) return true;
+    }
+  }
+  return false;
+}
+// BATH words: "a" in America, a long "ɑː" in the south of England
+const BATH = new Set(("ask after afternoon afterwards answer aunt banana basket bath blast branch brass calf can't cast castle chance chant " +
+  "class command commander craft aircraft dance demand disaster draft draught example sample fast fasten ghastly glance glass graph grant " +
+  "grass grasp clasp gasp half behalf calves halves laugh laughter last mask master nasty pass past pastor path plant plaster rather raft " +
+  "shaft shan't slant staff task vast advance advantage enhance france prance aghast contrast flask cask mast giraffe alas").split(" "));
+// PALM words the dictionary writes with the LOT vowel
+const PALM = new Set(("father calm palm psalm balm spa bra drama llama lager saga karate safari massage facade façade plaza promenade armada " +
+  "sonata tiara gala almond nirvana pajamas pyjamas avocado bravado bravo lava panorama mama papa ma pa").split(" "));
+// short o before r and a vowel: orange, borrow
+const LOT_R = new Set(("orange horrible horror horrid origin original foreign forest florida moral coral quarrel warrant warren sorrow borrow " +
+  "tomorrow morrow torrent porridge corridor historic minority majority priority authority sorry").split(" "));
+// "a" before r and a vowel that the dictionary writes as "ɛ": carry is kˈaɹi
+const TRAP_R = new Set(("paris parish charity clarity clarify comparison chariot arid baron barren marathon caramel parallel paradise " +
+  "paragraph parachute clarinet parody character carol carrot narrative").split(" "));
+// -ile said "aɪl": mobile, missile, fragile
+const ILE = new Set(("mobile missile fertile hostile fragile futile sterile versatile agile juvenile reptile tactile volatile projectile " +
+  "servile virile ductile senile infantile").split(" "));
+// everyday words Britain says differently, whole (misaki's British lexicon, written in our IPA)
+const GB_WORDS = {
+  schedule: "ʃˈɛdjuːl", tomato: "təmˈɑːtəʊ", tomatoes: "təmˈɑːtəʊz", privacy: "pɹˈɪvəsi", vitamin: "vˈɪtəmɪn", vitamins: "vˈɪtəmɪnz",
+  either: "ˈaɪðə", neither: "nˈaɪðə", leisure: "lˈɛʒə", advertisement: "ədvˈɜːtɪsmənt", advertisements: "ədvˈɜːtɪsmənts",
+  aluminium: "ˌaljʊmˈɪniəm", aluminum: "əlˈuːmɪnəm", garage: "ɡˈaɹɑːʒ", laboratory: "ləbˈɒɹətəɹi", zebra: "zˈɛbɹə", route: "ɹˈuːt",
+  herb: "hˈɜːb", herbs: "hˈɜːbz", yogurt: "jˈɒɡət", yoghurt: "jˈɒɡət", controversy: "kˈɒntɹəvɜːsi", clerk: "klˈɑːk",
+  lieutenant: "lɛftˈɛnənt", vase: "vˈɑːz", ballet: "bˈaleɪ", data: "dˈeɪtə", been: "biːn", of: "ɒv", what: "wˈɒt", figure: "fˈɪɡə",
+  basil: "bˈazəl", oregano: "ˌɒɹɪɡˈɑːnəʊ", process: "pɹˈəʊsɛs", progress: "pɹˈəʊɡɹɛs", dynasty: "dˈɪnəsti", patriot: "pˈatɹiət",
+  semi: "sˈɛmi", anti: "ˈanti", niche: "nˈiːʃ", docile: "dˈəʊsaɪl", buoy: "bˈɔɪ", adult: "ˈadʌlt", suggest: "sədʒˈɛst",
+  squirrel: "skwˈɪɹəl", hurricane: "hˈʌɹɪkən", pasta: "pˈastə", aeroplane: "ˈɛːɹəpleɪn", mum: "mˈʌm", ate: "ˈɛt"
+};
+// British spellings the American dictionary lacks: colour, centre, organise
+function usSpellings(w) {
+  const out = [];
+  const add = (x) => { if (x !== w && out.indexOf(x) < 0) out.push(x); };
+  add(w.replace(/our(s|ed|ing|ite|ites|able|er|ers)?$/, "or$1").replace(/our(?=[a-z]+)/, "or"));
+  add(w.replace(/is(e|es|ed|ing|ation|ations|er|ers)$/, "iz$1"));
+  add(w.replace(/ys(e|es|ed|ing)$/, "yz$1"));
+  add(w.replace(/tre(s)?$/, "ter$1").replace(/bre(s)?$/, "ber$1"));
+  add(w.replace(/ence(s)?$/, "ense$1"));
+  add(w.replace(/ll(ed|ing|er|ers)$/, "l$1"));
+  add(w.replace(/ogue(s)?$/, "og$1"));
+  add(w.replace(/ae/g, "e").replace(/oe/g, "e"));
+  add(w.replace(/^programme/, "program").replace(/^cheque/, "check").replace(/^tyre/, "tire").replace(/^pyjama/, "pajama"));
+  return out;
+}
+// one word in British sounds; r says whether it ends in an r Britain leaves
+// silent, which comes back as a linking r before a vowel (far away, there is)
+function arpaToIpaGB(arpa, word) {
+  const w = word || "";
+  const ph = arpa.trim().split(/\s+/).map((x) => { const m = /^([A-Z]+)([012])?$/.exec(x); return m ? { b: m[1], s: m[2] } : null; }).filter(Boolean);
+  const isV = (p) => !!(p && VOWEL[p.b]);
+  const n = ph.length;
+  // -ary, -ory, -ery lose their American second stress: secretary sˈɛkɹətəɹi
+  let e = n - 1;
+  if (ph[e] && ph[e].b === "Z") e--;
+  if (e >= 2 && ph[e].b === "IY" && ph[e - 1].b === "R" && /^(EH|AO)$/.test(ph[e - 2].b) && ph[e - 2].s !== "1") { ph[e - 2] = { b: "AH", s: "0" }; ph[e] = { b: "IY", s: "0" }; }
+  // -mony: ceremony sˈɛɹɪməni
+  if (e >= 2 && ph[e].b === "IY" && ph[e - 1].b === "N" && ph[e - 2].b === "OW" && ph[e - 2].s === "2") ph[e - 2] = { b: "AH", s: "0" };
+  // -ile: mobile mˈəʊbaɪl
+  if (hasStem(ILE, w)) { for (let i = n - 1; i > 0; i--) if (ph[i].b === "L" && ph[i - 1].b === "AH") { ph[i - 1] = { b: "AY", s: "0" }; break; } }
+  // -isation: organisation ˌɔːɡənaɪzˈeɪʃən
+  if (/i[sz]ations?$/.test(w)) { for (let i = 0; i < n - 2; i++) if (/^(AH|IH)$/.test(ph[i].b) && ph[i].s === "0" && ph[i + 1].b === "Z" && ph[i + 2].b === "EY") ph[i] = { b: "AY", s: "0" }; }
+  // a last "o" carries no second stress: tomorrow təmˈɒɹəʊ, borrow
+  if (ph[n - 1] && ph[n - 1].b === "OW" && ph[n - 1].s === "2") ph[n - 1] = { b: "OW", s: "0" };
+  const bath = hasStem(BATH, w), palm = hasStem(PALM, w), lotR = hasStem(LOT_R, w), trapR = hasStem(TRAP_R, w);
+  const yod = /[tdn](u|ew|eu|ue)/.test(w);
+  let out = "", firstAE = true, rEnd = false;
+  for (let i = 0; i < n; i++) {
+    const { b, s } = ph[i];
+    const mark = s === "1" ? "ˈ" : s === "2" ? "ˌ" : "";
+    const nextR = ph[i + 1] && ph[i + 1].b === "R";
+    const rVowel = nextR && isV(ph[i + 2]);   // the r is said: very, sorry
+    const nextV = isV(ph[i + 1]);
+    if (VOWEL[b]) {
+      let v;
+      if (b === "AA") v = nextR ? (rVowel && (lotR || /or/.test(w)) ? "ɒ" : "ɑː") : palm ? "ɑː" : /au|aw|ough/.test(w) ? "ɔː" : "ɒ";
+      else if (b === "AE") { v = bath && firstAE ? "ɑː" : "a"; firstAE = false; }
+      else if (b === "AH") v = s === "0" ? "ə" : "ʌ";
+      else if (b === "AO") v = nextR ? (rVowel && lotR ? "ɒ" : "ɔː") : (ph[i + 1] && /^(F|TH|S|NG|G)$/.test(ph[i + 1].b) && !/au|aw/.test(w)) ? "ɒ" : "ɔː";
+      else if (b === "AW") v = nextR ? "aʊə" : "aʊ";
+      else if (b === "AY") v = nextR ? "aɪə" : "aɪ";
+      else if (b === "EY") v = nextR ? "ɛː" : "eɪ";
+      else if (b === "EH") v = !nextR ? "ɛ" : !rVowel ? "ɛː" : (trapR || /arr|ar[aou]/.test(w)) ? "a" : /ar[eiy]|air|are|ear|eir/.test(w) ? "ɛː" : "ɛ";
+      else if (b === "ER") {
+        if (s === "0") v = nextV ? "əɹ" : "ə";
+        else v = nextV ? (/urr|orr|our/.test(w) && !/^(furr|purr|blurr)/.test(w) ? "ʌɹ" : "ɜːɹ") : "ɜː";
+        if (i === n - 1) rEnd = true;
+      }
+      else if (b === "IH") v = nextR ? (rVowel && /ir|yr/.test(w) ? "ɪ" : "ɪə") : "ɪ";
+      else if (b === "IY") v = nextR ? "ɪə" : s === "0" ? "i" : "iː";
+      else if (b === "OW") v = nextR ? "ɔː" : "əʊ";
+      else if (b === "OY") v = "ɔɪ";
+      else if (b === "UH") v = nextR ? "ʊə" : "ʊ";
+      else v = nextR ? "ʊə" : s === "0" ? "u" : "uː";   // UW
+      // the British "you" in new, tune, student, during
+      if ((b === "UW" || b === "UH") && yod && i > 0 && /^(T|D|N)$/.test(ph[i - 1].b)) out += "j";
+      out += mark + v;
+    } else if (b === "R") {
+      if (nextV) out += "ɹ";
+      else if (i === n - 1) rEnd = true;
+    } else out += CONS[b] || "";   // no American flap: water is wˈɔːtə
+  }
+  return { ipa: out, r: rEnd };
+}
+// sounds written for American English (spelling rules, our own names) made British
+function gbString(ipa) {
+  return ipa.replace(/æ/g, "a").replace(/oʊ/g, "əʊ").replace(/ɚ/g, "ə").replace(/ɾ/g, "t")
+    .replace(/(aɪ|aʊ|eɪ|əʊ|iː|uː|ɑː|ɔː|ɜː|a|ɑ|ɒ|ɔ|ɜ|ɛ|ɪ|ʊ|ʌ|ə)ɹ(?![ˈˌ]?[aeiouɑɒɔəɛɜɪʊʌ])/g, (m, v) =>
+      ({ "aɪ": "aɪə", "aʊ": "aʊə", "eɪ": "ɛː", "əʊ": "ɔː", "iː": "ɪə", "uː": "ʊə", "ɑː": "ɑː", "ɔː": "ɔː", "ɜː": "ɜː", a: "ɑː", "ɑ": "ɑː",
+        "ɒ": "ɔː", "ɔ": "ɔː", "ɜ": "ɜː", "ɛ": "ɛː", "ɪ": "ɪə", "ʊ": "ʊə", "ʌ": "ɜː", "ə": "ə" })[v]);
+}
+const LETTERS_GB = Object.assign({}, LETTERS, { o: "ˈəʊ", r: "ˈɑː", z: "zˈɛd" });
+function wordIpaGB(raw) {
+  const w = raw.toLowerCase();
+  if (CUSTOM[w]) return { ipa: gbString(CUSTOM[w]), r: false };
+  if (GB_WORDS[w]) return { ipa: WEAK.has(w) ? GB_WORDS[w].replace(/[ˈˌ]/g, "") : GB_WORDS[w], r: false };
+  const look = (x) => { const g = arpaToIpaGB(dict[x], x); if (WEAK.has(x)) g.ipa = g.ipa.replace(/[ˈˌ]/g, ""); return g; };
+  if (dict[w]) return look(w);
+  const s = /^(.*?)('s|s')$/.exec(w);
+  if (s && dict[s[1]]) { const b = arpaToIpaGB(dict[s[1]], s[1]).ipa; return { ipa: b + (/[szʃʒ]$|tʃ$|dʒ$/.test(b) ? "ɪz" : /[ptkfθ]$/.test(b) ? "s" : "z"), r: false }; }
+  if (/^[A-Z]{2,5}$/.test(raw)) return { ipa: w.split("").map((ch) => LETTERS_GB[ch] || "").join(" "), r: false };
+  const us = usSpellings(w).find((x) => dict[x]);
+  if (us) return arpaToIpaGB(dict[us], w);
+  // spelling rules: their "o" is the American LOT, Britain's is "ɒ"
+  return { ipa: gbString(spell(w).replace(/ɑː/g, "ɒ")), r: false };
+}
+function phonemize(text, gb) {
+  const parts = normalize(text, gb).match(/[A-Za-z]+(?:'[A-Za-z]+)?|[.,!?;:—…"]/g) || [];
+  let out = "", linkR = false;
   parts.forEach((p) => {
-    if (/^[.,!?;:—…"]$/.test(p)) out = out.replace(/ $/, "") + p + " ";
+    if (/^[.,!?;:—…"]$/.test(p)) { out = out.replace(/ $/, "") + p + " "; linkR = false; }
+    else if (gb) {
+      const g = wordIpaGB(p);
+      // the linking r of RP: "far away" is fˈɑːɹ əwˈeɪ
+      if (linkR && /^[ˈˌ]?[aeiouɑɒɔəɛɜɪʊʌ]/.test(g.ipa)) out = out.replace(/ $/, "ɹ ");
+      out += g.ipa + " ";
+      linkR = g.r;
+    }
     else out += wordIpa(p) + " ";
   });
   return out.trim();
@@ -166,9 +331,10 @@ function sentences(text) {
 async function speak(id, text, voice, speed) {
   await load();
   const vd = await voiceData(voice);
+  const gb = isGB(voice);
   const parts = [];
   for (const s of sentences(text)) {
-    const ph = phonemize(s);
+    const ph = phonemize(s, gb);
     if (!ph) continue;
     const { input_ids } = tok(ph, { truncation: true });
     const n = Math.min(Math.max(input_ids.dims.at(-1) - 2, 0), 509);
@@ -189,5 +355,5 @@ onmessage = (e) => {
   const m = e.data || {};
   if (m.type === "load") load().catch((err) => postMessage({ type: "error", id: null, message: String((err && err.message) || err) }));
   else if (m.type === "speak") speak(m.id, m.text, m.voice, m.speed).catch((err) => postMessage({ type: "error", id: m.id, message: String((err && err.message) || err) }));
-  else if (m.type === "phonemize") load().then(() => postMessage({ type: "phonemes", id: m.id, text: phonemize(m.text) }));
+  else if (m.type === "phonemize") load().then(() => postMessage({ type: "phonemes", id: m.id, text: phonemize(m.text, isGB(m.voice)) }));
 };
