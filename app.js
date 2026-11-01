@@ -4700,7 +4700,7 @@
       const level = inside && !silent ? audioLevel(a, S.time) : 0;
       if (v.gain) { v.el.volume = 1; v.gain.gain.value = clamp(level, 0, 2); }
       else v.el.volume = clamp(level, 0, 1);
-      if (v.slot) setVoiceSlot(v.slot, a.voice, a.voiceAmt);
+      if (v.slot) setVoiceSlot(v.slot, a.voice, a.voiceAmt, a.enhance);
       // ccl14: with Reduce noise on, the element plays the cleaned sound (same timing as the file)
       {
         const am = mediaById(a.mediaId);
@@ -4913,6 +4913,8 @@
     retouch: I('<circle cx="10" cy="12" r="7"/><path d="M7.5 14.5c1.4 1.2 3.6 1.2 5 0"/><line x1="8" y1="10" x2="8" y2="10.5"/><line x1="12" y1="10" x2="12" y2="10.5"/><path d="M19 3v4M17 5h4"/>'),
     // ccl17 stabilize: a frame held steady between two brackets
     stabilize: I('<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/>'),
+    // ccl21 enhance voice: a voice wave with a lift above it
+    enhance: I('<path d="M2 14h2l2-4 2 8 2-12 2 10 2-6 2 4h6"/><polyline points="16 6 19 3 22 6"/><line x1="19" y1="3" x2="19" y2="9"/>'),
     // ccl14 reduce noise: a wave with its rough edge smoothed
     denoise: I('<path d="M2 12h2l1.5-4 2 8 2-10 2 12 2-8 1.5 4H22"/><line x1="3" y1="20" x2="21" y2="20"/>'),
     // ccl11 chroma key: a person's outline in front of a screen
@@ -5091,6 +5093,8 @@
           box.appendChild(group("Sound", chipsRow([[false, "On"], [true, "Muted"]], !!c.muted, (v) => { c.muted = v; })));
         }));
         list.push(tool("denoise", "Reduce noise", ICON.denoise, (box) => denoisePanel(box, c, true)));
+        // ccl21: next to Reduce noise, as CapCut's Enhance voice
+        list.push(tool("enhance", "Enhance voice", ICON.enhance, (box) => enhancePanel(box, c)));
         list.push(tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, c, () => clipStartOf(c), () => dispDur(c))));
       } else {
         list.push(tool("duration", "Duration", ICON.timing, (box) => {
@@ -5243,6 +5247,7 @@
         act("split", "Split", ICON.split, splitAtPlayhead),
         tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 1.5, 0.05, typeof a.gain === "number" ? a.gain : 1, (v) => { a.gain = v; syncAudioClips(); }, () => commit(), pct)))),
         tool("denoise", "Reduce noise", ICON.denoise, (box) => denoisePanel(box, a, false)),
+        tool("enhance", "Enhance voice", ICON.enhance, (box) => enhancePanel(box, a)),
         tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, a, () => a.start, () => audioDur(a))),
         tool("fade", "Fade", ICON.fade, (box) => {
           box.appendChild(group("Fade in", slider(0, 3, 0.05, a.fadeIn || 0, (v) => { a.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
@@ -7803,6 +7808,18 @@
     stadium: '<ellipse cx="12" cy="14" rx="10" ry="5"/><ellipse cx="12" cy="14" rx="5" ry="2"/><path d="M2 14V9c0-2.8 4.5-5 10-5s10 2.2 10 5v5"/>',
     bathroom: '<path d="M3 12h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5z"/><path d="M6 12V5a2 2 0 0 1 4 0"/><line x1="7" y1="20" x2="6" y2="22"/><line x1="17" y1="20" x2="18" y2="22"/>'
   };
+  /* ccl21 Enhance voice: one switch and a Strength, like CapCut's. Clearer
+     speech (rumble and mud out, presence in, evened out), in the preview and
+     the export through the same chain as the voice effects. */
+  function enhancePanel(box, item) {
+    const on = item.enhance > 0;
+    box.appendChild(group("Enhance voice", chipsRow([[true, "On"], [false, "Off"]], on, (v) => {
+      if (v) item.enhance = item.enhance > 0 ? item.enhance : 0.6; else delete item.enhance;
+      recordEdit("enhance", { on: v });
+    })));
+    if (on) box.appendChild(group("Strength", slider(0.1, 1, 0.05, item.enhance, (v) => { item.enhance = v; }, () => commit(), (v) => Math.round(v * 100) + "%")));
+    box.appendChild(mk("p", "panel-note", "Makes speech clearer and fuller: takes out rumble and boxiness, brings the words forward and evens out loud and quiet."));
+  }
   function voicePanel(box, item, startOf, lenOf) {
     const V = window.SenotelVoice;
     if (!V) return;
@@ -11232,7 +11249,7 @@
     // ccl9: the voice effect of the clip being heard
     if (pvVoice) {
       const at = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
-      setVoiceSlot(pvVoice, at && at.clip.voice, at && at.clip.voiceAmt);
+      setVoiceSlot(pvVoice, at && at.clip.voice, at && at.clip.voiceAmt, at && at.clip.enhance);
     }
   }
 
@@ -11271,13 +11288,13 @@
     inp.connect(dest);
     return { inp: inp, dest: dest, key: "", chain: null, busy: false };
   }
-  function setVoiceSlot(slot, id, amount) {
-    const on = !!(id && id !== "none" && window.SenotelVoice);
-    const key = on ? id + ":" + (amount == null ? 1 : amount) : "";
+  function setVoiceSlot(slot, id, amount, enhance) {
+    const on = !!(((id && id !== "none") || enhance > 0) && window.SenotelVoice);
+    const key = on ? (id || "none") + ":" + (amount == null ? 1 : amount) + ":" + (enhance || 0) : "";
     if (slot.key === key || slot.busy) return;
     slot.busy = true;
     slot.key = key;
-    (on ? SenotelVoice.build(slot.inp.context, id, amount) : Promise.resolve(null)).then((ch) => {
+    (on ? SenotelVoice.build(slot.inp.context, id, amount, enhance) : Promise.resolve(null)).then((ch) => {
       try { slot.inp.disconnect(); } catch (e) {}
       if (slot.chain) { try { slot.chain.output.disconnect(); slot.chain.stop(); } catch (e) {} }
       slot.chain = ch;
@@ -12122,8 +12139,8 @@
       const d = seg.duration;
       level(g.gain, at, d, edge);
       src.connect(g);
-      const fx = voice && voice.voice && voice.voice !== "none" && window.SenotelVoice
-        ? await SenotelVoice.build(ctx, voice.voice, voice.voiceAmt).catch(() => null) : null;
+      const fx = voice && ((voice.voice && voice.voice !== "none") || voice.enhance > 0) && window.SenotelVoice
+        ? await SenotelVoice.build(ctx, voice.voice, voice.voiceAmt, voice.enhance).catch(() => null) : null;
       if (fx) { g.connect(fx.input); fx.output.connect(dest); }
       else g.connect(dest);
       src.start(at);

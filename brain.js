@@ -881,6 +881,8 @@
       const aud = m && m.analysis && m.analysis.aud;
       if (!m || m.type !== "video" || (aud && aud.musical > 0.5)) return;
       if (noiseRatio(m) > NOISY) { c.denoise = 1; cleanedClips++; }
+      // ccl21: speech gets a gentle Enhance voice by itself (clearer over music, on every phone speaker)
+      if (m.transcript && m.transcript.length) c.enhance = 0.5;
     });
     if (cleanedClips && window.SenotelDiag) window.SenotelDiag.last.denoise = "noise cleaned on " + cleanedClips + (cleanedClips === 1 ? " clip" : " clips");
     // the Director's effects — emphasis only, never decoration

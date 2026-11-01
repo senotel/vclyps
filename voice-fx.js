@@ -140,7 +140,33 @@
   };
   function chain(ctx, nodes) { for (let i = 0; i < nodes.length - 1; i++) nodes[i].connect(nodes[i + 1]); return nodes; }
 
-  async function build(ctx, id, amount) {
+  /* ccl21 Enhance voice (round 2): what a dialogue editor does to a phone
+     recording, as one chain: the rumble below 80 Hz out, some of the boxy mud
+     around 300 Hz out, presence lifted around 3.5 kHz so words cut through
+     music, a little air on top, then gentle compression so quiet and loud
+     words sit closer. k (0..1) scales every move; at 0 it is a straight wire.
+     It runs before any voice effect, so the effect gets a cleaner voice. */
+  function enhanceChain(ctx, k) {
+    const hp = filt(ctx, "highpass", 80, 0.7);
+    const mud = filt(ctx, "peaking", 300, 1.0, -3.5 * k);
+    const pres = filt(ctx, "peaking", 3500, 0.8, 4 * k);
+    const air = filt(ctx, "highshelf", 10000, null, 2.5 * k);
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -18 - 8 * k; comp.ratio.value = 1 + 2.5 * k; comp.knee.value = 12;
+    comp.attack.value = 0.008; comp.release.value = 0.2;
+    const make = ctx.createGain(); make.gain.value = Math.pow(10, (2.5 * k) / 20);
+    chain(ctx, [hp, mud, pres, air, comp, make]);
+    return { input: hp, output: make, stop: () => {} };
+  }
+  async function build(ctx, id, amount, enhance) {
+    const en = enhance > 0 ? enhanceChain(ctx, Math.min(1, enhance)) : null;
+    const fx = await buildEffect(ctx, id, amount);
+    if (!en) return fx;
+    if (!fx) return en;
+    en.output.connect(fx.input);
+    return { input: en.input, output: fx.output, stop: fx.stop };
+  }
+  async function buildEffect(ctx, id, amount) {
     if (!id || id === "none") return null;
     const k = amount == null ? 1 : Math.max(0, Math.min(1, amount));
     const input = ctx.createGain(), output = ctx.createGain();
