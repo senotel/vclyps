@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    vClyps: text animations
    CapCut's three kinds, for headings: In (how a text arrives), Out (how it
-   leaves) and Loop (what it does while it stays). 40 ins, 34 outs and 25
+   leaves) and Loop (what it does while it stays). 67 ins, 54 outs and 41
    loops, a third of them letter by letter or word by word.
 
    at(t, time) works out, for one frame, how the whole text and each letter
@@ -43,6 +43,16 @@
   // a wipe In and a wipe Out both write o.wipe; the Out runs second, mostly
   // at p = 1, so the one that covers more wins and the In still shows
   function wipeTo(o, dir, f) { if (!o.wipe || f < o.wipe.f) o.wipe = { dir: dir, f: f }; }
+  // adds a change for every letter, after any the text already has
+  function eachLetter(o, fn) {
+    var prev = o.letter;
+    o.letter = function (q, i, n, w, nw) { if (prev) prev(q, i, n, w, nw); fn(q, i, n, w, nw); };
+  }
+  /* A mask: drawHeading clips to the text's own box whenever a wipe is under
+     1, and moves the letters inside that clip. Just under 1 keeps the whole
+     box open, so letters sliding in from below or above appear to come out
+     from behind an edge, the way CapCut's mask reveals do. */
+  var MASK = 0.9999;
 
   /* ─── Motions: p from 0 (gone) to 1 (in place) ─── */
   var M = {
@@ -87,7 +97,59 @@
       o.r += (rnd(i, 7) - 0.5) * 180 * (1 - e);
       o.a *= e;
     },
-    wave: function (o, p) { o.dy += (1 - back(p)) * 0.7; o.a *= clamp(p * 3, 0, 1); }
+    wave: function (o, p) { o.dy += (1 - back(p)) * 0.7; o.a *= clamp(p * 3, 0, 1); },
+
+    /* 0.52: the CapCut staples that were missing. A "swoosh" is a slide with
+       motion blur: smeared and stretched along the way it moves, sharp as it
+       lands. */
+    blurleft: function (o, p) { var w = 1 - out3(p); o.dx -= w * 2.2; o.sx *= 1 + w * 0.5; o.blur += w * 0.25; o.a *= clamp(p * 3, 0, 1); },
+    blurright: function (o, p) { var w = 1 - out3(p); o.dx += w * 2.2; o.sx *= 1 + w * 0.5; o.blur += w * 0.25; o.a *= clamp(p * 3, 0, 1); },
+    blurrise: function (o, p) { var w = 1 - out3(p); o.dy += w * 1.1; o.sy *= 1 + w * 0.45; o.blur += w * 0.22; o.a *= clamp(p * 3, 0, 1); },
+    blurfall: function (o, p) { var w = 1 - out3(p); o.dy -= w * 1.1; o.sy *= 1 + w * 0.45; o.blur += w * 0.22; o.a *= clamp(p * 3, 0, 1); },
+    blurzoom: function (o, p) { var e = out3(p), w = 1 - e; o.s *= 1 + w * 0.6; o.blur += w * 0.4; o.a *= e; },
+    // one and a half turns while it grows out of a point and curls into place
+    spiral: function (o, p) {
+      var e = out3(p), w = 1 - e, ang = w * Math.PI * 3;
+      o.r -= w * 540; o.s *= 0.2 + 0.8 * e; o.a *= clamp(p * 2.5, 0, 1);
+      o.dx += Math.cos(ang) * w * 1.2; o.dy += Math.sin(ang) * w * 1.2;
+    },
+    rotate: function (o, p) { var e = out3(p); o.r -= (1 - e) * 90; o.s *= 0.7 + 0.3 * e; o.a *= e; },
+    stretchup: function (o, p) { var e = out3(p); o.sy *= 1 + (1 - e) * 1.5; o.sx *= 0.4 + 0.6 * e; o.a *= e; },
+    // squashed wide, then wobbles to its shape like a jelly set down
+    jelly: function (o, p) { var w = 1 - elastic(p); o.sx *= 1 + w * 0.5; o.sy *= 1 - w * 0.5; o.a *= clamp(p * 5, 0, 1); },
+    shake: function (o, p) { o.dx += Math.sin(p * Math.PI * 10) * (1 - p) * 0.3; o.a *= clamp(p * 4, 0, 1); },
+    // a neon tube striking: two stutters, a dim moment, then full. No glow is
+    // added: the text's own glow, if it has one, flickers with it
+    neon: function (o, p) {
+      if (p >= 1) return;
+      o.a *= p < 0.1 ? 0 : p < 0.17 ? 1 : p < 0.3 ? 0.12 : p < 0.36 ? 1 : p < 0.48 ? 0.2 : 0.7 + 0.3 * out3((p - 0.48) / 0.52);
+    },
+    spring: function (o, p) { o.dy -= (1 - elastic(p)) * 0.9; o.a *= clamp(p * 4, 0, 1); },
+    // lands from big and fast, like a stamp
+    slam: function (o, p) { var w = 1 - out3(p); o.s *= 1 + w * w * 2.2; o.blur += w * w * 0.12; o.a *= clamp(p * 5, 0, 1); },
+    // a word that is simply there when its turn comes, with a tiny settle
+    snap: function (o, p) { o.a *= clamp(p * 4, 0, 1); o.s *= 0.92 + 0.08 * out3(p); },
+    // mask reveals: the letters rise (or drop) into place from behind the
+    // edge of their own box; a line of text moves as one
+    maskup: function (o, p) {
+      if (p >= 1) return;
+      var w = 1 - out3(p);
+      wipeTo(o, "y", MASK);
+      eachLetter(o, function (q) { q.dy += w * 1.3; q.a *= clamp(p * 2.5, 0, 1); });
+    },
+    maskdown: function (o, p) {
+      if (p >= 1) return;
+      var w = 1 - out3(p);
+      wipeTo(o, "y", MASK);
+      eachLetter(o, function (q) { q.dy -= w * 1.3; q.a *= clamp(p * 2.5, 0, 1); });
+    },
+    // opens from the middle while the letters spread out from it
+    open: function (o, p) {
+      if (p >= 1) return;
+      var e = out3(p);
+      wipeTo(o, "c", e);
+      eachLetter(o, function (q, i, n) { q.dx -= (i - (n - 1) / 2) * 0.3 * (1 - e); });
+    }
   };
 
   /* ─── The lists. by: "letter" or "word" runs the motion per letter or
@@ -106,7 +168,25 @@
     ["l-zoom", "Letters zoom", { m: "zoom", by: "letter" }], ["l-random", "Sparkle", { m: "fade", by: "letter", order: "random" }],
     ["l-left", "Letters slide", { m: "left", by: "letter" }], ["l-turn", "Letters turn", { m: "flipy", by: "letter" }],
     ["l-bounce", "Cascade", { m: "bounce", by: "letter" }], ["w-rise", "Word by word", { m: "rise", by: "word" }],
-    ["w-pop", "Words pop", { m: "pop", by: "word" }]
+    ["w-pop", "Words pop", { m: "pop", by: "word" }],
+    // 0.52
+    ["swoosh-left", "Swoosh in left", { m: "blurleft" }], ["swoosh-right", "Swoosh in right", { m: "blurright" }],
+    ["swoosh-up", "Swoosh up", { m: "blurrise" }], ["swoosh-down", "Swoosh down", { m: "blurfall" }],
+    ["zoom-blur", "Zoom blur", { m: "blurzoom" }], ["spiral", "Spiral"], ["rotate", "Rotate in"],
+    ["stretch-up", "Stretch up", { m: "stretchup" }], ["jelly", "Jelly"], ["shake", "Shake in"],
+    ["neon", "Neon on"], ["spring", "Spring"], ["slam", "Slam"],
+    ["l-mask-up", "Mask up", { m: "maskup" }], ["l-mask-down", "Mask down", { m: "maskdown" }],
+    ["l-open", "Open out", { m: "open" }],
+    // st: how much of the length goes to waiting for its turn; near 1 is a
+    // typewriter, each letter landing in its own short moment
+    ["l-type-fade", "Type fade", { m: "fade", by: "letter", st: 0.9 }],
+    ["l-type-pop", "Type pop", { m: "pop", by: "letter", st: 0.85 }],
+    ["l-type-rise", "Type rise", { m: "rise", by: "letter", st: 0.85 }],
+    ["l-grow", "Letters grow", { m: "grow", by: "letter" }], ["l-elastic", "Letters spring", { m: "elastic", by: "letter" }],
+    ["l-flip", "Letters flip", { m: "flipx", by: "letter" }], ["l-swing", "Letters swing", { m: "swing", by: "letter" }],
+    ["l-swoosh", "Letters swoosh", { m: "blurrise", by: "letter" }],
+    ["w-blur", "Words blur", { m: "blur", by: "word" }], ["w-drop", "Words drop", { m: "drop", by: "word" }],
+    ["w-snap", "Words appear", { m: "snap", by: "word", st: 0.9 }]
   ];
   var OUT = [
     ["fade", "Fade"], ["rise", "Rise away", { m: "drop" }], ["drop", "Fall away", { m: "rise" }],
@@ -121,7 +201,19 @@
     ["l-spin", "Letters spin out", { m: "spin", by: "letter" }], ["l-blur", "Letters blur", { m: "blur", by: "letter" }],
     ["l-scatter", "Scatter", { m: "scatter", by: "letter" }], ["l-zoom", "Letters zoom", { m: "zoom", by: "letter" }],
     ["l-random", "Fade sparkle", { m: "fade", by: "letter", order: "random" }],
-    ["l-right", "Letters slide out", { m: "right", by: "letter" }], ["w-rise", "Words away", { m: "drop", by: "word" }]
+    ["l-right", "Letters slide out", { m: "right", by: "letter" }], ["w-rise", "Words away", { m: "drop", by: "word" }],
+    // 0.52: an Out plays its motion backwards, so leaving upwards is the
+    // motion that arrives from above
+    ["swoosh-left", "Swoosh out left", { m: "blurleft" }], ["swoosh-right", "Swoosh out right", { m: "blurright" }],
+    ["swoosh-up", "Swoosh away up", { m: "blurfall" }], ["swoosh-down", "Swoosh away down", { m: "blurrise" }],
+    ["zoom-blur", "Zoom blur out", { m: "blurzoom" }], ["spiral", "Spiral out"], ["rotate", "Rotate out"],
+    ["shake", "Shake out"], ["neon", "Neon off"], ["slam", "Blow up"],
+    ["l-mask-up", "Mask away up", { m: "maskdown" }], ["l-mask-down", "Mask away down", { m: "maskup" }],
+    ["l-open", "Close in", { m: "open" }],
+    ["l-grow", "Letters shrink", { m: "grow", by: "letter" }], ["l-flip", "Letters flip out", { m: "flipx", by: "letter" }],
+    ["l-swing", "Letters swing out", { m: "swing", by: "letter" }], ["l-swoosh", "Letters swoosh away", { m: "blurfall", by: "letter" }],
+    ["w-blur", "Words blur out", { m: "blur", by: "word" }], ["w-drop", "Words fall", { m: "rise", by: "word" }],
+    ["w-snap", "Words vanish", { m: "snap", by: "word", st: 0.9 }]
   ];
 
   /* Loops: ph is seconds since the text appeared. Each returns its change
@@ -154,6 +246,38 @@
     throb: function (o, ph) { o.s *= 1 + 0.12 * Math.pow(Math.sin((ph / 1.2) * Math.PI), 2); },
     shiver: function (o, ph) { o.r += 1.2 * wav(ph, 0.07); },
     pendulum: function (o, ph) { var w = wav(ph, 1.8); o.r += 12 * w; o.dx += 0.12 * w; },
+    // 0.52
+    // hops, and squashes a little each time it touches down
+    bounce: function (o, ph) {
+      var b = Math.abs(Math.sin((ph / 0.8) * Math.PI)), g = Math.pow(1 - b, 6);
+      o.dy -= 0.3 * b; o.sx *= 1 + 0.12 * g; o.sy *= 1 - 0.12 * g;
+    },
+    "slow-zoom": function (o, ph) { o.s *= 1 + 0.07 * (0.5 - 0.5 * Math.cos((ph / 3) * PI2)); },
+    wobble: function (o, ph) { o.kx += 0.14 * wav(ph, 1.1); },
+    // a neon sign's hum: steady, with a double stutter every few seconds
+    neon: function (o, ph) {
+      var c = ph % 2.8;
+      if ((c > 2.2 && c < 2.28) || (c > 2.4 && c < 2.46)) o.a *= 0.15;
+      else o.a *= 0.97 + 0.03 * wav(ph, 0.5);
+    },
+    stretch: function (o, ph) { o.sx *= 1 + 0.1 * wav(ph, 1.3); },
+    // every so often it is plucked and wobbles back; starts and ends at rest so nothing jumps
+    rubber: function (o, ph) {
+      var c = ph % 1.6, w = Math.exp(-c * 6) * Math.sin(c * 25);
+      o.sx *= 1 + 0.18 * w; o.sy *= 1 - 0.18 * w;
+    },
+    tada: function (o, ph) {
+      var c = ph % 2.2;
+      if (c >= 0.8) return;
+      var env = Math.sin((c / 0.8) * Math.PI);
+      o.s *= 1 + 0.1 * env; o.r += 5 * Math.sin(c * 28) * env;
+    },
+    // slides side to side, leaning into the way it moves
+    glide: function (o, ph) { var a = (ph / 2.2) * PI2; o.dx += 0.12 * Math.sin(a); o.kx -= 0.12 * Math.cos(a); },
+    rumble: function (o, ph) {
+      var step = Math.floor(ph * 24);
+      o.dx += (rnd(step, 15) - 0.5) * 0.06; o.dy += (rnd(step, 16) - 0.5) * 0.06;
+    },
     // letter by letter
     "l-wave": function (o, ph) { o.each = function (q, i) { q.dy += 0.14 * Math.sin(ph * 5 - i * 0.55); }; },
     "l-jump": function (o, ph) {
@@ -168,6 +292,28 @@
     "l-jitter": function (o, ph) {
       var step = Math.floor(ph * 12);
       o.each = function (q, i) { q.dy += (rnd(i * 31 + step, 12) - 0.5) * 0.1; q.r += (rnd(i * 17 + step, 13) - 0.5) * 8; };
+    },
+    "l-bounce": function (o, ph) { o.each = function (q, i) { var b = Math.max(0, Math.sin(ph * 5 - i * 0.45)); q.dy -= 0.22 * b * b; }; },
+    "l-shimmer": function (o, ph) { o.each = function (q, i) { q.a *= 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(ph * 4 - i * 0.5)); }; },
+    "l-sway": function (o, ph) { o.each = function (q, i) { q.r += 12 * Math.sin(ph * 3 - i * 0.5); }; },
+    "l-stretch": function (o, ph) { o.each = function (q, i) { q.sy *= 1 + 0.25 * Math.max(0, Math.sin(ph * 4 - i * 0.6)); }; },
+    // one letter after another turns over (or spins round), then a pause
+    "l-flip": function (o, ph) {
+      o.each = function (q, i, n) {
+        var d = ((ph / 0.1) % (n + 8)) - i;
+        if (d > 0 && d < 3) { var c = Math.cos((d / 3) * PI2); q.sx *= Math.abs(c) < 0.02 ? 0.02 : c; }
+      };
+    },
+    "l-spin": function (o, ph) {
+      o.each = function (q, i, n) {
+        var d = ((ph / 0.1) % (n + 8)) - i;
+        if (d > 0 && d < 3) q.r += 360 * (0.5 - 0.5 * Math.cos((d / 3) * Math.PI));
+      };
+    },
+    // a sign with a loose wire: now and then a letter or two goes dim
+    "l-neon": function (o, ph) {
+      var step = Math.floor(ph * 8);
+      o.each = function (q, i) { if (rnd(i * 7 + step, 17) > 0.93) q.a *= 0.2; };
     }
   };
   var LOOP = [
@@ -175,7 +321,12 @@
     ["jelly", "Jelly"], ["hop", "Hop"], ["spin", "Spin"], ["flip", "Flip"], ["breathe", "Breathe"], ["blink", "Blink"],
     ["flicker", "Flicker"], ["glitch", "Glitch"], ["sway", "Sway"], ["tilt", "Tilt"], ["drift", "Drift"],
     ["orbit", "Orbit"], ["throb", "Throb"], ["shiver", "Shiver"], ["pendulum", "Pendulum"],
-    ["l-wave", "Letters wave"], ["l-jump", "Letters jump"], ["l-ripple", "Ripple"], ["l-dance", "Dance"], ["l-jitter", "Jitter"]
+    ["l-wave", "Letters wave"], ["l-jump", "Letters jump"], ["l-ripple", "Ripple"], ["l-dance", "Dance"], ["l-jitter", "Jitter"],
+    // 0.52
+    ["bounce", "Bounce"], ["slow-zoom", "Slow zoom"], ["wobble", "Wobble"], ["neon", "Neon buzz"], ["stretch", "Stretch"],
+    ["rubber", "Rubber"], ["tada", "Tada"], ["glide", "Glide"], ["rumble", "Rumble"],
+    ["l-bounce", "Letters bounce"], ["l-shimmer", "Shimmer"], ["l-sway", "Letters sway"], ["l-stretch", "Letters stretch"],
+    ["l-flip", "Letters flip"], ["l-spin", "Letters spin"], ["l-neon", "Broken neon"]
   ];
 
   // id → {m, by, order}; a row without a spec uses the motion of the same name
@@ -187,9 +338,10 @@
   var IN_BY = table(IN), OUT_BY = table(OUT);
 
   // a letter's own progress: each starts a little after the one before, and all finish together
-  function stagger(p, idx, count) {
+  // (st, from the row, is the share of the length spent waiting; 0.6 unless it says)
+  function stagger(p, idx, count, st) {
     if (count <= 1) return p;
-    var st = 0.6;
+    st = st || 0.6;
     return clamp((p - (idx / (count - 1)) * st) / (1 - st), 0, 1);
   }
 
@@ -205,7 +357,7 @@
       var idx = spec.by === "word" ? w : i, cnt = spec.by === "word" ? nw : n;
       if (spec.order === "random") idx = Math.floor(rnd(i, 14) * cnt);
       if (leaving) idx = cnt - 1 - idx;   // the first to arrive is the first to leave
-      fn(q, stagger(p, idx, cnt), i);
+      fn(q, stagger(p, idx, cnt, spec.st), i);
     };
   }
 
@@ -249,6 +401,11 @@
     at: at,
     base: base,
     // how long an In or Out reads best at, when it is first picked
-    lengthFor: function (id) { return /^[lw]-/.test(id || "") ? 0.9 : id === "type" ? 1 : 0.5; }
+    lengthFor: function (id) {
+      id = id || "";
+      if (/^l-type-/.test(id) || id === "w-snap") return 1.1;   // a typewriter needs time for every letter
+      if (/^l-(mask-|open)/.test(id) || id === "neon" || id === "spiral") return 0.7;
+      return /^[lw]-/.test(id) ? 0.9 : id === "type" ? 1 : 0.5;
+    }
   };
 })(typeof window !== "undefined" ? window : globalThis);
