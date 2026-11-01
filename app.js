@@ -7132,7 +7132,11 @@
         back.onclick = () => { item.cutout.pts.pop(); commit(); syncOverlays(); renderInspector(); }; box.appendChild(back);
       }
       const state = C.choiceStatus(chooseInfo(item).key);
-      const note = mk("p", "panel-note", state ? (state.p < 1 ? (state.download && state.p === 0 ? "Downloading model " + Math.round(state.download.progress || 0) + "%" : "Finding it " + Math.round(state.p * 100) + "%") : "Object ready") : "Tap points on the object, then Done. Erase points exclude background. Downloads SlimSAM on first use (about 14 MB of model weights, plus the runtime). Runs on your device.");
+      const note = mk("p", "panel-note", state ? (state.p < 1 ? (state.download && state.p === 0 ? "Downloading model " + Math.round(state.download.progress || 0) + "%" : "Finding it " + Math.round(state.p * 100) + "%") : "Object ready") : "Tap points on the object, then Done. Erase points exclude background. Downloads SlimSAM on first use (about 14 MB on CPU or 21-40 MB on GPU, plus the runtime). Runs on your device.");
+      if (state && state.p < 1) {
+        if (state.device === "wasm") note.textContent += ". WebGPU unavailable. This will take a while";
+        if (state.remaining != null) note.textContent += state.remaining >= 60 ? "; about " + Math.max(1, Math.round(state.remaining / 60)) + " minutes remaining" : "; about " + Math.max(1, Math.round(state.remaining)) + " seconds remaining";
+      }
       box.appendChild(note);
       const bar = document.createElement("progress"); bar.setAttribute("aria-label", "Object analysis progress"); bar.max = 1; bar.value = state ? (state.p || (state.download && state.download.progress || 0) / 100) : 0; box.appendChild(bar);
       box.appendChild(group("Edge", slider(0, 1, 0.05, item.cutout.soft == null ? 0.3 : item.cutout.soft, (v) => { item.cutout.soft = v; syncOverlays(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
