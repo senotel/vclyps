@@ -284,8 +284,8 @@
     }
   }
 
-  /* Every screen change goes through the transition when experience.js has
-     provided one, and straight through when it has not — so the app is never
+  /* Every screen change goes through a transition when one is provided
+     (window.vcCurtain; none since the 0.66.0 landing), and straight through when it is not — so the app is never
      dependent on the atmosphere layer being present.
 
      The whole navigation runs SYNCHRONOUSLY inside this callback, at the

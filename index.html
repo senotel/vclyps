@@ -34,10 +34,6 @@
   <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="logo.png" />
-  <noscript><style>
-    .lp-skip { display: none !important; }
-    .lp-scene[data-scene="0"] { opacity: 1 !important; visibility: visible !important; }
-  </style></noscript>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="landing.css" />
 </head>
@@ -70,151 +66,120 @@
     </div>
   </header>
 
-  <!-- ══════════════ LANDING ══════════════ -->
+  <!-- ══════════════ LANDING ══════════════
+       A plain product page (0.66.0). What it does, a real screenshot of the
+       editor, how it works, what is in it, and the privacy line. No WebGL, no
+       scroll choreography, no cursor effects: the product is the picture. -->
   <section class="screen active" id="screen-home">
     <div class="lp-root">
-      <canvas class="lp-world" id="lpWorld" aria-hidden="true"></canvas>
 
-      <!-- skip intro — arrow only -->
-      <button class="lp-skip" id="lpSkip" type="button" aria-label="Skip intro">→</button>
+      <header class="lp-nav">
+        <a class="lp-brand" href="#" aria-label="vClyps by Senotel">
+          <img src="logo.png" alt="" width="22" height="22" />
+          <span><b>v</b>Clyps</span>
+        </a>
+        <nav class="lp-links" aria-label="Site">
+          <a href="#lpHow">How it works</a>
+          <a href="#lpTools">The editor</a>
+          <a href="#lpPrivate">Privacy</a>
+        </nav>
+        <button class="lp-btn lp-btn-sm" type="button" data-start>Start editing</button>
+      </header>
 
-      <!-- The edit line is decoration, not an editor control. -->
-      <div class="lp-progress" aria-hidden="true"><span id="lpProgress"></span></div>
-
-      <!-- HERO -->
-      <section class="lp-hero">
-        <h1 class="lp-sr-only">vClyps. The story was always there. Every story deserves to be seen.</h1>
-        <div class="lp-hero-center">
-          <img class="lp-logo" id="lpLogo" src="logo.png" alt="vClyps logo" />
-          <div class="lp-taglines">
-            <div class="lp-title" id="lpTag1"><span>The story</span> <span>was always</span> <span>there.</span></div>
-            <div class="lp-subtitle" id="lpTag2">Every story deserves to be seen.</div>
+      <main>
+        <section class="lp-hero">
+          <div class="lp-wrap">
+            <h1 class="lp-title">The story was always there.</h1>
+            <p class="lp-lede">Drop in your footage. vClyps finds the story and edits it for you, free, in your browser.</p>
+            <div class="lp-cta">
+              <button class="lp-btn" id="lpPlus" type="button" data-start>Start editing, free</button>
+              <span class="lp-cta-note">No sign-up</span>
+            </div>
+            <ul class="lp-proof">
+              <li>1080p and 60 fps, free</li>
+              <li>No watermark</li>
+              <li>Your video never uploads</li>
+            </ul>
           </div>
-        </div>
-        <!-- One original image, in three displaced film frames. Scroll finds
-             the sequence. No stock requests, video downloads or editor state. -->
-        <div class="lp-contact" id="lpContact" aria-hidden="true">
-          <div class="lp-contact-bed"></div>
-          <div class="lp-film lp-film-a"><div class="lp-film-window"></div><i></i></div>
-          <div class="lp-film lp-film-b"><div class="lp-film-window"></div><i></i></div>
-          <div class="lp-film lp-film-c"><div class="lp-film-window"></div><i></i></div>
-          <div class="lp-cut-line"><span></span></div>
-          <div class="lp-contact-reticle"></div>
-        </div>
-        <span class="lp-cue-line" id="lpCue" aria-hidden="true"></span>
-        <div class="lp-hero-ruler" aria-hidden="true"></div>
-      </section>
+          <div class="lp-wrap lp-wrap-wide">
+            <figure class="lp-shot">
+              <picture>
+                <source media="(max-width: 760px)" srcset="site/editor-phone.webp" type="image/webp" width="390" height="844" />
+                <source srcset="site/editor.webp" type="image/webp" />
+                <img src="site/editor.jpg" width="1440" height="900" alt="The vClyps editor: a tall video in the preview with a heading on it, two clips and the heading on the timeline, and the text settings open on the right." />
+              </picture>
+            </figure>
+          </div>
+        </section>
 
-      <!-- NARRATIVE — the story text we established -->
-      <section class="lp-story" id="lpStory">
-        <div class="lp-story-inner">
-        <div class="lp-eyebrow lp-reveal">vClyps</div>
-        <h2 class="lp-h2 lp-reveal">The story was always there.</h2>
-        <div class="lp-story-copy">
-        <p class="lp-body lp-reveal">The best edits aren't created by cutting randomly. They're created by understanding the story.</p>
-        <p class="lp-body lp-reveal">vClyps watches your footage from beginning to end, identifies the moments that matter, builds a narrative, and edits your video around that story, <em>not just the highlights.</em></p>
-        <p class="lp-body lp-reveal">Whether it's a vlog, gaming clip, podcast, tutorial, or a video of your dog digging for treats, vClyps transforms raw footage into a polished short designed to keep people watching.</p>
-        </div>
-        <div class="lp-triad lp-reveal"><span>One upload.</span><span>One story.</span><span>One click.</span></div>
-        <div class="lp-splice" aria-hidden="true"><i></i><i></i><i></i></div>
-        </div>
-      </section>
+        <section class="lp-section" id="lpHow">
+          <div class="lp-wrap">
+            <h2 class="lp-h2">How it works</h2>
+            <ol class="lp-steps">
+              <li>
+                <span class="lp-step-n">1</span>
+                <h3>Add your footage</h3>
+                <p>Phone clips, a long recording, photos. Everything is read on your device.</p>
+              </li>
+              <li>
+                <span class="lp-step-n">2</span>
+                <h3>The Director finds the story</h3>
+                <p>It watches your footage from beginning to end, finds the moments that matter, and cuts a short around that story, not just the highlights.</p>
+              </li>
+              <li>
+                <span class="lp-step-n">3</span>
+                <h3>You finish it by hand</h3>
+                <p>Every cut lands on a real timeline. Change anything, then export.</p>
+              </li>
+            </ol>
+          </div>
+        </section>
 
-      <!-- Native-scroll walkthrough. This presentation never mounts or calls
-           the real editor: the existing + gateway remains the only entry. -->
-      <section class="lp-walk" id="lpWalk">
-        <div class="lp-walk-grid">
+        <section class="lp-section" id="lpTools">
+          <div class="lp-wrap">
+            <h2 class="lp-h2">A full editor, not just a clipper</h2>
+            <p class="lp-sub">The Director gives you a first cut. Everything after it is yours.</p>
+            <dl class="lp-tools">
+              <div><dt>Captions</dt><dd>Written from what is said, timed word by word, in styles you can change.</dd></div>
+              <div><dt>Text and titles</dt><dd>Hundreds of fonts, text animations, lower thirds and title cards.</dd></div>
+              <div><dt>Effects and transitions</dt><dd>Filters, colour adjustment, video effects and transitions between clips.</dd></div>
+              <div><dt>Sound</dt><dd>Recorded sound effects, music, voice clean-up and voice effects.</dd></div>
+              <div><dt>Remove background</dt><dd>Cut a person out of the picture, or tap to choose what stays.</dd></div>
+              <div><dt>Auto reframe</dt><dd>Wide footage in a tall frame follows the subject.</dd></div>
+              <div><dt>Speed</dt><dd>Speed curves, reverse and smooth slow motion.</dd></div>
+              <div><dt>Two modes</dt><dd>Entertainment for stories, Business for product videos.</dd></div>
+            </dl>
+          </div>
+        </section>
 
-            <!-- A portrait canvas inside an assembling editing workspace. -->
-            <div class="lp-phone-col">
-              <div class="lp-workspace" id="lpWorkspace" data-phase="0">
-                <div class="lp-workspace-top" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
-                <div class="lp-workspace-stage">
-                <div class="lp-source-stack" aria-hidden="true"><i></i><i></i><i></i></div>
-              <div class="lp-phone" id="lpPhone">
-                <div class="lp-phone-notch"></div>
-                <div class="lp-phone-screen">
-
-                  <!-- 0 · Upload -->
-                  <div class="lp-scene lp-scene-upload" data-scene="0">
-                    <div class="lp-raw-clip">
-                      <span class="lp-clip-play"></span>
-                      <span class="lp-clip-tag">RAW · 04:12</span>
-                    </div>
-                  </div>
-
-                  <!-- 1 · Understand -->
-                  <div class="lp-scene lp-scene-understand" data-scene="1">
-                    <div class="lp-scan"><span class="lp-scan-line"></span></div>
-                    <div class="lp-transcript">
-                      <span></span><span></span><span></span><span></span>
-                    </div>
-                    <div class="lp-verdict">Finds the story.</div>
-                  </div>
-
-                  <!-- 2 · Edit -->
-                  <div class="lp-scene lp-scene-edit" data-scene="2">
-                    <div class="lp-frame"></div>
-                    <div class="lp-caption-chip">every story deserves to be seen</div>
-                    <div class="lp-timeline">
-                      <span class="lp-seg lp-seg-keep"></span>
-                      <span class="lp-seg lp-seg-cut"></span>
-                      <span class="lp-seg lp-seg-keep"></span>
-                      <span class="lp-seg lp-seg-cut"></span>
-                      <span class="lp-seg lp-seg-keep"></span>
-                    </div>
-                  </div>
-
-                  <!-- 3 · Export -->
-                  <div class="lp-scene lp-scene-export" data-scene="3">
-                    <svg class="lp-check" viewBox="0 0 64 64" aria-hidden="true">
-                      <circle class="lp-check-ring" cx="32" cy="32" r="26"></circle>
-                      <path class="lp-check-mark" d="M20 33 L28 41 L45 23"></path>
-                    </svg>
-                    <div class="lp-export-text">Ready to share.</div>
-                  </div>
-
-                </div>
-              </div>
-                <div class="lp-output-guide" aria-hidden="true"><i></i><i></i></div>
-                </div>
-                <div class="lp-workspace-tracks" aria-hidden="true">
-                  <div class="lp-track-ruler"></div>
-                  <div class="lp-demo-track lp-demo-overlay"><i></i><i></i></div>
-                  <div class="lp-demo-track lp-demo-text"><i></i><i></i><i></i><i></i></div>
-                  <div class="lp-demo-track lp-demo-video"><i></i><i></i><i></i><i></i></div>
-                  <div class="lp-demo-track lp-demo-audio"><i></i></div>
-                  <span class="lp-demo-playhead"></span>
-                </div>
-              </div>
+        <section class="lp-section" id="lpPrivate">
+          <div class="lp-wrap lp-split">
+            <h2 class="lp-h2">Your video never uploads.</h2>
+            <div>
+              <p class="lp-body">The AI reads your words and a few still frames to make its choices and, with your permission, how you edit helps train vClyps' own AI.</p>
+              <p class="lp-body"><a href="privacy.html">Read the privacy policy</a></p>
             </div>
+          </div>
+        </section>
 
-            <!-- workflow -->
-            <div class="lp-steps-col">
-              <ol class="lp-steps" id="lpSteps">
-                <li class="lp-step-marker" id="lpMarker" aria-hidden="true"></li>
-                <li class="lp-step" data-step="0"><span class="lp-step-idx">01</span><span class="lp-step-name">Upload</span><span class="lp-step-note">Drop in raw footage</span></li>
-                <li class="lp-step" data-step="1"><span class="lp-step-idx">02</span><span class="lp-step-name">Understand</span><span class="lp-step-note">It watches, listens, finds the story</span></li>
-                <li class="lp-step" data-step="2"><span class="lp-step-idx">03</span><span class="lp-step-name">Edit</span><span class="lp-step-note">Cuts, captions and polish, built around the story</span></li>
-                <li class="lp-step" data-step="3"><span class="lp-step-idx">04</span><span class="lp-step-name">Export</span><span class="lp-step-note">A finished short, ready to share</span></li>
-              </ol>
+        <section class="lp-section lp-end">
+          <div class="lp-wrap">
+            <h2 class="lp-h2">Every story deserves to be seen.</h2>
+            <div class="lp-cta">
+              <button class="lp-btn" type="button" data-start>Start editing, free</button>
+              <span class="lp-cta-note">No sign-up</span>
             </div>
-
-        </div>
-      </section>
+          </div>
+        </section>
+      </main>
 
       <footer class="lp-foot">
-        <span>vClyps by Senotel</span>
-        <a href="privacy.html">Privacy</a>
-        <a href="terms.html">Terms</a>
-      </footer>
-
-      <!-- Same + gateway and accessible label; always available. -->
-      <div class="lp-dock" id="lpDock">
-        <div class="lp-cta-magnet" id="lpMagnet">
-          <button class="lp-plus" id="lpPlus" type="button" aria-label="Start editing"><span class="lp-entry-label">Start editing</span></button>
+        <div class="lp-wrap">
+          <span>vClyps by Senotel</span>
+          <a href="privacy.html">Privacy</a>
+          <a href="terms.html">Terms</a>
         </div>
-      </div>
+      </footer>
 
     </div>
   </section>
@@ -1192,10 +1157,6 @@
   <script defer src="render-clock.js"></script>
   <script defer src="export-fast.js"></script>
   <script defer src="app.js"></script>
-  <script defer src="landing-world.js"></script>
   <script defer src="landing.js"></script>
-  <!-- Atmosphere only, and last on purpose: if it fails, everything above it
-       has already run and the site is merely calmer. -->
-  <script defer src="experience.js"></script>
 </body>
 </html>
