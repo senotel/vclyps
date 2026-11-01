@@ -4161,6 +4161,7 @@
       dur: m.type === "image" ? OVERLAY_DUR : Math.min(m.duration || OVERLAY_DUR, 5),
       mode: "inset"
     };
+    b.layer = nextOverlayLayer(b.start, b.dur);
     S.broll.push(b);
     S.sel = { type: "broll", id: b.id };
     commit();
@@ -4169,6 +4170,162 @@
     syncNow();
     toast(m.name + " added as an overlay. Drag it anywhere");
     return b;
+  }
+
+  // Cells keep ordinary overlay placement and effects. Only the initial
+  // rectangular proportions and the shared gap/corners belong to the collage.
+  function collageCells(layout) {
+    if (layout === "side") return [[0, 0, 0.5, 1], [0.5, 0, 0.5, 1]];
+    if (layout === "stack") return [[0, 0, 1, 0.5], [0, 0.5, 1, 0.5]];
+    if (layout === "three") return [[0, 0, 0.6, 1], [0.6, 0, 0.4, 0.5], [0.6, 0.5, 0.4, 0.5]];
+    if (layout === "grid") return [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]];
+    if (layout === "diagonal") return [[0, 0, 1, 1, 1], [0, 0, 1, 1, 2]];
+    return [];
+  }
+  function buildCollage(layout, media, at, gap, rounded) {
+    const cells = collageCells(layout);
+    if (!cells.length || media.length !== cells.length || media.some((m) => !m || !["video", "image"].includes(m.type))) return [];
+    const videos = media.filter((m) => m.type === "video");
+    if (videos.some((m) => !(m.duration > 0) || !Number.isFinite(m.duration))) return [];
+    const dur = videos.length ? Math.min(...videos.map((m) => m.duration)) : OVERLAY_DUR;
+    const size = exportSize(), groupId = "collage-" + nextId++;
+    extendCollageCanvas(Math.max(0, at) + dur, size);
+    const layer = Math.max(-1, ...S.broll.map(overlayLayer)) + 1;
+    const items = cells.map(([x, y, w, h, diagonal], i) => {
+      const ar = size.w * w / (size.h * h);
+      return { id: nextId++, mediaId: media[i].id, start: Math.max(0, at), in: 0, dur: dur, mode: "inset",
+        layer: layer + i, x: x + w / 2, y: y + h / 2, scale: w, cell: { w: w, h: h, diagonal: diagonal || 0 },
+        collage: groupId, collageGap: clamp(gap || 0, 0, 16), collageRound: clamp(rounded || 0, 0, 80),
+        mask: { shape: "rect", x: 0.5, y: 0.5, s: Math.max(1, 1 / ar), ar: ar, rot: 0, feather: 0, round: 0, invert: false } };
+    });
+    S.broll.push(...items);
+    return items;
+  }
+  function extendCollageCanvas(end, size) {
+    const missing = end - total();
+    if (missing <= 0.001) return;
+    // A collage can start an empty edit, or outlast the footage beneath it.
+    // Give it a plain black canvas on the main track so playback and both
+    // exports reach its end without changing the duration rules for projects.
+    const cv = document.createElement("canvas");
+    cv.width = Math.max(1, Math.round(size.w / 80)); cv.height = Math.max(1, Math.round(size.h / 80));
+    const ctx = cv.getContext("2d"); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+    const bytes = Uint8Array.from(atob(cv.toDataURL("image/png").split(",")[1]), (c) => c.charCodeAt(0));
+    const file = new File([bytes], "Collage canvas.png", { type: "image/png" });
+    const url = URL.createObjectURL(file);
+    const m = { id: nextId++, type: "image", url: url, thumb: url, name: "Collage canvas", w: cv.width, h: cv.height, duration: missing, file: file };
+    S.media.push(m); keepFile(m, file);
+    S.clips.push({ id: nextId++, mediaId: m.id, in: 0, out: missing, speed: 1, volume: 0, muted: true, filter: "none", fadeIn: 0, fadeOut: 0 });
+  }
+  function collageControls(box, b) {
+    const change = (key) => (value) => {
+      S.broll.filter((item) => item.collage === b.collage).forEach((item) => { item[key] = value; });
+      syncOverlays();
+    };
+    box.appendChild(group("Border", slider(0, 16, 1, b.collageGap || 0, change("collageGap"), () => commit(), (v) => v + "px")));
+    box.appendChild(group("Rounded", slider(0, 80, 1, b.collageRound || 0, change("collageRound"), () => commit(), (v) => v + "px")));
+  }
+  function collageClip(ctx, b, g, W) {
+    const gap = clamp(b.collageGap || 0, 0, 16) * W / 1080 / 2;
+    const radius = clamp(b.collageRound || 0, 0, 80) * W / 1080;
+    const l = -g.w / 2 + gap, r = g.w / 2 - gap, top = -g.h / 2 + gap, bottom = g.h / 2 - gap;
+    let pts = [[l, top], [r, top], [r, bottom], [l, bottom]];
+    if (b.cell.diagonal) {
+      // Offset the shared diagonal by half the gap, measured perpendicular
+      // to the cut rather than along either axis.
+      const k = gap * Math.hypot(g.w, g.h);
+      pts = b.cell.diagonal === 1 ? [[l, top], [r - k / g.h, top], [l, bottom - k / g.w]]
+        : [[r, top + k / g.w], [r, bottom], [l + k / g.h, bottom]];
+    }
+    ctx.beginPath();
+    const last = pts[pts.length - 1];
+    ctx.moveTo((last[0] + pts[0][0]) / 2, (last[1] + pts[0][1]) / 2);
+    pts.forEach((p, i) => {
+      const prev = pts[(i + pts.length - 1) % pts.length], next = pts[(i + 1) % pts.length];
+      const rad = Math.min(radius, Math.hypot(p[0] - prev[0], p[1] - prev[1]) / 4, Math.hypot(p[0] - next[0], p[1] - next[1]) / 4);
+      ctx.arcTo(p[0], p[1], (p[0] + next[0]) / 2, (p[1] + next[1]) / 2, rad);
+    });
+    ctx.closePath(); ctx.clip();
+  }
+
+  function openCollage() {
+    pause();
+    const at = S.time;
+    let layout = "side", chosen = [], gap = 0, rounded = 0, busy = false;
+    let sheet = $("collageSheet");
+    if (!sheet) {
+      sheet = mk("div", "sheet hidden"); sheet.id = "collageSheet";
+      sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-label", "Collage");
+      $("sheetBackdrop").appendChild(sheet);
+    }
+    const token = {}; sheet.collageRun = token;
+    sheet.innerHTML = "";
+    sheet.appendChild(mk("div", "sheet-grip"));
+    const head = mk("div", "sheet-head");
+    head.appendChild(mk("h3", "", "Collage"));
+    const close = mk("button", "ghost-btn", "Close"); close.type = "button";
+    close.addEventListener("click", closeSheets); head.appendChild(close); sheet.appendChild(head);
+    const layouts = mk("div", "filter-chips"), list = mk("div", "lib-grid");
+    const status = mk("p", "panel-note"); status.setAttribute("aria-live", "polite");
+    const build = mk("button", "primary-btn", "Create collage"); build.type = "button";
+    const render = () => {
+      layouts.innerHTML = "";
+      [["side", "2 side by side"], ["stack", "2 stacked"], ["three", "3: one big, two small"], ["grid", "2 x 2"], ["diagonal", "Diagonal"]].forEach(([id, label]) => {
+        const button = mk("button", "fchip" + (layout === id ? " active" : ""), label); button.type = "button";
+        button.setAttribute("aria-pressed", String(layout === id));
+        button.disabled = busy;
+        button.style.minHeight = "calc(var(--sp-8) + var(--sp-3))";
+        button.addEventListener("click", () => { layout = id; chosen = chosen.slice(0, collageCells(layout).length); render(); });
+        layouts.appendChild(button);
+      });
+      const count = collageCells(layout).length;
+      status.textContent = "Choose " + count + " videos or photos in cell order. " + chosen.length + " selected. Photos match the shortest video; photos only use 3 seconds.";
+      list.innerHTML = "";
+      S.media.filter((m) => m.type === "video" || m.type === "image").forEach((m) => {
+        const i = chosen.indexOf(m.id), button = mk("button", "lib-item fchip" + (i >= 0 ? " active" : "")); button.type = "button";
+        button.setAttribute("aria-label", (i >= 0 ? "Cell " + (i + 1) + ": " : "") + m.name);
+        if (m.thumb || m.type === "image") {
+          const img = document.createElement("img"); img.src = m.thumb || m.url; img.alt = "";
+          button.appendChild(img);
+        }
+        const badge = mk("span", "li-badge");
+        badge.textContent = (i >= 0 ? (i + 1) + ". " : "") + m.name.slice(0, 32);
+        button.appendChild(badge);
+        button.disabled = busy;
+        button.style.minHeight = "calc(var(--sp-8) + var(--sp-3))";
+        button.setAttribute("aria-pressed", String(i >= 0));
+        button.addEventListener("click", () => { if (i >= 0) chosen.splice(i, 1); else if (chosen.length < count) chosen.push(m.id); else toast("Choose " + count + " items for this layout"); render(); });
+        list.appendChild(button);
+      });
+      build.disabled = busy || chosen.length !== count;
+    };
+    sheet.appendChild(layouts); sheet.appendChild(status); sheet.appendChild(list);
+    const device = mk("button", "secondary-btn", "Add from device"); device.type = "button";
+    const input = document.createElement("input"); input.type = "file"; input.accept = "video/*,image/*"; input.multiple = true; input.className = "hidden";
+    device.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => {
+      const before = new Set(S.media.map((m) => m.id));
+      addFiles(Array.from(input.files || []), "library"); input.value = "";
+      S.media.filter((m) => !before.has(m.id) && m.type !== "audio").forEach((m) => { if (chosen.length < collageCells(layout).length) chosen.push(m.id); });
+      render();
+    });
+    sheet.appendChild(device); sheet.appendChild(input);
+    sheet.appendChild(group("Border", slider(0, 16, 1, gap, (v) => { gap = v; }, () => {}, (v) => v + "px")));
+    sheet.appendChild(group("Rounded", slider(0, 80, 1, rounded, (v) => { rounded = v; }, () => {}, (v) => v + "px")));
+    build.addEventListener("click", async () => {
+      if (busy) return;
+      busy = true; render(); device.disabled = true; status.textContent = "Reading media lengths...";
+      const media = chosen.map(mediaById), pickedLayout = layout;
+      try {
+        await Promise.all(media.filter((m) => m && m.type === "video").map(mediaDuration));
+        if (sheet.classList.contains("hidden") || sheet.collageRun !== token) return;
+        const items = buildCollage(pickedLayout, media, at, gap, rounded);
+        if (!items.length) { toast("These videos could not be read. Try another file"); return; }
+        S.sel = { type: "broll", id: items[0].id }; pendingTool = "arrange";
+        commit(); closeSheets(); renderAll(); renderTimeline(); renderInspector(); syncNow();
+      } finally { busy = false; device.disabled = false; if (sheet.collageRun === token) render(); }
+    });
+    sheet.appendChild(build); render(); openSheet("collageSheet");
   }
 
   function addSfxAt(name, at) {
@@ -4456,11 +4613,23 @@
   }
 
   function renderOverlayTrack(ot) {
+    const layers = [...new Set(S.broll.map(overlayLayer))].sort((a, b) => b - a);
+    ot.style.height = Math.max(1, layers.length) * 34 + "px";
+    layers.forEach((layer, row) => {
+      const lane = mk("div", "overlay-lane");
+      lane.style.top = row * 34 + "px";
+      lane.setAttribute("aria-label", "Overlay layer " + (layer + 1));
+      ot.appendChild(lane);
+    });
     S.broll.forEach((b) => {
       const m = mediaById(b.mediaId);
       const on = S.sel && S.sel.type === "broll" && S.sel.id === b.id;
       const el = mk("div", "oclip" + (on ? " sel" : ""));
       el.dataset.id = String(b.id);
+      el.style.top = layers.indexOf(overlayLayer(b)) * 34 + 1 + "px";
+      el.style.height = "28px";
+      el.style.bottom = "auto";
+      el.title = "Layer " + (overlayLayer(b) + 1);
       el.style.left = b.start * S.pps + "px";
       el.style.width = Math.max(b.dur * S.pps, 26) + "px";
       if (m && m.thumb) {
@@ -5166,6 +5335,7 @@
       { id: "stickers", label: "Stickers", icon: ICON.sticker, run: () => openStickers(null) },
       { id: "effects", label: "Effects", icon: ICON.effects, run: () => openEffects(null) },
       { id: "overlay", label: "Overlay", icon: ICON.overlay, run: () => $("tbOverlay").click() },
+      { id: "collage", label: "Collage", icon: ICON.layout, run: openCollage },
       { id: "captions", label: "Captions", icon: ICON.captions, run: () => $("tbCaptions").click() },
       { id: "filters", label: "Filters", icon: ICON.filters, run: () => { if (!S.clips.length) { toast("Add clips to the timeline first"); return; } pendingTool = "filters"; S.sel = { type: "all" }; renderTimeline(); renderInspector(); } },
       { id: "adjust", label: "Adjust", icon: ICON.adjust, run: () => selectClipHere("adjust") },
@@ -5376,6 +5546,8 @@
       return [
         act("split", "Split", ICON.split, splitAtPlayhead),
         tool("arrange", "Arrange", ICON.arrange, (box) => {
+          box.appendChild(group("Layer", slider(0, Math.max(4, ...S.broll.map(overlayLayer)) + 1, 1, overlayLayer(b), (v) => { b.layer = v; renderTimeline(); syncOverlays(); }, () => commit(), (v) => String(v + 1))));
+          if (b.collage) collageControls(box, b);
           box.appendChild(group("Size", chipsRow([["inset", "Panel"], ["cover", "Full frame"]], b.mode === "cover" ? "cover" : "inset", (k) => { b.mode = k; })));
           if (b.mode !== "cover") {
             box.appendChild(mk("p", "panel-note", "Drag it on the picture to move it. Two fingers make it bigger or smaller and turn it."));
@@ -5990,7 +6162,9 @@
      for touch (in textHits, as "b" + id, under any text) and, when selected,
      wears the same plain frame a selected text does. Preview only. */
   function drawOverlayHandle(ctx, box) {
-    const b = brollAt(S.time);
+    brollAt(S.time).forEach((b) => drawOneOverlayHandle(ctx, box, b));
+  }
+  function drawOneOverlayHandle(ctx, box, b) {
     if (!b || b.mode === "cover") return;
     const g = brollGeom(itemView(b, S.time - b.start), box);
     textHits.set("b" + b.id, { x: g.cx, y: g.cy, w: g.w, h: g.h, rot: g.rot });
@@ -10141,6 +10315,11 @@
     ["color", "Colour"], ["luminosity", "Luminosity"]];
   function brollGeom(b, box) {
     if (b.mode === "cover") return { cx: box.x + box.w / 2, cy: box.y + box.h / 2, w: box.w, h: box.h, rot: 0, shape: "square" };
+    if (b.cell) {
+      const scale = b.scale || b.cell.w;
+      return { cx: box.x + box.w * (b.x == null ? 0.5 : b.x), cy: box.y + box.h * (b.y == null ? 0.5 : b.y),
+        w: box.w * scale, h: box.h * b.cell.h * scale / b.cell.w, rot: b.rot || 0, shape: b.shape || "square" };
+    }
     const s = box.w * (b.scale || BROLL_SIZE);
     const shape = b.shape || "square";
     const m = mediaById(b.mediaId);
@@ -10153,8 +10332,9 @@
     };
   }
   function drawBroll(ctx, W, H, t, getSrc) {
-    const b0 = brollAt(t);
-    if (!b0) return;
+    brollAt(t).forEach((b) => drawOneBroll(ctx, W, H, t, getSrc, b));
+  }
+  function drawOneBroll(ctx, W, H, t, getSrc, b0) {
     const b = itemView(b0, t - b0.start);   // ccl13 + ccl18: its keyframed and tracked place at this moment
     const m = mediaById(b.mediaId);
     if (!m) return;
@@ -10167,6 +10347,7 @@
     if (b.blend && b.blend !== "normal") ctx.globalCompositeOperation = b.blend;
     ctx.translate(g.cx, g.cy);
     if (g.rot) ctx.rotate((g.rot * Math.PI) / 180);
+    if (b.collage && b.cell) collageClip(ctx, b, g, W);
     ctx.beginPath();
     if (g.shape === "round") ctx.ellipse(0, 0, g.w / 2, g.h / 2, 0, 0, Math.PI * 2);
     else ctx.rect(-g.w / 2, -g.h / 2, g.w, g.h);
@@ -10200,7 +10381,7 @@
           ox.globalCompositeOperation = "source-over";
         }
       }
-      if (b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) SenotelMasks.apply(ox, b.mask, ow, oh);
+      if (b.mask && b.mask.shape && b.mask.shape !== "none" && window.SenotelMasks) SenotelMasks.apply(ox, SenotelMasks.at(b.mask, local), ow, oh);
       try { ctx.drawImage(brollMaskCv, -g.w / 2, -g.h / 2, g.w, g.h); } catch (e) {}
     } else {
       try { ctx.drawImage(src.el, -g.w / 2 + dx, -g.h / 2 + (g.h - dh) / 2, dw, dh); } catch (e) {}
@@ -10265,7 +10446,7 @@
     const m = mediaById(item.mediaId);
     if (!m) return null;
     if (m.type !== "video") return imageOf(m);
-    if (S.broll.indexOf(item) >= 0) return vidSrc(pvB);
+    if (S.broll.indexOf(item) >= 0) return overlayPreviewSrc(item);
     const main = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
     if (main && main.clip === item && pv.dataset.mid === String(m.id)) return vidSrc(pv);
     pvTUsed = true;
@@ -10434,7 +10615,7 @@
     ctx.clearRect(0, 0, pw, ph);
     // lower thirds and title cards, inside the picture, under the captions; then the logo
     const marked = S.clips.length && BRAND.mark && BRAND.mark !== "off" && BRAND.logo;
-    if (S.texts.length || marked || brollAt(S.time)) {
+    if (S.texts.length || marked || brollAt(S.time).length) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const box = pictureBox();
       drawTexts(ctx, box, S.time, textHits);
@@ -10751,8 +10932,17 @@
   /* Draw/position the active overlay. Sized against the PICTURE box, exactly
      like headings, so window / fullscreen / export all agree. */
   function brollAt(t) {
-    for (const b of S.broll) if (t >= b.start && t < b.start + b.dur) return b;
-    return null;
+    return S.broll.filter((b) => t >= b.start && t < b.start + b.dur)
+      .sort((a, b) => overlayLayer(a) - overlayLayer(b) || a.start - b.start);
+  }
+
+  function overlayLayer(b) { return Number.isFinite(b.layer) ? b.layer : 0; }
+
+  function nextOverlayLayer(at, dur) {
+    const used = new Set(S.broll.filter((b) => b.start < at + dur && b.start + b.dur > at).map(overlayLayer));
+    let layer = 0;
+    while (used.has(layer)) layer++;
+    return layer;
   }
 
   /* ═══════════ B-ROLL GEOMETRY ═══════════
@@ -10776,23 +10966,93 @@
   /* The overlay's player, kept at the overlay's own point in its footage
      (looping, as in the export). It is drawn by renderPicture, not shown. */
   function syncBroll() {
-    const b = brollAt(S.time);
-    const m = b ? mediaById(b.mediaId) : null;
-    if (!m || m.type !== "video") { if (!pvB.paused) pvB.pause(); return; }
-    if (pvB.dataset.mid !== String(m.id)) {
-      pvB.src = m.url;
-      pvB.dataset.mid = String(m.id);
-    }
-    if (pvB.readyState < 1) return;
-    const local = S.time - b.start;
-    const want = overlayTime(b, m, local);
-    const drift = Math.abs(pvB.currentTime - want);
-    if (S.playing) {
-      if (pvB.paused) pvB.play().catch(() => {});
-      if (drift > 0.3 && !pvB.seeking) { try { pvB.currentTime = want; } catch (e) {} }
-    } else {
-      if (!pvB.paused) pvB.pause();
-      if (drift > 0.05 && !pvB.seeking) { try { pvB.currentTime = want; } catch (e) {} }
+    const recording = (EXP.active || EXP.starting) && !EXP.fast;
+    // Recording preloads future overlays too: their first visible frame must
+    // be ready at the cut, rather than start loading after the cut was recorded.
+    const active = (recording ? S.broll.filter((b) => b.start + b.dur > S.time) : brollAt(S.time))
+      .filter((b) => { const m = mediaById(b.mediaId); return m && m.type === "video"; });
+    const ids = new Set(active.map((b) => b.id));
+    overlayStills.forEach((s, id) => { if (!ids.has(id)) overlayStills.delete(id); });
+    // While paused all layers get an exact still, using the same four players
+    // in batches. During playback the upper four move; other layers retain
+    // their last paused still (or their library thumbnail until first paused).
+    const pending = !S.playing && !recording ? active.filter((b) => !overlayStillReady(b)) : active;
+    // Retain the upper four after paused snapshots finish, ready for Play.
+    const wanted = recording ? active : S.playing || !pending.length ? active.slice(-OVERLAY_PLAYERS) : pending.slice(0, OVERLAY_PLAYERS);
+    const keep = new Set(wanted.map((b) => b.id));
+    overlayPlayers.forEach((slot, id) => {
+      if (!keep.has(id)) { releaseOverlayPlayer(slot); overlayPlayers.delete(id); }
+    });
+    wanted.forEach((b) => {
+      const m = mediaById(b.mediaId);
+      let slot = overlayPlayers.get(b.id);
+      if (!slot) {
+        const v = document.createElement("video");
+        v.muted = true; v.playsInline = true; v.preload = "auto";
+        v.className = "hidden"; v.setAttribute("aria-hidden", "true");
+        pvB.parentNode.appendChild(v);
+        slot = { v: v, url: m.url, item: b };
+        overlayPlayers.set(b.id, slot);
+        const refresh = () => { if (overlayPlayers.get(b.id) === slot) syncOverlays(); };
+        v.addEventListener("loadeddata", refresh); v.addEventListener("seeked", refresh);
+        v.src = m.url;
+      }
+      const v = slot.v;
+      if (slot.url !== m.url) { slot.url = m.url; v.src = m.url; }
+      if (v.readyState < 1) return;
+      const want = overlayTime(b, m, Math.max(0, S.time - b.start));
+      const drift = Math.abs(v.currentTime - want);
+      if (S.playing && S.time >= b.start) {
+        if (v.paused) v.play().catch(() => {});
+        if (drift > 0.3 && !v.seeking) { try { v.currentTime = want; } catch (e) {} }
+      } else {
+        v.pause();
+        if (drift > 0.001 && !v.seeking) { try { v.currentTime = want; } catch (e) {} }
+        else if (!recording && !v.seeking && vidSrc(v) && !overlayStillReady(b)) {
+          const cv = document.createElement("canvas");
+          const k = Math.min(1, 1280 / Math.max(v.videoWidth, v.videoHeight));
+          cv.width = Math.max(1, Math.round(v.videoWidth * k)); cv.height = Math.max(1, Math.round(v.videoHeight * k));
+          cv.getContext("2d").drawImage(v, 0, 0, cv.width, cv.height);
+          overlayStills.set(b.id, { el: cv, w: cv.width, h: cv.height, at: want, url: m.url });
+          if (!recording) requestAnimationFrame(() => syncOverlays());
+        }
+      }
+    });
+  }
+
+  const OVERLAY_PLAYERS = 4;
+  const overlayPlayers = new Map(), overlayStills = new Map();
+  function releaseOverlayPlayer(slot) {
+    slot.v.pause(); slot.v.removeAttribute("src"); slot.v.load(); slot.v.remove();
+  }
+  function overlayStillReady(b) {
+    const m = mediaById(b.mediaId), s = overlayStills.get(b.id);
+    return !!(m && s && s.url === m.url && Math.abs(s.at - overlayTime(b, m, S.time - b.start)) < 0.001);
+  }
+  function overlayPreviewSrc(b) {
+    const slot = overlayPlayers.get(b.id), m = mediaById(b.mediaId);
+    const live = slot && m && slot.url === m.url ? vidSrc(slot.v) : null;
+    if (live) return live;
+    const s = overlayStills.get(b.id);
+    if (s && m && s.url === m.url) return s;
+    return m && m.thumb ? imageOf({ id: "overlay-thumb-" + m.id, url: m.thumb }) : null;
+  }
+
+  async function primeOverlayFrames() {
+    const start = Date.now();
+    while (true) {
+      syncBroll();
+      const ready = S.broll.filter((b) => b.start + b.dur > S.time).every((b) => {
+        const m = mediaById(b.mediaId);
+        if (!m) return true;
+        if (m.type !== "video") return !!imageOf(m);
+        const slot = overlayPlayers.get(b.id), v = slot && slot.v;
+        return v && vidSrc(v) && !v.seeking && Math.abs(v.currentTime - overlayTime(b, m, Math.max(0, S.time - b.start))) < 0.04;
+      });
+      if (ready) return;
+      if (EXP.cancelled) return;
+      if (Date.now() - start > 15000) throw new Error("An overlay could not load its first frame");
+      await new Promise((resolve) => setTimeout(resolve, 33));
     }
   }
 
@@ -12415,8 +12675,7 @@
             const info = clipAt(S.time);
             if (info) want.push([info.clip, srcTimeAt(info.clip, info.start, S.time)]);
           }
-          const b = brollAt(S.time);
-          if (b) {
+          for (const b of brollAt(S.time)) {
             const bm = mediaById(b.mediaId);
             // an overlay loops, as it does in the preview
             const local = S.time - b.start;
@@ -12846,6 +13105,7 @@
       }
 
       await primeFirstFrame();
+      await primeOverlayFrames();
     } catch (e) {
       abortExport("Export could not get ready: " + ((e && e.message) || "an error"));
       return;
