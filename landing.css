@@ -234,7 +234,7 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
   transition: opacity 140ms, transform 140ms;
 }
 .lp-show-say p.is-on { opacity: 1; transform: none; transition: opacity 320ms 120ms, transform 420ms 120ms cubic-bezier(0.2, 0, 0, 1); }
-.lp-show-bar { position: absolute; z-index: 2; left: var(--lp-gut); right: var(--lp-gut); bottom: 5%; height: 2px; background: rgba(255, 255, 255, 0.12); }
+.lp-show-bar { display: none; position: absolute; z-index: 2; left: var(--lp-gut); right: var(--lp-gut); bottom: 5%; height: 2px; background: rgba(255, 255, 255, 0.12); }
 .lp-show-bar i { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.7); transform-origin: 0 50%; transform: scaleX(0); }
 
 .lp-show.is-still { height: auto; }

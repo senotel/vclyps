@@ -384,7 +384,6 @@
     // the words on screen
     var idx = p < 0.1 ? 0 : p < 0.36 ? 1 : p < 0.5 ? 2 : p < 0.6 ? 3 : p < 0.76 ? 4 : 5;
     says.forEach(function (el, i) { el.classList.toggle("is-on", i === idx); });
-    if (bar) bar.style.transform = "scaleX(" + pAll.toFixed(3) + ")";
   }
 
   /* ── driving it ── */
@@ -393,11 +392,42 @@
     return clamp(-r.top / Math.max(1, r.height - h), 0, 1);
   }
   var visible = false, raf = 0, last = -1;
+
+  /* Autoplay, as lusion.co's astronaut scene (owner, 2026-11-01): scroll a
+     little into the show and it plays by itself, with no progress bar. It
+     plays by moving the page, so the visitor's own scrolling still steers
+     it: scrolling down speeds it up, scrolling up slows it or plays it
+     backwards (autoplay steps aside while they pull back, then carries on).
+     It stops at the end, starts again only when the show is entered afresh,
+     and never runs with reduced motion. */
+  var PLAY_SECS = 34;                 // the whole show, start to end, untouched
+  var auto = { on: false, done: false, pos: 0, prev: 0, wait: 0 };
+  function autoplay(ts, dt) {
+    var pr = progress();
+    var range = Math.max(1, show.offsetHeight - home.clientHeight);
+    if (pr <= 0) { auto.on = false; auto.done = false; return; }       // above the show: ready to play again
+    if (!auto.on && !auto.done && pr > 0.012 && pr < 0.97) { auto.on = true; auto.pos = home.scrollTop; auto.prev = home.scrollTop; }
+    if (!auto.on) return;
+    if (pr >= 0.995) { auto.on = false; auto.done = true; return; }
+    var now = home.scrollTop;
+    // the visitor moved it back: let them, and wait a moment before carrying on
+    if (now < auto.prev - 1) auto.wait = ts + 900;
+    if (now > auto.prev + 1 || now < auto.prev - 1) auto.pos = now;   // follow the visitor wherever they went
+    if (ts < auto.wait) { auto.prev = now; return; }
+    auto.pos += (range / PLAY_SECS) * Math.min(dt, 0.05);
+    home.scrollTop = auto.pos;
+    auto.prev = home.scrollTop;
+  }
+  var lastTs = 0;
   function frame(ts) {
     raf = 0;
     clock = ts || 0;
+    var dt = lastTs ? (ts - lastTs) / 1000 : 0;
+    lastTs = ts;
+    if (!still.matches && document.body.dataset.screen === "home") autoplay(ts, dt);
     render(progress());
     if (visible && !still.matches && !document.hidden) raf = requestAnimationFrame(frame);
+    else lastTs = 0;
   }
   function kick() { if (!raf) raf = requestAnimationFrame(frame); }
 
