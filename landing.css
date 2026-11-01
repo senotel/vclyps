@@ -290,9 +290,7 @@ body[data-screen="home"] .topbar { display: none; }
 
 /* ── 4 · privacy and questions (Mist) ── */
 .lp-trust { padding: 96px 0; scroll-margin-top: var(--nav); }
-.lp-trust .lp-wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; align-items: start; }
-.lp-privacy .lp-body { margin-top: 24px; }
-.lp-privacy .lp-link { margin-top: 16px; }
+.lp-trust .lp-faq { max-width: 760px; }
 .lp-faq .lp-h2 { margin-bottom: 24px; }
 .lp-faq details { border-top: 1px solid var(--line); }
 .lp-faq details:last-child { border-bottom: 1px solid var(--line); }
@@ -323,7 +321,7 @@ body[data-screen="home"] .topbar { display: none; }
   .lp-root { --gut: 32px; }
   .lp-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
   .lp-hero .lp-actions { flex-wrap: wrap; }
-  .lp-own-row, .lp-trust .lp-wrap { grid-template-columns: 1fr; gap: 40px; }
+  .lp-own-row { grid-template-columns: 1fr; gap: 40px; }
   .lp-quality { margin-top: 64px; }
 }
 
