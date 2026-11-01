@@ -67,9 +67,10 @@
   </header>
 
   <!-- ══════════════ LANDING ══════════════
-       A plain product page (0.66.0). What it does, a real screenshot of the
-       editor, how it works, what is in it, and the privacy line. No WebGL, no
-       scroll choreography, no cursor effects: the product is the picture. -->
+       0.67.0, rebuilt from NO UPLOAD/research/landing-conversion-2026-11.md:
+       a light page, the hero takes your footage (choose or drop it), the real
+       editor as the picture, how it works, the tools, privacy in plain words,
+       questions answered, one action. No invented numbers. -->
   <section class="screen active" id="screen-home">
     <div class="lp-root">
 
@@ -80,28 +81,25 @@
         </a>
         <nav class="lp-links" aria-label="Site">
           <a href="#lpHow">How it works</a>
-          <a href="#lpTools">The editor</a>
-          <a href="#lpPrivate">Privacy</a>
+          <a href="#lpTools">Features</a>
+          <a href="#lpFaq">Questions</a>
         </nav>
-        <button class="lp-btn lp-btn-sm" type="button" data-start>Start editing</button>
+        <button class="lp-btn lp-btn-quiet lp-btn-sm" type="button" data-start>Open the editor</button>
       </header>
 
       <main>
-        <section class="lp-hero">
-          <div class="lp-wrap">
-            <h1 class="lp-title">The story was always there.</h1>
-            <p class="lp-lede">Drop in your footage. vClyps finds the story and edits it for you, free, in your browser.</p>
-            <div class="lp-cta">
-              <button class="lp-btn" id="lpPlus" type="button" data-start>Start editing, free</button>
-              <span class="lp-cta-note">No sign-up</span>
+        <section class="lp-hero" id="lpHero">
+          <div class="lp-wrap lp-hero-grid">
+            <div class="lp-hero-copy">
+              <h1 class="lp-title">The story was always there.</h1>
+              <p class="lp-lede">Drop in your footage. vClyps watches it, finds the story and edits a short around it. Then every cut is yours to change.</p>
+              <div class="lp-cta">
+                <button class="lp-btn" id="lpPlus" type="button" data-pick>Choose your footage</button>
+                <button class="lp-text-btn" type="button" data-start>or open the editor</button>
+              </div>
+              <p class="lp-cta-note">Free, no sign-up, no watermark.<span class="lp-drop-hint"> Or drop videos anywhere here.</span></p>
+              <input type="file" id="lpFiles" accept="video/*,image/*,audio/*" multiple hidden />
             </div>
-            <ul class="lp-proof">
-              <li>1080p and 60 fps, free</li>
-              <li>No watermark</li>
-              <li>Your video never uploads</li>
-            </ul>
-          </div>
-          <div class="lp-wrap lp-wrap-wide">
             <figure class="lp-shot">
               <picture>
                 <source media="(max-width: 760px)" srcset="site/editor-phone.webp" type="image/webp" width="390" height="844" />
@@ -110,16 +108,17 @@
               </picture>
             </figure>
           </div>
+          <div class="lp-drop" aria-hidden="true"><span>Drop to start editing</span></div>
         </section>
 
         <section class="lp-section" id="lpHow">
           <div class="lp-wrap">
-            <h2 class="lp-h2">How it works</h2>
+            <h2 class="lp-h2">From raw footage to a finished short</h2>
             <ol class="lp-steps">
               <li>
                 <span class="lp-step-n">1</span>
                 <h3>Add your footage</h3>
-                <p>Phone clips, a long recording, photos. Everything is read on your device.</p>
+                <p>Phone clips, a long recording, photos or a song, from your device, Google Drive, Dropbox or a link.</p>
               </li>
               <li>
                 <span class="lp-step-n">2</span>
@@ -128,8 +127,8 @@
               </li>
               <li>
                 <span class="lp-step-n">3</span>
-                <h3>You finish it by hand</h3>
-                <p>Every cut lands on a real timeline. Change anything, then export.</p>
+                <h3>Change anything, then export</h3>
+                <p>Every cut lands on a real timeline. Trim, add text, sound and effects, and export in 1080p at up to 60 fps.</p>
               </li>
             </ol>
           </div>
@@ -152,12 +151,30 @@
           </div>
         </section>
 
-        <section class="lp-section" id="lpPrivate">
+        <section class="lp-section" id="lpFaq">
           <div class="lp-wrap lp-split">
-            <h2 class="lp-h2">Your video never uploads.</h2>
-            <div>
-              <p class="lp-body">The AI reads your words and a few still frames to make its choices and, with your permission, how you edit helps train vClyps' own AI.</p>
-              <p class="lp-body"><a href="privacy.html">Read the privacy policy</a></p>
+            <h2 class="lp-h2">Questions</h2>
+            <div class="lp-faq">
+              <details>
+                <summary>Is it really free?</summary>
+                <p>Yes. Editing and exporting are free, in 1080p at up to 60 fps, with no watermark and no account.</p>
+              </details>
+              <details>
+                <summary>Where does my footage go?</summary>
+                <p>It stays on your device. vClyps edits in your browser, so your videos are never copied to our servers. To make its choices, the AI reads what is said and a few still frames. With your permission, how you edit helps train vClyps' own AI. <a href="privacy.html">Privacy policy</a></p>
+              </details>
+              <details>
+                <summary>Will the edit look like a robot made it?</summary>
+                <p>The Director edits around the story in your footage, not a template. And it is only the first cut: every clip, caption and sound is on a normal timeline for you to change before you export.</p>
+              </details>
+              <details>
+                <summary>What can I edit?</summary>
+                <p>Videos, photos and music from your phone or computer, Google Drive, Dropbox, or a link. Short clips and long recordings both work.</p>
+              </details>
+              <details>
+                <summary>Does it work on my phone?</summary>
+                <p>Yes. It runs in the browser on phones and computers, with nothing to install.</p>
+              </details>
             </div>
           </div>
         </section>
@@ -166,8 +183,8 @@
           <div class="lp-wrap">
             <h2 class="lp-h2">Every story deserves to be seen.</h2>
             <div class="lp-cta">
-              <button class="lp-btn" type="button" data-start>Start editing, free</button>
-              <span class="lp-cta-note">No sign-up</span>
+              <button class="lp-btn" type="button" data-pick>Choose your footage</button>
+              <button class="lp-text-btn" type="button" data-start>or open the editor</button>
             </div>
           </div>
         </section>

@@ -309,6 +309,23 @@
   // resumed edit on boot should land in the editor, not play a transition at
   // someone who has not asked for one yet.
   window.vcBegin = function () { go(showModes); };
+
+  /* The landing's "Choose your footage" (0.67.0): files picked or dropped on
+     the home page go straight onto the timeline, as on OpusClip and Captions.
+     A new project starts in Entertainment; a project already open is kept and
+     the footage is added to it, so nothing is ever thrown away from here. */
+  window.vcStartWith = function (files) {
+    const list = Array.prototype.slice.call(files || []).filter((f) => kindOf(f));
+    if (!list.length) { toast("That file can't be edited here. Try a video, a photo or a song"); return; }
+    go(() => {
+      const fresh = !S.media.length;
+      if (fresh) { S.mode = "entertainment"; applyModeUI(); }
+      // added first, so the editor opens on them (and not on "add your footage")
+      addFiles(list, "editor");
+      enterEditor();
+      if (!fresh) toast("Added to the project you had open");
+    });
+  };
   window.vcEnterEditor = enterEditor;
 
   document.querySelectorAll(".mode-card[data-mode]").forEach((card) => {
