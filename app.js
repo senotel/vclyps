@@ -3283,8 +3283,9 @@
 
     /* Half a viewport of padding at each end so the first and last frame can
        both sit under a centred playhead — the same reason CapCut lets you
-       scroll past both ends of your edit. */
-    $("tlInner").style.padding = "0 " + padL() + "px";
+       scroll past both ends of your edit. On a computer the edit starts at
+       the left edge instead (deskTimeline), with room to drop clips after it. */
+    $("tlInner").style.padding = "0 " + (deskTimeline() ? DESK_PAD_R : padL()) + "px 0 " + padL() + "px";
 
     /* The ruler, as CapCut spaces it: a time every so often, never closer
        than about 70px apart, and a single dot halfway between. No tick
@@ -3858,10 +3859,10 @@
   (function dragToScrub() {
     const sc = $("tlScroll");
     let down = false, x0 = 0, s0 = 0, moved = false;
-    let touch = false;
+    let touch = false, lastDownX = null;
     sc.addEventListener("pointerdown", (e) => {
       if (e.target.closest(".clip, .tclip, .oclip, .aclip, .uclip, .mclip, .clip-add, .lane-add, .cut-btn, .handle, .ruler")) return;
-      down = true; moved = false; x0 = e.clientX; s0 = sc.scrollLeft;
+      down = true; moved = false; x0 = e.clientX; s0 = sc.scrollLeft; lastDownX = e.clientX;
       touch = e.pointerType === "touch";
     });
     window.addEventListener("pointermove", (e) => {
@@ -3880,6 +3881,12 @@
          "nothing here" everywhere else in the app. */
       if (down && !moved) {
         S.sel = null;
+        // on a computer, as in CapCut's desktop editor, the click also puts the playhead there
+        if (deskTimeline() && lastDownX != null) {
+          const x = lastDownX - $("tlInner").getBoundingClientRect().left - padL();
+          S.time = clamp(x / S.pps, 0, total());
+          syncNow();
+        }
         renderTimeline();
         renderInspector();
       }
@@ -3897,7 +3904,7 @@
   /* Scroll position IS the playhead position. One listener closes the loop, so
      a flick, a trackpad, a scrollbar and the drag above all scrub identically. */
   $("tlScroll").addEventListener("scroll", () => {
-    if (scrollLock || S.playing) return;
+    if (scrollLock || S.playing || deskTimeline()) return;   // on a computer, scrolling only looks along the edit
     const t = clamp($("tlScroll").scrollLeft / S.pps, 0, total());
     if (Math.abs(t - S.time) < 0.0005) return;
     S.time = t;
@@ -3908,10 +3915,7 @@
     $("playhead").style.left = padL() + S.time * S.pps + "px";
   });
 
-  $("zoomSlider").addEventListener("input", () => {
-    S.pps = +$("zoomSlider").value;
-    renderTimeline();
-  });
+  $("zoomSlider").addEventListener("input", () => zoomTimeline(+$("zoomSlider").value));
 
   /* One way to zoom, for every gesture that zooms (the slider, a pinch, Ctrl
      or Cmd with the wheel or +/-): the playhead stays where it is and the
@@ -3920,9 +3924,15 @@
   function zoomTimeline(pps) {
     const next = clamp(pps, PPS_MIN, PPS_MAX);
     if (Math.abs(next - S.pps) < 0.01) return;
+    const sc = $("tlScroll"), onScreen = padL() + S.time * S.pps - sc.scrollLeft;
     S.pps = next;
     $("zoomSlider").value = String(Math.round(next));
     renderTimeline();   // ends in updatePlayheadUI, which re-centres on the playhead
+    if (deskTimeline()) {
+      scrollLock = true;
+      sc.scrollLeft = Math.max(0, padL() + S.time * S.pps - onScreen);
+      requestAnimationFrame(() => { scrollLock = false; });
+    }
   }
 
   /* ═══════════ TOUCH AND WHEEL, THE CAPCUT WAY (2026-10-22) ═══════════
@@ -10687,13 +10697,43 @@
      makes dragging the timeline scrub (see the scroll listener below). */
   let scrollLock = false;      // true while WE move the scroll, so the listener stays quiet
 
+  /* On a computer (wide window, mouse) the timeline is CapCut's desktop one:
+     it starts at the left edge and the playhead travels along it, so half
+     the panel is no longer empty space before 00:00. A click on the ruler or
+     on empty timeline moves the playhead; the wheel only looks along the
+     edit; while it plays, the view turns the page when the playhead nears
+     the right edge. Phones and tablets keep the centred playhead. */
+  const DESK_TL = window.matchMedia("(min-width: 1200px) and (hover: hover) and (pointer: fine)");
+  const DESK_PAD_R = 240;
+  function deskTimeline() { return DESK_TL.matches; }
+  if (DESK_TL.addEventListener) DESK_TL.addEventListener("change", () => {
+    if ($("screen-editor").classList.contains("active")) { deskShown = -1; renderTimeline(); }
+  });
+  let deskShown = -1;          // the time the desktop view last followed
+
   function padL() {
+    if (deskTimeline()) return PADX;
     return Math.max(PADX, Math.round($("tlScroll").clientWidth / 2));
   }
 
   function updatePlayheadUI() {
     const sc = $("tlScroll");
     $("playhead").style.left = padL() + S.time * S.pps + "px";
+    if (deskTimeline()) {
+      // follow the playhead only when it moved (an edit's redraw leaves the view where you put it)
+      if (S.time === deskShown) return;
+      deskShown = S.time;
+      const x = padL() + S.time * S.pps, w = sc.clientWidth;
+      let to = null;
+      if (S.playing) { if (x > sc.scrollLeft + w - 60 || x < sc.scrollLeft) to = x - 60; }
+      else if (x < sc.scrollLeft + 20 || x > sc.scrollLeft + w - 20) to = x - w / 3;
+      if (to != null) {
+        scrollLock = true;
+        sc.scrollLeft = Math.max(0, to);
+        requestAnimationFrame(() => { scrollLock = false; });
+      }
+      return;
+    }
     const want = S.time * S.pps;
     if (Math.abs(sc.scrollLeft - want) > 0.5) {
       scrollLock = true;
