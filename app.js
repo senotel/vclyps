@@ -4951,6 +4951,8 @@
     retouch: I('<circle cx="10" cy="12" r="7"/><path d="M7.5 14.5c1.4 1.2 3.6 1.2 5 0"/><line x1="8" y1="10" x2="8" y2="10.5"/><line x1="12" y1="10" x2="12" y2="10.5"/><path d="M19 3v4M17 5h4"/>'),
     // ccl17 stabilize: a frame held steady between two brackets
     stabilize: I('<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/>'),
+    // ccl25 auto reframe: a narrow frame inside a wide one, with arrows to follow
+    reframe: I('<rect x="2" y="5" width="20" height="14" rx="2"/><rect x="9" y="7" width="6" height="10" rx="1"/><polyline points="6 10 4 12 6 14"/><polyline points="18 10 20 12 18 14"/>'),
     // ccl23 auto lyrics: a note beside two caption lines
     lyrics: I('<path d="M9 15V4l8-1.5v10"/><circle cx="6.5" cy="15" r="2.5"/><circle cx="14.5" cy="12.5" r="2.5"/><line x1="3" y1="20" x2="21" y2="20"/>'),
     // ccl21 enhance voice: a voice wave with a lift above it
@@ -5213,6 +5215,8 @@
       // ccl19 Retouch and ccl17 Stabilize: near the end of the bar
       list.push(tool("retouch", "Retouch", ICON.retouch, (box) => retouchPanel(box, c)));
       if (isVid) list.push(tool("stabilize", "Stabilize", ICON.stabilize, (box) => stabilizePanel(box, c)));
+      // ccl25: Auto reframe, beside Stabilize (both measure the footage once)
+      if (isVid) list.push(tool("reframe", "Auto reframe", ICON.reframe, (box) => reframePanel(box, c)));
       // ccl10: at the far end of the bar, where CapCut keeps it
       if (isVid) {
         const busy = reversing && reversing.clipId === c.id;
@@ -7138,7 +7142,8 @@
       item.x, item.y, item.scale, item.shape, item.tx, item.ty, item.zoom, item.turn, item.mode, item.layout, item.kb, item.bg,
       item.filter, item.filterAmt, item.adj, item.cutout, item.retouch,
       clipAnimAt(item, local), item.stab ? stabAt(item, local) : null,
-      item.kb ? local / Math.max(dispDur(item), 0.01) : null]);
+      item.kb ? local / Math.max(dispDur(item), 0.01) : null,
+      item.reframe && item.reframe.pts && window.SenotelReframe ? +SenotelReframe.at(item.reframe.pts, (item.in || 0) + srcOff(item, local)).toFixed(3) : null]);
   }
   function cutoutHere(ctx, W, H, item, stream, srcT, local) {
     const C = window.SenotelCutout;
@@ -7452,6 +7457,85 @@
     }
     if (done) toast("Steadied " + done + (done === 1 ? " shaky clip" : " shaky clips") + " (Stabilize, Recommended)");
     if (window.SenotelDiag) window.SenotelDiag.last.stabilize = done + " clips steadied";
+  }
+  /* ═══════════ AUTO REFRAME (ccl25, round 2) ═══════════
+     A wide picture in a narrower frame shows only a slice; this moves the
+     slice with the subject (reframe.js). Faces lead when the face model is
+     there (retouch.js, downloaded once); otherwise the motion the analysis
+     already measured. Five looks a second, smoothed into a calm pan. */
+  let reframing = null;   // {clipId, p, cancel}
+  const wideInFrame = (c) => {
+    const m = mediaById(c.mediaId), f = exportSize();
+    return !!(m && m.w && m.h && !turned(c) && m.w / m.h > (f.w / f.h) * 1.05);
+  };
+  function reframeFromMotion(c) {
+    const m = mediaById(c.mediaId), RF = window.SenotelReframe;
+    const smp = m && m.analysis && m.analysis.vis && m.analysis.vis.samples;
+    if (!RF || !smp || !smp.length) return false;
+    c.reframe = { by: "motion", t0: c.in, t1: c.out, pts: RF.fromMotion(smp, c.in, c.out) };
+    return true;
+  }
+  async function reframeClip(c) {
+    const F = window.SenotelFastExport, RF = window.SenotelReframe, RT = window.SenotelRetouch, m = mediaById(c.mediaId);
+    if (!F || !RF || !m || m.type !== "video" || reframing) return;
+    if (c.out - c.in > 300.5) { toast("Auto reframe works on up to 5 minutes of video. Split the clip first", 6000); return; }
+    const job = { clipId: c.id, p: 0, cancel: false };
+    reframing = job;
+    renderInspector();
+    let src = null;
+    try {
+      let faces = false;
+      if (RT) { try { await RT.load(); faces = RT.ready(); } catch (e) { faces = false; } }
+      const raw = [];
+      if (faces) {
+        src = await F.frameSource(m);
+        const step = RF.STEP, n = Math.max(2, Math.ceil((c.out - c.in) / step));
+        for (let i = 0; i <= n && !job.cancel; i++) {
+          const t = Math.min(c.out, c.in + i * step);
+          const pic = await src.frameAt(t);
+          const found = pic ? RT.faceCentres(pic.el, pic.w, pic.h) : null;
+          raw.push([t, found && found.length ? found[0].x : null]);
+          job.p = i / n;
+          if (i % 10 === 0) { renderInspector(); await F.breathe(); }
+        }
+      }
+      if (job.cancel) { toast("Auto reframe stopped"); return; }
+      const cc = clipById(c.id);
+      if (!cc) return;
+      const seen = raw.filter((p) => p[1] != null).length;
+      if (seen >= Math.max(2, raw.length * 0.2)) cc.reframe = { by: "face", t0: c.in, t1: c.out, pts: RF.smooth(raw, c.in, c.out) };
+      else if (!reframeFromMotion(cc)) { toast("Nothing to follow was found in this clip"); return; }
+      commit();
+      toast(cc.reframe.by === "face" ? "Following the face" : "Following the action");
+      recordEdit("reframe", { by: cc.reframe.by, secs: +(c.out - c.in).toFixed(1) });
+    } catch (e) {
+      toast("This clip could not be reframed here: " + ((e && e.message) || "unknown"), 6000);
+    } finally {
+      if (src && src.close) { try { src.close(); } catch (e) {} }
+      reframing = null;
+      syncOverlays();
+      renderInspector();
+    }
+  }
+  function reframePanel(box, c) {
+    if (!wideInFrame(c)) {
+      box.appendChild(mk("p", "panel-note", "This clip already fits the frame. Auto reframe is for a picture wider than the frame, like landscape video in a 9:16 edit."));
+      return;
+    }
+    const busy = reframing && reframing.clipId === c.id;
+    if (busy) {
+      box.appendChild(mk("p", "panel-note", "Finding the subject… " + Math.round(reframing.p * 100) + "%"));
+      const stop = mk("button", "fchip", "Stop");
+      stop.addEventListener("click", () => { reframing.cancel = true; });
+      box.appendChild(stop);
+      return;
+    }
+    box.appendChild(group("Auto reframe", chipsRow([[true, "On"], [false, "Off"]], !!c.reframe, (v) => {
+      if (v) { if (!c.reframe) setTimeout(() => reframeClip(c), 0); } else delete c.reframe;
+    })));
+    box.appendChild(mk("p", "panel-note", c.reframe
+      ? (c.reframe.by === "face" ? "Following the face through this clip." : "Following the action through this clip.")
+      : "Keeps the person or the action in the frame as they move. Looks for faces first (a 9 MB model, downloaded once)."));
   }
   function stabilizePanel(box, c) {
     const ST = window.SenotelStab;
@@ -9716,7 +9800,10 @@
         let dx = (W - dw) / 2, dy = (H - dh) / 2;
         if (!fit && !cr && dw > W + 1 && !side && !clip.flipH) {
           // smart crop: keep the frame centred on where the motion lives
-          const mcx = (m && m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
+          // ccl25 Auto reframe: the subject's place at this moment, else where the motion lives on average
+          const mcx = clip.reframe && clip.reframe.pts && window.SenotelReframe
+            ? SenotelReframe.at(clip.reframe.pts, clip.in + srcOff(clip, local))
+            : (m && m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
           dx = clamp(W / 2 - mcx * dw, W - dw, 0);
         }
         ctx.filter = pictureFilter(clip, blur);
@@ -10764,6 +10851,8 @@
       writeSession();
       // ccl17: shaky clips the edit kept are steadied in the background (it never holds the edit up)
       autoStabilize().catch(() => {});
+      // ccl25: landscape footage in a narrower edit follows its action, from the motion already measured (free, instant)
+      { let n = 0; S.clips.forEach((c) => { if (!c.reframe && wideInFrame(c) && reframeFromMotion(c)) n++; }); if (n) { commit(); syncOverlays(); } }
       $("doneDownload").classList.add("hidden");
       notifyDone("Your edit is ready", extrasFailed
         ? "Your draft is ready. Some finishing touches were unavailable."

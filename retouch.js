@@ -115,6 +115,25 @@
     return out;
   }
 
+  /* Round 2, Auto reframe: where the faces are in one picture, as fractions
+     of it, biggest first. No caching or steadying: the caller smooths the
+     whole path. Null while the model is not loaded. */
+  function faceCentres(source, W, H) {
+    if (!face) return null;
+    const s = 256 / Math.max(W, H);
+    const mw = Math.max(16, Math.round(W * s)), mh = Math.max(16, Math.round(H * s));
+    if (!small) small = document.createElement("canvas");
+    if (small.width !== mw) small.width = mw;
+    if (small.height !== mh) small.height = mh;
+    small.getContext("2d").drawImage(source, 0, 0, mw, mh);
+    const fr = face.detect(small);
+    return (fr.faceLandmarks || []).map((f) => {
+      let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+      f.forEach((p) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); });
+      return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, size: (x1 - x0) * (y1 - y0) };
+    }).sort((a, b) => b.size - a.size);
+  }
+
   /* ─── the warp: up to 16 control points; kind 0 magnifies, kind 1 pushes ─── */
   const N = 16;
   const FS = [
@@ -278,5 +297,5 @@
   // a new project: no face points from the last one (ids start again at 1)
   function clear() { cache.clear(); last.clear(); }
 
-  global.SenotelRetouch = { load: load, ready: ready, apply: apply, failed: failedNow, clear: clear, _faceOps: faceOps, _bodyOps: bodyOps, _warp: warp, _steady: steady };
+  global.SenotelRetouch = { load: load, ready: ready, apply: apply, faceCentres: faceCentres, failed: failedNow, clear: clear, _faceOps: faceOps, _bodyOps: bodyOps, _warp: warp, _steady: steady };
 })(typeof window !== "undefined" ? window : globalThis);
