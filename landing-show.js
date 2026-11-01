@@ -49,6 +49,7 @@
     { t: "ride to work with me", hi: 0, v: "bike" },
     { t: "one more try", hi: 2, v: "laugh" }
   ];
+  var CAPS = ["cap-punch", "cap-box", "cap-serif", "cap-outline", "cap-marker", "cap-mono", "cap-karaoke", "cap-bubble", "cap-block", "cap-quiet"];
   var saveData = !!(navigator.connection && navigator.connection.saveData);
   // loops play only while they are on screen (and the home page is showing)
   var playing = [];
@@ -75,7 +76,8 @@
   function short(i, moving) {
     var s = SHORTS[i % SHORTS.length];
     var el = document.createElement("div");
-    el.className = "lp-short has-media";
+    // ten caption styles, spread so neighbours differ (landing.css .cap-*)
+    el.className = "lp-short has-media " + CAPS[(i * 3 + Math.floor(i / 5)) % CAPS.length];
     el.style.backgroundImage = "url(" + MEDIA + s.v + ".webp)";
     if (moving) el.appendChild(loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp"));
     var cap = document.createElement("div");
@@ -234,7 +236,20 @@
   }
 
   var clock = 0;
-  function render(p) {
+  /* The ending (0.70.2): the show is longer (760vh, was 560vh). The original
+     story keeps its pace in the first 74% (p = pAll x STRETCH); the rest is
+     the pull-back, the wall shrinking into a field of hundreds of videos, the
+     far ones drawn on one canvas so it stays smooth. */
+  var STRETCH = 760 / 560;
+  var field = document.createElement("canvas");
+  field.className = "lp-field";
+  field.setAttribute("aria-hidden", "true");
+  stage.parentNode.insertBefore(field, stage);
+  var fx = field.getContext("2d"), fieldOn = false;
+  var posters = SHORTS.map(function (s) { var im = new Image(); im.decoding = "async"; im.src = MEDIA + s.v + ".webp"; return im; });
+  function render(pAll) {
+    var p = Math.min(1, pAll * STRETCH);
+    var tail = ease(span(pAll, 0.70, 0.97));
     if (!L) layout();
     var t = clock / 1000;
     var fold = ease(span(p, 0.58, 0.7));   // the timeline folding into the phone
@@ -310,10 +325,13 @@
     var ph1 = ease(span(p, 0.6, 0.72));
     var wallK = ease(span(p, 0.76, 0.94));
     var cols = L.cols, tw = L.tf, thh = L.tfh, g = L.tg;
-    var zoom = mix(1.3, 1, wallK);   // the wall settles back as it fills, so it feels like pulling away
+    // the wall settles back as it fills, then keeps pulling away into the field
+    var zoom = mix(1.3, 1, wallK) * mix(1, L.narrow ? 0.34 : 0.24, tail);
+    var drift = function (col) { return (col % 2 ? 1 : -1) * tail * thh * 0.9; };   // neighbouring columns slide apart
     var pw = mix(L.pW, tw, wallK), phh = mix(L.pH, thh, wallK);
     var pS = mix(0.55, 1, ph1);
-    place(phone, cx - pw * pS / 2, cy - phh * pS / 2, pw, phh, 0, pS, ph1);
+    var pz = wallK > 0 ? zoom : 1;
+    place(phone, cx - pw * pS * pz / 2, cy - phh * pS * pz / 2 + drift(0) * pz, pw, phh, 0, pS * pz, ph1);
     phone.classList.toggle("is-tile", wallK > 0.5);
     // the caption the finished short is playing
     // captions cut with the short's own shots (make.mjs: 2.3 / 2.4 / 2.2 / 2.6 / 2.5 s)
@@ -330,15 +348,43 @@
       var dist = Math.sqrt(col * col + row * row);
       var k = ease(span(wallK, Math.min(0.5, dist * 0.05), Math.min(0.5, dist * 0.05) + 0.4));
       var x = cx - tw / 2 + col * (tw + g), y = cy - thh / 2 + row * (thh + g);
-      var drift = Math.sin(t * 0.6 + i) * 4 * k;
+      var bob = Math.sin(t * 0.6 + i) * 4 * k * (1 - tail);
       if (k <= 0) { el.style.opacity = 0; return; }
-      place(el, cx + (x - cx) * zoom, cy + (y + drift - cy) * zoom, tw, thh, 0, zoom * mix(0.6, 1, k), k);
+      place(el, cx + (x - cx) * zoom, cy + (y + bob + drift(col) - cy) * zoom, tw, thh, 0, zoom * mix(0.6, 1, k), k);
     });
+
+    // the field: every cell beyond the DOM tiles, drawn once per frame on the canvas
+    var fa = ease(span(pAll, 0.66, 0.76));
+    if (fa > 0 || fieldOn) {
+      var dpr = Math.min(1.5, window.devicePixelRatio || 1), FW = field.clientWidth, FH = field.clientHeight;
+      if (field.width !== Math.round(FW * dpr) || field.height !== Math.round(FH * dpr)) { field.width = Math.round(FW * dpr); field.height = Math.round(FH * dpr); }
+      fx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fx.clearRect(0, 0, FW, FH);
+      fieldOn = fa > 0;
+      if (fieldOn) {
+        var oy = stage.offsetTop, hc = Math.floor(cols / 2), hr = Math.floor(rows / 2);
+        var sx = (tw + g) * zoom, sy = (thh + g) * zoom, w0 = tw * zoom, h0 = thh * zoom;
+        var nc = Math.ceil(W / 2 / sx) + 2, nr = Math.ceil(FH / sy) + 3;
+        fx.globalAlpha = fa;
+        for (var c2 = -nc; c2 <= nc; c2++) {
+          var dy = drift(c2) * zoom;
+          for (var r2 = -nr; r2 <= nr; r2++) {
+            if (Math.abs(c2) <= hc && Math.abs(r2) <= hr) continue;   // a DOM tile is there
+            var X = cx + c2 * sx - w0 / 2, Y = oy + cy + r2 * sy - h0 / 2 + dy;
+            if (X > FW || X + w0 < 0 || Y > FH || Y + h0 < 0) continue;
+            var im = posters[((c2 * 7 + r2 * 3) % posters.length + posters.length) % posters.length];
+            if (im.complete && im.naturalWidth) fx.drawImage(im, X, Y, w0, h0);
+            else { fx.fillStyle = "#1c1c1c"; fx.fillRect(X, Y, w0, h0); }
+          }
+        }
+        fx.globalAlpha = 1;
+      }
+    }
 
     // the words on screen
     var idx = p < 0.1 ? 0 : p < 0.36 ? 1 : p < 0.5 ? 2 : p < 0.6 ? 3 : p < 0.76 ? 4 : 5;
     says.forEach(function (el, i) { el.classList.toggle("is-on", i === idx); });
-    if (bar) bar.style.transform = "scaleX(" + p.toFixed(3) + ")";
+    if (bar) bar.style.transform = "scaleX(" + pAll.toFixed(3) + ")";
   }
 
   /* ── driving it ── */
@@ -358,7 +404,7 @@
   function settle() {
     show.classList.toggle("is-still", still.matches);
     layout();
-    if (still.matches) { clock = 0; render(0.5); says.forEach(function (el, i) { el.classList.toggle("is-on", i === 2); }); }
+    if (still.matches) { clock = 0; render(0.5 / STRETCH); says.forEach(function (el, i) { el.classList.toggle("is-on", i === 2); }); }
     else kick();
   }
   if ("IntersectionObserver" in window) {
