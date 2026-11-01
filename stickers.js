@@ -84,12 +84,18 @@
     for (var i = 0; i < n * 2; i++) { var r = i % 2 ? s * inner : s * 0.5, a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
     c.closePath(); c.fillStyle = color; c.fill();
   }
+  /* A word sticker's word can be the user's own (round 2): drawShape passes
+     it in and the button grows to fit it, never shrinks below its design. */
+  var word = null, usedLabel = false;
   function label(c, text, s, color, bg, wFactor) {
-    var h = s * 0.62, w = s * wFactor;
+    usedLabel = true;
+    if (word) text = word;
+    var h = s * 0.62;
+    c.font = "800 " + (h * 0.48) + "px Inter, Montserrat, system-ui, sans-serif";
+    var w = Math.max(s * wFactor, (word ? c.measureText(text).width : 0) + h * 0.9);
     rr(c, -w / 2, -h / 2, w, h, h * 0.22);
     c.fillStyle = bg; c.fill();
     c.fillStyle = color;
-    c.font = "800 " + (h * 0.48) + "px Inter, Montserrat, system-ui, sans-serif";
     c.textAlign = "center"; c.textBaseline = "middle";
     c.fillText(text, 0, h * 0.03);
     return w;
@@ -286,21 +292,33 @@
   addShape("cross-badge","Cross badge",function(c,s,col){c.fillStyle=col;c.beginPath();c.arc(0,0,s*.48,0,Math.PI*2);c.fill();SHAPES.cross(c,s*.65,"#111210");return s;});
 
   // draw shape id, s high, centred on (0, 0); returns its width
-  function drawShape(c, id, s, color) {
+  function drawShape(c, id, s, color, custom) {
     var fn = SHAPES[id];
     if (!fn) return s;
     c.save();
-    var w = fn(c, s, color || "#ffffff");
+    word = custom ? String(custom).toUpperCase() : null;
+    var w;
+    try { w = fn(c, s, color || "#ffffff"); } finally { word = null; }
     c.restore();
     return w;
   }
   // how wide a shape is for its height, without drawing it on screen: drawn
   // on one small measuring canvas kept for good (this runs every frame)
   var measure = null;
-  function shapeWidth(id, s) {
+  function shapeWidth(id, s, custom) {
     if (typeof document === "undefined") return s;
     if (!measure) { var cv = document.createElement("canvas"); cv.width = cv.height = 1; measure = cv.getContext("2d"); }
-    return drawShape(measure, id, s, "#000");
+    return drawShape(measure, id, s, "#000", custom);
+  }
+  // does this shape carry a word the user can change (Subscribe, Sale...)?
+  var wordy = {};
+  function hasWord(id) {
+    if (wordy[id] == null) {
+      usedLabel = false;
+      if (typeof document !== "undefined") shapeWidth(id, 10);
+      wordy[id] = usedLabel;
+    }
+    return wordy[id];
   }
 
   var emojiFontAdded = false;
@@ -318,6 +336,7 @@
     SHAPES: SHAPE_LIST,
     drawShape: drawShape,
     shapeWidth: shapeWidth,
+    hasWord: hasWord,
     loadEmojiFont: loadEmojiFont,
     EMOJI_FONT: "Noto Color Emoji"
   };

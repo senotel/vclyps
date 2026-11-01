@@ -5465,6 +5465,16 @@
     if (textTab === "stk" && sticker) {
       ins.appendChild(group("Size", slider(10, 220, 1, t.size, (v) => { t.size = v; live(); }, save, (v) => v + "")));
       if (sticker === "shape") ins.appendChild(group("Colour", colorIn(t.color, (v) => { t.color = v; })));
+      // round 2: a button sticker's word is the user's (Subscribe becomes Join, Sale becomes 50% off)
+      const SKw = window.SenotelStickers;
+      if (sticker === "shape" && SKw && SKw.hasWord && SKw.hasWord(t.shape)) {
+        const wi = document.createElement("input");
+        wi.type = "text"; wi.value = t.word || ""; wi.maxLength = 24; wi.className = "panel-input";
+        wi.placeholder = "The word on it";
+        wi.addEventListener("input", () => { const v = wi.value.replace(/\s+/g, " ").trim(); if (v) t.word = v; else delete t.word; live(); });
+        wi.addEventListener("change", save);
+        ins.appendChild(group("Words", wi));
+      }
       ins.appendChild(group("Opacity", slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct)));
       ins.appendChild(group("Shadow", onOff(k.shadow, (v) => { t.shadow = v; if (v && t.shOpacity == null) { t.shOpacity = 0.6; t.shBlur = 0.3; t.shDist = 0.05; t.shAngle = 90; } })));
       ins.appendChild(group("Shows for", slider(0.5, 20, 0.5, t.dur, (v) => { t.dur = v; renderTimeline(); }, save, (v) => v.toFixed(1) + "s")));
@@ -9076,7 +9086,7 @@
     const A = textAnimAt(t, time);
     const L = headingLayout(t, f.w, f.h), k = textLook(t);
     const s = L.size * 1.6;
-    const w = SK.shapeWidth(t.shape, s), h = s;
+    const w = SK.shapeWidth(t.shape, s, t.word), h = s;
     ctx.save();
     ctx.translate(f.x + L.cx, f.y + L.cy);
     if (hits) hits.set(t.id, { x: f.x + L.cx, y: f.y + L.cy, w: w, h: h, rot: k.rotate });
@@ -9102,7 +9112,7 @@
       ctx.shadowOffsetX = Math.cos(a) * k.shDist * L.size * px;
       ctx.shadowOffsetY = Math.sin(a) * k.shDist * L.size * px;
     }
-    SK.drawShape(ctx, t.shape, s, t.color || "#ffffff");
+    SK.drawShape(ctx, t.shape, s, t.color || "#ffffff", t.word);
     ctx.shadowColor = "transparent";
     if (hits && S.sel && S.sel.type === "text" && S.sel.id === t.id) {
       ctx.globalAlpha = 1;
