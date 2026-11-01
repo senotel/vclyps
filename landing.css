@@ -137,7 +137,8 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
 /* real footage (0.70.0): the loop fills the tile under the caption; no painted light on it */
 .lp-short video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .lp-short.has-media { background-color: #1a1a1a; }
-.lp-short.has-media::before { display: none; }
+.lp-short.has-media::before, .lp-short.lp-atlas::before { display: none; }
+.lp-short.lp-atlas { background-color: #1a1a1a; background-repeat: no-repeat; }
 .lp-short-cap {
   position: absolute; z-index: 1; left: 8%; right: 8%; top: 56%;
   font-family: "Anton", Impact, sans-serif; font-size: 16px; font-size: 11.5cqw; line-height: 1.04;

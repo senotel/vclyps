@@ -187,6 +187,37 @@
   phoneScreen.appendChild(heroShort);
   var live = heroShort.querySelector(".lp-live");
   var tiles = [];   // made in layout(), as many as the screen needs
+  /* The field's footage (0.71.1): 815 different moments from 375 everyday
+     shorts (free Pexels stock, NO UPLOAD/stock/field/build.mjs), one sprite
+     sheet of 72x128 frames, 32 across. Loaded only when the show is reached. */
+  var ATLAS = { src: "site/field.webp", n: 815, cols: 32, w: 72, h: 128 };
+  ATLAS.rows = Math.ceil(ATLAS.n / ATLAS.cols);
+  var atlas = new Image(), atlasTiles = [], atlasAwake = false;
+  atlas.decoding = "async";
+  function wakeAtlas() {
+    if (atlasAwake) return;
+    atlasAwake = true;
+    atlas.src = ATLAS.src;
+    atlasTiles.forEach(function (el) { el.style.backgroundImage = "url(" + ATLAS.src + ")"; });
+  }
+  // a frame for a grid cell: well mixed, so the field never shows a pattern
+  function cellFrame(c, r) {
+    var h = (c * 374761393 + r * 668265263) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    h ^= h >>> 16;
+    return ((h % ATLAS.n) + ATLAS.n) % ATLAS.n;
+  }
+  function atlasTile(f) {
+    var el = document.createElement("div");
+    el.className = "lp-short lp-atlas";
+    var x = f % ATLAS.cols, y = Math.floor(f / ATLAS.cols);
+    el.style.backgroundSize = ATLAS.cols * 100 + "% " + ATLAS.rows * 100 + "%";
+    el.style.backgroundPosition = (x / (ATLAS.cols - 1) * 100).toFixed(4) + "% " + (y / (ATLAS.rows - 1) * 100).toFixed(4) + "%";
+    if (atlasAwake) el.style.backgroundImage = "url(" + ATLAS.src + ")";
+    atlasTiles.push(el);
+    return el;
+  }
+  var nearUsed = 0;
 
   /* ── maths ── */
   var clamp = function (v, a, b) { return v < a ? a : v > b ? b : v; };
@@ -212,7 +243,13 @@
     var cols = Math.ceil(W / (tf + tg)) + 2, rows = Math.ceil(pinH * 1.25 / (tfh + tg)) + 2;
     if (cols % 2 === 0) cols++; if (rows % 2 === 0) rows++;
     // the wall mixes its clips, so no column repeats one
-    while (tiles.length < cols * rows) { var ti = tiles.length; var nt = short(ti * 7 + Math.floor(ti / cols) * 4 + 3, false); nt.classList.add("lp-tile"); stage.insertBefore(nt, phone); tiles.push(nt); }
+    // the tiles near the phone are the 15 captioned clips, each once; the rest come from the field's 815
+    while (tiles.length < cols * rows) {
+      var ti = tiles.length, tc = ti % cols - Math.floor(cols / 2), tr = Math.floor(ti / cols) - Math.floor(rows / 2);
+      var near = Math.abs(tc) <= 2 && Math.abs(tr) <= 1 && nearUsed < SHORTS.length;
+      var nt = near ? short(nearUsed++, false) : atlasTile(cellFrame(tc, tr));
+      nt.classList.add("lp-tile"); stage.insertBefore(nt, phone); tiles.push(nt);
+    }
     L = { narrow: narrow, tlX: tlX, tlW: tlW, vh: vh, th: th, ah: ah, y: y, pps: tlW / RAW, pW: pW, pH: pH, px: (W - pW) / 2, py: (H - pH) / 2,
       tf: tf, tg: tg, tfh: tfh, cols: cols, rows: rows };
     lanes[0].style.cssText = box(tlX, y.text, tlW, th);
@@ -230,9 +267,11 @@
 
   function place(el, x, y, w, h, r, sc, o) {
     el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px) rotate(" + (r || 0).toFixed(2) + "deg) scale(" + (sc == null ? 1 : sc).toFixed(3) + ")";
-    if (w != null) el.style.width = w.toFixed(1) + "px";
-    if (h != null) el.style.height = h.toFixed(1) + "px";
-    el.style.opacity = o == null ? 1 : o.toFixed(3);
+    // size only when it changes: a width or height write costs a layout, a transform does not
+    if (w != null) { var ws = w.toFixed(1); if (el._w !== ws) { el._w = ws; el.style.width = ws + "px"; } }
+    if (h != null) { var hs = h.toFixed(1); if (el._h !== hs) { el._h = hs; el.style.height = hs + "px"; } }
+    var os = o == null ? "1" : o.toFixed(3);
+    if (el._o !== os) { el._o = os; el.style.opacity = os; }
   }
 
   var clock = 0;
@@ -246,7 +285,6 @@
   field.setAttribute("aria-hidden", "true");
   stage.parentNode.insertBefore(field, stage);
   var fx = field.getContext("2d"), fieldOn = false;
-  var posters = SHORTS.map(function (s) { var im = new Image(); im.decoding = "async"; im.src = MEDIA + s.v + ".webp"; return im; });
   function render(pAll) {
     var p = Math.min(1, pAll * STRETCH);
     var tail = ease(span(pAll, 0.70, 0.97));
@@ -372,8 +410,8 @@
             if (Math.abs(c2) <= hc && Math.abs(r2) <= hr) continue;   // a DOM tile is there
             var X = cx + c2 * sx - w0 / 2, Y = oy + cy + r2 * sy - h0 / 2 + dy;
             if (X > FW || X + w0 < 0 || Y > FH || Y + h0 < 0) continue;
-            var im = posters[((c2 * 7 + r2 * 3) % posters.length + posters.length) % posters.length];
-            if (im.complete && im.naturalWidth) fx.drawImage(im, X, Y, w0, h0);
+            var fr = cellFrame(c2, r2);
+            if (atlas.complete && atlas.naturalWidth) fx.drawImage(atlas, (fr % ATLAS.cols) * ATLAS.w, Math.floor(fr / ATLAS.cols) * ATLAS.h, ATLAS.w, ATLAS.h, X, Y, w0, h0);
             else { fx.fillStyle = "#1c1c1c"; fx.fillRect(X, Y, w0, h0); }
           }
         }
@@ -398,35 +436,46 @@
      plays by moving the page, so the visitor's own scrolling still steers
      it: scrolling down speeds it up, scrolling up slows it or plays it
      backwards (autoplay steps aside while they pull back, then carries on).
-     It stops at the end, starts again only when the show is entered afresh,
-     and never runs with reduced motion. */
+     Any scroll inside the show (wheel, touch, keys, scrollbar) sets it going
+     again, from wherever the visitor is; it stops at the very end, and never
+     runs with reduced motion.
+     Smoothness (0.71.1): the picture never jumps to the scroll position, it
+     eases toward it (shown += (target - shown) x (1 - e^(-12 dt))), and the
+     page is moved by fractions of a pixel, so it glides. */
   var PLAY_SECS = 34;                 // the whole show, start to end, untouched
-  var auto = { on: false, done: false, pos: 0, prev: 0, wait: 0 };
+  var auto = { on: false, pos: 0, prev: 0, wait: 0, touched: 0, expect: -1 };
   function autoplay(ts, dt) {
     var pr = progress();
     var range = Math.max(1, show.offsetHeight - home.clientHeight);
-    if (pr <= 0) { auto.on = false; auto.done = false; return; }       // above the show: ready to play again
-    if (!auto.on && !auto.done && pr > 0.012 && pr < 0.97) { auto.on = true; auto.pos = home.scrollTop; auto.prev = home.scrollTop; }
+    if (pr <= 0) { auto.on = false; return; }
+    // any scroll by the visitor inside the show (not at its very end) sets it going
+    if (!auto.on && auto.touched && pr < 0.99) { auto.on = true; auto.pos = home.scrollTop; auto.prev = home.scrollTop; }
+    auto.touched = 0;
     if (!auto.on) return;
-    if (pr >= 0.995) { auto.on = false; auto.done = true; return; }
+    if (pr >= 0.995) { auto.on = false; return; }
     var now = home.scrollTop;
     // the visitor moved it back: let them, and wait a moment before carrying on
     if (now < auto.prev - 1) auto.wait = ts + 900;
     if (now > auto.prev + 1 || now < auto.prev - 1) auto.pos = now;   // follow the visitor wherever they went
     if (ts < auto.wait) { auto.prev = now; return; }
     auto.pos += (range / PLAY_SECS) * Math.min(dt, 0.05);
-    home.scrollTop = auto.pos;
-    auto.prev = home.scrollTop;
+    home.scrollTop = auto.pos;       // fractional: browsers keep sub-pixel scroll offsets
+    auto.prev = auto.expect = home.scrollTop;
   }
-  var lastTs = 0;
+  var lastTs = 0, shown = -1;
   function frame(ts) {
     raf = 0;
     clock = ts || 0;
     var dt = lastTs ? (ts - lastTs) / 1000 : 0;
     lastTs = ts;
     if (!still.matches && document.body.dataset.screen === "home") autoplay(ts, dt);
-    render(progress());
-    if (visible && !still.matches && !document.hidden) raf = requestAnimationFrame(frame);
+    var target = progress();
+    // ease toward the scroll position; snap when far away (a jump, a link, a resize)
+    if (shown < 0 || Math.abs(target - shown) > 0.08) shown = target;
+    else shown += (target - shown) * (1 - Math.exp(-12 * Math.min(dt || 0.016, 0.05)));
+    render(shown);
+    var moving = Math.abs(target - shown) > 0.00005;
+    if ((visible || moving) && !still.matches && !document.hidden) raf = requestAnimationFrame(frame);
     else lastTs = 0;
   }
   function kick() { if (!raf) raf = requestAnimationFrame(frame); }
@@ -440,11 +489,16 @@
   if ("IntersectionObserver" in window) {
     new IntersectionObserver(function (es) {
       visible = es[0].isIntersecting;
+      if (visible) wakeAtlas();
       document.body.classList.toggle("lp-cinema", visible && es[0].intersectionRatio > 0);
       if (visible) kick();
     }, { root: home, threshold: [0, 0.02] }).observe(show);
   } else { visible = true; }
-  home.addEventListener("scroll", function () { if (!still.matches) kick(); }, { passive: true });
+  home.addEventListener("scroll", function () {
+    // autoplay's own step lands where it put the page; anything else is the visitor
+    if (!(auto.on && Math.abs(home.scrollTop - auto.expect) < 1.5)) auto.touched = 1;
+    if (!still.matches) kick();
+  }, { passive: true });
   window.addEventListener("resize", function () { L = null; settle(); });
   if (still.addEventListener) still.addEventListener("change", settle);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) kick(); });
