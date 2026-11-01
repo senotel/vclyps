@@ -176,6 +176,7 @@
       if (c.smooth) media.add(c.smooth.mediaId);
     });
     histMedia.push(media);
+    if (typeof primeSfx === "function") primeSfx();   // the sounds this edit uses start loading
     hist.push(JSON.stringify({ media: S.media.map((m) => m.id), c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
     if (hist.length > 80) { hist.shift(); histMedia.shift(); }
     histIdx = hist.length - 1;
@@ -273,10 +274,11 @@
     $("mediaStrip").classList.remove("hidden");
     renderStrips();
     renderTimeline();
-    /* The sound effects are recordings (sfx.js, 0.25.0): about 1 MB, fetched
-       once and kept on the device. Fetched now, so a sound placed by hand or
-       by the Director plays the first time it is reached. */
-    if (sfxEngine() && sfxEngine().prepare) sfxEngine().prepare();
+    /* The sound effects are recordings (sfx.js, 0.25.0), fetched once and
+       kept on the device. The first twenty are fetched now, and any sound
+       this project already uses, so they play the first time they are
+       reached; the rest load when first used (primeSfx). */
+    if (sfxEngine() && sfxEngine().prepare) { sfxEngine().prepare(); primeSfx(); }
     if (!S.media.length) {
       toast("Add your footage with +, then tell vClyps what you want or let it decide");
     }
@@ -4328,6 +4330,12 @@
     sheet.appendChild(build); render(); openSheet("collageSheet");
   }
 
+  // every sound in the edit fetched before playback reaches it (each loads once; cheap to repeat)
+  function primeSfx() {
+    const e = sfxEngine();
+    if (!e || !e.prepare || !S.sfx.length) return;
+    e.prepare(Array.from(new Set(S.sfx.map((x) => x.name))));
+  }
   function addSfxAt(name, at) {
     const e = sfxEngine();
     if (!e || !e.has(name)) return null;
@@ -4366,6 +4374,18 @@
     e.play(name);
   }
 
+  /* Round 2: with 60 sounds the sheet gets CapCut's group tabs. A sound not
+     listed here (a new one) still shows under All and in search. */
+  const SFX_GROUPS = [
+    ["Transitions", ["whoosh", "swoosh2", "swipe", "riser", "subdrop", "drumroll", "tapestop", "rewind", "glitch"]],
+    ["Impacts", ["boom", "punch", "slap", "bonk", "explosion", "glass", "thunder"]],
+    ["Cartoon", ["boing", "slidewhistle", "airhorn", "rimshot", "sadtrombone", "scratch", "tada", "buzz"]],
+    ["Crowd", ["applause", "laugh", "gasp", "cheer", "boo", "aww", "ooh", "crickets"]],
+    ["Game and phone", ["pop", "ding", "coin", "kaching", "sparkle", "notify", "click", "levelup", "success", "error", "shutter", "vibrate", "bubbles"]],
+    ["Everyday", ["typing", "typewriter", "knock", "creak", "footsteps", "alarm", "tick", "heartbeat", "honk", "schoolbell", "dogbark"]],
+    ["Nature", ["wind", "rain", "birds", "splash"]]
+  ];
+  let sfxGroup = "All";
   function renderSoundSheet() {
     const grid = $("sndGrid");
     if (!grid) return;
@@ -4380,7 +4400,23 @@
        by what it is called, and the registry already carries those words. */
     const q = (($("sndSearch") && $("sndSearch").value) || "").trim().toLowerCase();
     const all = e.list();
-    const shown = !q ? all : all.filter(function (s) {
+    // the group tabs: only groups that have a sound, and hidden while searching (search looks everywhere)
+    const cats = $("sndCats");
+    if (cats) {
+      cats.innerHTML = "";
+      const have = SFX_GROUPS.filter((g) => g[1].some((id) => all.some((s) => s.name === id)));
+      if (!have.some((g) => g[0] === sfxGroup)) sfxGroup = "All";
+      [["All"]].concat(have).forEach((g) => {
+        const b = mk("button", "fchip" + (sfxGroup === g[0] ? " active" : ""), g[0]);
+        b.type = "button";
+        b.addEventListener("click", () => { sfxGroup = g[0]; renderSoundSheet(); });
+        cats.appendChild(b);
+      });
+      cats.classList.toggle("hidden", !!q || have.length < 2);
+    }
+    const inGroup = q || sfxGroup === "All" ? null : (SFX_GROUPS.find((g) => g[0] === sfxGroup) || [0, []])[1];
+    const pool = inGroup ? inGroup.map((id) => all.find((s) => s.name === id)).filter(Boolean) : all;
+    const shown = !q ? pool : all.filter(function (s) {
       if (s.label.toLowerCase().indexOf(q) >= 0) return true;
       return s.tags.some(function (t) { return t.toLowerCase().indexOf(q) >= 0; });
     });

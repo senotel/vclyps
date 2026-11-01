@@ -3057,7 +3057,7 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
 /* A sheet's groups are a scrolling row of words, as in CapCut: the chosen
    one is the bright word with a rule under it. Boxed buttons that wrap to a
    second line read as a form, not as places to look. */
-#fxCats, #stkCats, #tmplCats, #capCats {
+#fxCats, #stkCats, #tmplCats, #capCats, #sndCats {
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
@@ -3066,8 +3066,8 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
 }
-#fxCats::-webkit-scrollbar, #stkCats::-webkit-scrollbar, #tmplCats::-webkit-scrollbar, #capCats::-webkit-scrollbar { display: none; }
-:is(#fxCats, #stkCats, #tmplCats, #capCats) .fchip {
+#fxCats::-webkit-scrollbar, #stkCats::-webkit-scrollbar, #tmplCats::-webkit-scrollbar, #capCats::-webkit-scrollbar, #sndCats::-webkit-scrollbar { display: none; }
+:is(#fxCats, #stkCats, #tmplCats, #capCats, #sndCats) .fchip {
   flex: 0 0 auto;
   padding: 8px 0 10px;
   border: 0;
@@ -3079,8 +3079,8 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
   font-weight: 500;
   margin-bottom: -1px;
 }
-:is(#fxCats, #stkCats, #tmplCats, #capCats) .fchip:hover { color: var(--t1); background: none; }
-:is(#fxCats, #stkCats, #tmplCats, #capCats) .fchip.active { color: var(--text); border-bottom-color: var(--text); background: none; }
+:is(#fxCats, #stkCats, #tmplCats, #capCats, #sndCats) .fchip:hover { color: var(--t1); background: none; }
+:is(#fxCats, #stkCats, #tmplCats, #capCats, #sndCats) .fchip.active { color: var(--text); border-bottom-color: var(--text); background: none; }
 
 /* ===================== DESKTOP EDITOR (round 2) ===================== */
 /* On a computer the editor is laid out like CapCut desktop rather than a

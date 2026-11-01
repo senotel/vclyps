@@ -1232,11 +1232,14 @@
     return pending[name];
   }
 
-  /* Fetch and decode the recordings, all of them unless names are given.
-     Safe to call as often as you like; the app calls it as the editor opens.
+  /* Fetch and decode the recordings: the given names, or else the first
+     twenty (the ones the AI reaches for most, about 1 MB). The other sounds
+     load when they are first previewed, added or used (round 2: with 59
+     sounds, fetching them all on opening the editor cost 8.6 MB nobody had
+     asked for). Safe to call as often as you like: each loads once.
      Resolves to { loaded, failed } and never rejects. */
   function prepare(names) {
-    var list = (names && names.length ? names : NAMES).filter(function (n) { return RECORDED[n]; });
+    var list = (names && names.length ? names : NAMES.slice(0, 20)).filter(function (n) { return RECORDED[n]; });
     if (!global.Promise) return null;
     return Promise.all(list.map(loadOne)).then(function (ok) {
       var done = { loaded: [], failed: [] };
