@@ -173,6 +173,7 @@
     [...S.clips, ...S.broll, ...S.audio].forEach((c) => {
       media.add(c.mediaId);
       if (c.reversed) media.add(c.reversed.mediaId);
+      if (c.smooth) media.add(c.smooth.mediaId);
     });
     histMedia.push(media);
     hist.push(JSON.stringify({ media: S.media.map((m) => m.id), c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
@@ -198,7 +199,7 @@
         });
       }
       [...(o.c || []), ...(o.b || []), ...(o.a || [])].forEach((c) => {
-        [c.mediaId, c.reversed && c.reversed.mediaId].forEach((id) => {
+        [c.mediaId, c.reversed && c.reversed.mediaId, c.smooth && c.smooth.mediaId].forEach((id) => {
           if (!mediaById(id) && removeMedia.kept.has(id)) {
             S.media.push(removeMedia.kept.get(id));
             removeMedia.kept.delete(id);
@@ -927,7 +928,7 @@
     removeMedia.collect = () => {
       if (!removeMedia.kept.size) return;
       const refs = new Set();
-      const remember = (c) => { refs.add(c.mediaId); if (c.reversed) refs.add(c.reversed.mediaId); };
+      const remember = (c) => { refs.add(c.mediaId); if (c.reversed) refs.add(c.reversed.mediaId); if (c.smooth) refs.add(c.smooth.mediaId); };
       [...S.clips, ...S.broll, ...S.audio].forEach(remember);
       histMedia.forEach((media) => media.forEach((id) => refs.add(id)));
       removeMedia.kept.forEach((m, key) => {
@@ -1387,6 +1388,127 @@
       if (src && src.close) { try { src.close(); } catch (e) {} }
       reversing = null;
       renderActionBar();
+    }
+  }
+
+  /* ─── Smooth slow motion (ccl26, round 2) ───
+     A clip slowed to half speed shows each frame twice, which judders. This
+     makes a new video once, as Reverse does: every new frame is a blend of
+     the two real frames either side of its moment (weighted by how close
+     each is), and the sound is stretched to the new length at the same
+     pitch. The clip then plays it at normal speed; Off puts the original
+     clip and its speed back. Up to 60 seconds of result. */
+  let smoothing = null;   // {clipId, p, cancel}
+  async function smoothClip(c) {
+    if (smoothing) return;
+    if (c.smooth) {
+      const o = c.smooth;
+      if (!mediaById(o.mediaId)) { toast("The original footage is no longer here"); return; }
+      c.mediaId = o.mediaId; c.in = o.in; c.out = o.out; c.speed = o.speed;
+      delete c.smooth;
+      commit(); renderTimeline(); renderInspector(); syncNow();
+      toast("Back to the original slow motion");
+      return;
+    }
+    const F = window.SenotelFastExport, m = mediaById(c.mediaId), sp = c.speed || 1;
+    if (!m || m.type !== "video" || hasCurve(c) || sp >= 0.95) return;
+    if (!F || typeof VideoEncoder === "undefined" || typeof createImageBitmap === "undefined") {
+      toast("Smooth slow motion needs a browser that can make video files (Chrome, Edge, or Safari 17 or newer)", 6000);
+      return;
+    }
+    const len = c.out - c.in, outLen = len / sp;
+    if (outLen > 60.05) { toast("Smooth slow motion works up to 60 seconds of result. Split the clip first", 6000); return; }
+    const job = { clipId: c.id, p: 0, cancel: false };
+    smoothing = job;
+    renderInspector();
+    let src = null;
+    try {
+      src = await F.frameSource(m);
+      const first = await src.frameAt(c.in);
+      if (!first) throw new Error("no picture");
+      const k = Math.min(1, 1920 / Math.max(first.w, first.h));
+      const W = Math.max(2, Math.round((first.w * k) / 2) * 2), H = Math.max(2, Math.round((first.h * k) / 2) * 2);
+      const fps = 30, Nin = Math.max(2, Math.round(len * fps) + 1), Nout = Math.max(1, Math.round(outLen * fps));
+      const canvas = document.createElement("canvas");
+      canvas.width = W; canvas.height = H;
+      const cx = canvas.getContext("2d");
+      const keep = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(W, H) : document.createElement("canvas");
+      keep.width = W; keep.height = H;
+      const kx = keep.getContext("2d");
+      const toJpeg = () => (keep.convertToBlob ? keep.convertToBlob({ type: "image/jpeg", quality: 0.95 })
+        : new Promise((res) => keep.toBlob(res, "image/jpeg", 0.95)));
+      // pass 1: the real frames, forwards, once
+      const shots = new Array(Nin).fill(null);
+      for (let i = 0; i < Nin && !job.cancel; i++) {
+        const pic = await src.frameAt(Math.min(c.out, c.in + i / fps));
+        if (pic) { kx.drawImage(pic.el, 0, 0, W, H); shots[i] = await toJpeg(); }
+        else if (i) shots[i] = shots[i - 1];
+        job.p = ((i + 1) / Nin) * 0.45;
+        if (i % 10 === 0) { renderInspector(); await F.breathe(); }
+      }
+      if (job.cancel) { toast("Smooth slow motion stopped"); return; }
+      // the sound, stretched to the new length at the same pitch
+      let audio = null;
+      try {
+        const au = await F.audioOf(m, c.in, c.out);
+        if (au && au.buffer) {
+          const b = au.buffer, r = b.sampleRate;
+          const s0 = Math.max(0, Math.round((c.in - au.startsAt) * r)), s1 = Math.min(b.length, Math.round((c.out - au.startsAt) * r));
+          const chans = [];
+          for (let ch = 0; ch < b.numberOfChannels; ch++) chans.push(b.getChannelData(ch).subarray(s0, s1));
+          const out = F.stretch(chans, sp);
+          const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+          const oc = new Ctx(2, Math.max(1, Math.round((out[0].length / r) * F.AUDIO_RATE)), F.AUDIO_RATE);
+          const rb = oc.createBuffer(out.length, out[0].length, r);
+          out.forEach((d, ch) => rb.getChannelData(ch).set(d));
+          const bs = oc.createBufferSource();
+          bs.buffer = rb; bs.connect(oc.destination); bs.start(0);
+          audio = await oc.startRendering();
+        }
+      } catch (e) { audio = null; }   // no readable sound: the picture is still smoothed
+      // pass 2: each new frame from the two real ones around its moment
+      const bitmaps = new Map();
+      const bm = async (i) => {
+        if (!bitmaps.has(i)) bitmaps.set(i, shots[i] ? await createImageBitmap(shots[i]) : null);
+        return bitmaps.get(i);
+      };
+      const blob = await F.encode({
+        canvas: canvas, fps: fps, duration: Nout / fps, audio: audio,
+        cancelled: () => job.cancel,
+        renderFrame: async (t) => {
+          const u = Math.min(Nin - 1, t * sp * fps), a0 = Math.floor(u), a1 = Math.min(Nin - 1, a0 + 1), w = u - a0;
+          const A = await bm(a0), B = await bm(a1);
+          cx.globalAlpha = 1;
+          if (A) cx.drawImage(A, 0, 0, W, H);
+          if (B && w > 0.02) { cx.globalAlpha = w; cx.drawImage(B, 0, 0, W, H); cx.globalAlpha = 1; }
+          // frames behind this moment are done with
+          bitmaps.forEach((v, i) => { if (i < a0 - 1) { if (v) v.close(); bitmaps.delete(i); } });
+          job.p = 0.45 + Math.min(1, t / (Nout / fps)) * 0.55;
+          if (Math.round(t * fps) % 10 === 0) renderInspector();
+        }
+      });
+      bitmaps.forEach((v) => { if (v) v.close(); });
+      if (!blob) { toast("Smooth slow motion stopped"); return; }
+      const before = S.media.length;
+      addFiles([new File([blob], (m.name || "clip") + " smooth.mp4", { type: "video/mp4" })], "library");
+      if (S.media.length === before) throw new Error("not added");
+      const nm = S.media[S.media.length - 1];
+      nm.fromSmooth = m.id;
+      const cc = clipById(c.id);
+      if (!cc) return;
+      cc.smooth = { mediaId: cc.mediaId, in: cc.in, out: cc.out, speed: sp };
+      cc.mediaId = nm.id; cc.in = 0; cc.out = Nout / fps; cc.speed = 1;
+      if (cc.mask) delete cc.mask.track;
+      delete cc.stab; delete cc.reframe;   // measured on the old footage
+      commit(); renderTimeline(); renderInspector(); syncNow();
+      toast("Smooth slow motion is on");
+      recordEdit("smooth-slowmo", { speed: sp, secs: +outLen.toFixed(1) });
+    } catch (e) {
+      toast("This clip could not be smoothed here: " + ((e && e.message) || "unknown"), 6000);
+    } finally {
+      if (src && src.close) { try { src.close(); } catch (e) {} }
+      smoothing = null;
+      renderInspector();
     }
   }
 
@@ -7676,6 +7798,15 @@
       box.appendChild(group("Speed", slider(0.1, 10, 0.05, sp || 1, (v) => { delete c.curve; c.speed = v; after(); }, () => commit(), (v) => v.toFixed(2) + "×")));
       box.appendChild(chipsRow([[0.5, "0.5×"], [1, "1×"], [1.5, "1.5×"], [2, "2×"], [3, "3×"]], sp, (v) => { delete c.curve; c.speed = v; after(); }));
       if (hasCurve(c)) box.appendChild(mk("p", "panel-note", "This clip has a speed curve. A speed here replaces it."));
+      // ccl26: slowed down, the frames can be blended into a smooth glide
+      if (c.smooth || (!hasCurve(c) && c.speed < 0.95)) {
+        const busy = smoothing && smoothing.clipId === c.id;
+        box.appendChild(group("Smooth slow motion", busy
+          ? mk("span", "panel-note", "Making it smooth… " + Math.round(smoothing.p * 100) + "%")
+          : chipsRow([[true, "On"], [false, "Off"]], !!c.smooth, (v) => { if (v !== !!c.smooth) setTimeout(() => smoothClip(c), 0); }, () => {})));
+        if (!busy) box.appendChild(mk("p", "panel-note", c.smooth ? "Smooth at " + c.smooth.speed.toFixed(2) + "×. Turn it off to change the speed."
+          : "Slow motion shows each frame two or more times; this blends new frames in between so it glides. Made once on your device."));
+      }
       return;
     }
     const grid = mk("div", "voice-grid");
