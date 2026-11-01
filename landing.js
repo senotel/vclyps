@@ -1,14 +1,11 @@
-/* vClyps landing (T18). The page is plain HTML and CSS; this only wires it
-   up. The show is landing-show.js.
+/* vClyps landing (0.67.0). The page is plain HTML and CSS; this only wires
+   it up.
    · "Choose your footage" ([data-pick]) opens the file picker, and files
-     dropped on the hero do the same: both go to app.js vcStartWith, which
-     opens the editor with them on the timeline. Cancelling the picker
-     leaves the page as it was, with focus back on the button pressed.
+     dropped anywhere on the hero do the same: both go to app.js
+     vcStartWith, which opens the editor with them on the timeline.
    · "Open the editor" ([data-start]) opens New project (vcBegin).
    · Section links scroll inside the landing (it is its own scroll box)
-     without writing a #hash into the app's address. "Skip the show"
-     ([data-instant]) jumps at once and puts focus on the heading it skips
-     to, so a keyboard user carries on from there. */
+     without writing a #hash into the app's address. */
 (function () {
   "use strict";
   var home = document.getElementById("screen-home");
@@ -26,24 +23,17 @@
 
   home.querySelectorAll("[data-start]").forEach(function (b) { b.addEventListener("click", begin); });
 
-  var input = document.getElementById("lpFiles"), opener = null;
+  var input = document.getElementById("lpFiles");
   home.querySelectorAll("[data-pick]").forEach(function (b) {
-    b.addEventListener("click", function () {
-      opener = b;
-      if (input) input.click(); else begin();
-    });
+    b.addEventListener("click", function () { if (input) input.click(); else begin(); });
   });
-  if (input) {
-    input.addEventListener("change", function () {
-      var files = Array.prototype.slice.call(input.files || []);
-      input.value = "";
-      if (!files.length && opener) opener.focus();
-      startWith(files);
-    });
-    input.addEventListener("cancel", function () { if (opener) opener.focus(); });
-  }
+  if (input) input.addEventListener("change", function () {
+    var files = Array.prototype.slice.call(input.files || []);
+    input.value = "";
+    startWith(files);
+  });
 
-  // drop footage on the hero; the outline shows only during a real file drag
+  // drop footage on the hero
   var hero = document.getElementById("lpHero");
   if (hero) {
     var depth = 0;
@@ -62,16 +52,10 @@
   home.querySelectorAll('a[href^="#"]').forEach(function (a) {
     a.addEventListener("click", function (e) {
       var id = a.getAttribute("href").slice(1);
-      var instant = a.hasAttribute("data-instant") || still.matches;
       e.preventDefault();
-      if (!id) { home.scrollTo({ top: 0, behavior: instant ? "auto" : "smooth" }); return; }
+      if (!id) { home.scrollTo({ top: 0, behavior: still.matches ? "auto" : "smooth" }); return; }
       var to = document.getElementById(id);
-      if (!to) return;
-      to.scrollIntoView({ behavior: instant ? "auto" : "smooth", block: "start" });
-      if (a.hasAttribute("data-instant")) {
-        var h = to.querySelector("h2[tabindex]");
-        if (h) h.focus({ preventScroll: true });
-      }
+      if (to) to.scrollIntoView({ behavior: still.matches ? "auto" : "smooth", block: "start" });
     });
   });
 })();

@@ -32,7 +32,6 @@
        the browser fake one, so both the DOM and the canvas request 400. -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&display=swap" />
   <!-- Archivo: the landing face (T17 design). Free, SIL Open Font License. -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&display=swap" />
   <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="logo.png" />
@@ -69,14 +68,11 @@
   </header>
 
   <!-- ══════════════ LANDING ══════════════
-       T18, Codex's T17 design: one pale blue editing surface, deep marine
-       type, white footage mounts, lime captions, crimson only for the main
-       action and the playhead. The offer first (free, what it does, how to
-       start), then one show (landing-show.js) that keeps the identity of each
-       piece of one shoot while it becomes a timeline, an edit, a short and a
-       field of stories. Every footage surface is a type-only sample until the
-       owner's real footage replaces it (see the media records in
-       landing-show.js); the samples say so on screen. -->
+       0.68.0, the experience. Prime Video's lesson (owner, 2026-11-01): the
+       price at once, big buttons you press when you like, a picture that says
+       what it is without reading. Then one cinematic section (landing-show.js)
+       where raw footage flies onto a timeline, is cut into a story, becomes a
+       short, and becomes a wall of shorts. Few words everywhere else. -->
   <section class="screen active" id="screen-home">
     <div class="lp-root">
 
@@ -89,153 +85,81 @@
           <a href="#lpShow">See it edit</a>
           <a href="#lpFaq">Questions</a>
         </nav>
-        <button class="lp-btn lp-btn-line lp-btn-nav" type="button" data-start>Open the editor</button>
+        <button class="lp-btn lp-btn-sm" type="button" data-pick>Start free</button>
       </header>
 
       <main>
-        <!-- 1 · the offer. Still in every mode: nothing here moves. -->
+        <!-- 1 · the offer, Prime-style -->
         <section class="lp-hero" id="lpHero">
           <div class="lp-hero-copy">
-            <p class="lp-offer">Free.</p>
-            <h1 class="lp-title">You shoot.<br />vClyps edits.</h1>
-            <p class="lp-body">An AI first cut, with every cut yours to change.</p>
-            <div class="lp-actions">
-              <button class="lp-btn lp-btn-main" id="lpPlus" type="button" data-pick>Choose your footage</button>
-              <a class="lp-btn lp-btn-line" href="#lpShow">See it edit</a>
+            <h1 class="lp-title">The story was always there.</h1>
+            <p class="lp-lede">vClyps edits your videos for you. Drop in raw footage and get back a finished short, cut around the story. <strong>Free. No sign-up, no card, no watermark.</strong></p>
+            <div class="lp-stack">
+              <button class="lp-btn lp-btn-big" id="lpPlus" type="button" data-pick>Choose your footage</button>
+              <a class="lp-btn lp-btn-ghost lp-btn-big" href="#lpShow">Watch it edit first</a>
             </div>
-            <p class="lp-note">No sign-up. No card. No watermark.</p>
+            <p class="lp-cta-note">Just looking? <button class="lp-text-btn" type="button" data-start>Open the editor</button></p>
             <input type="file" id="lpFiles" accept="video/*,image/*,audio/*" multiple hidden />
           </div>
-          <!-- three source cuts and the short they became. Each surface is a
-               media mount: a poster or loop goes inside later, same frame. -->
-          <div class="lp-hero-pic" aria-hidden="true">
-            <div class="lp-raw">
-              <p class="lp-pic-cap">Raw clips</p>
-              <div class="lp-raw-mount">
-                <div class="lp-cut is-paper" data-media="A"><span>Fold.</span></div>
-                <div class="lp-cut is-ink" data-media="C"><span>Miss.</span></div>
-                <div class="lp-cut is-splice" data-media="F"><span>Made it.</span></div>
-                <i class="lp-raw-cap"></i>
-              </div>
-            </div>
-            <div class="lp-hero-short">
-              <div class="lp-phone">
-                <div class="lp-poster is-splice" data-media="short">
-                  <i class="lp-poster-rule"></i>
-                  <p class="lp-poster-words">One<br />more<br />try.</p>
-                  <p class="lp-poster-tag">A type-only sample</p>
-                </div>
-              </div>
-              <p class="lp-pic-cap">A finished short</p>
-            </div>
-          </div>
-          <div class="lp-drop" aria-hidden="true"><span>Drop your footage to start</span></div>
+          <div class="lp-wall" id="lpWall" aria-hidden="true"></div>
+          <div class="lp-drop" aria-hidden="true"><span>Drop to start editing</span></div>
         </section>
 
-        <!-- 2 · the show. Scroll is its clock; it never takes the scroll.
-             Without JavaScript, with reduced motion, on a short landscape
-             screen or at very large text it is the still below (is-still),
-             which landing-show.js lifts only when the motion can run well. -->
-        <section class="lp-show is-still" id="lpShow" aria-labelledby="lpShowTitle">
-          <h2 class="lp-sr" id="lpShowTitle">See it edit</h2>
-          <p class="lp-sr">An example edit: raw clips join captions, voice and music on a timeline. Pauses are removed. The edit becomes a finished short and joins a field of other stories.</p>
+        <!-- 2 · the show: scroll and it edits -->
+        <section class="lp-show" id="lpShow" aria-label="How vClyps edits: raw footage becomes a timeline, the timeline becomes a short">
           <div class="lp-show-pin">
-            <div class="lp-stage" id="lpStage">
-              <a class="lp-skip" href="#lpOwn" data-instant>Skip the show</a>
-              <div class="lp-art" id="lpArt" aria-hidden="true"></div>
+            <div class="lp-show-stage" id="lpStage"></div>
+            <div class="lp-show-say" aria-live="off">
+              <p class="is-on">Your raw footage.</p>
+              <p>vClyps watches all of it.</p>
+              <p>It finds the story and cuts out the rest.</p>
+              <p>Captions, music, timing. Done.</p>
+              <p>One upload. One finished short.</p>
+              <p>Every story deserves to be seen.</p>
             </div>
-            <div class="lp-show-act">
-              <button class="lp-btn lp-btn-main" id="lpShowPick" type="button" data-pick>Choose your footage</button>
-            </div>
-          </div>
-
-          <div class="lp-still">
-            <h2 class="lp-h2">Your footage. <span class="lp-keep">Your finished story.</span></h2>
-            <div class="lp-still-art" aria-hidden="true">
-              <div class="lp-tl">
-                <div class="lp-tl-ruler"><span>0:00</span><span>0:03</span><span>0:06</span><span>0:09</span><span>0:12</span></div>
-                <div class="lp-tl-caps"><span>Fold.</span><span>Miss.</span><span>Again.</span><span>Made it.</span></div>
-                <div class="lp-tl-clips">
-                  <div class="lp-cut is-paper"><span>Fold.</span><b>F</b></div>
-                  <div class="lp-cut is-ink"><span>Miss.</span><b>M</b></div>
-                  <div class="lp-cut is-splice"><span>Again.</span><b>A</b></div>
-                  <div class="lp-cut is-ink"><span>Made it.</span><b>M</b></div>
-                </div>
-                <p class="lp-tl-leg">Voice</p>
-                <div class="lp-tl-lane is-voice"><i class="lp-wave"></i></div>
-                <p class="lp-tl-leg">Music</p>
-                <div class="lp-tl-lane is-music"><i class="lp-wave"></i></div>
-              </div>
-              <div class="lp-still-short">
-                <div class="lp-phone">
-                  <div class="lp-poster is-splice">
-                    <i class="lp-poster-rule"></i>
-                    <p class="lp-poster-words">One<br />more<br />try.</p>
-                    <p class="lp-poster-tag">A type-only sample</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p class="lp-body">Clips, captions, voice and music, together.</p>
-            <div class="lp-actions">
-              <button class="lp-btn lp-btn-main" type="button" data-pick>Choose your footage</button>
-              <button class="lp-btn lp-btn-line" type="button" data-start>Open the editor</button>
-            </div>
+            <div class="lp-show-bar" aria-hidden="true"><i id="lpShowBar"></i></div>
           </div>
         </section>
 
-        <!-- 3 · the edit stays yours, and the quality -->
-        <section class="lp-own" id="lpOwn">
-          <div class="lp-wrap lp-own-row">
-            <div class="lp-own-copy">
-              <h2 class="lp-h2" tabindex="-1">Every cut is yours.</h2>
-              <p class="lp-body">Change the clips, captions, sound and timing in the full editor.</p>
-              <button class="lp-btn lp-btn-line" type="button" data-start>Open the editor</button>
-            </div>
-            <figure class="lp-own-pic" aria-hidden="true">
-              <div class="lp-tl">
-                <div class="lp-tl-ruler"><span>0:00</span><span>0:03</span><span>0:06</span><span>0:09</span><span>0:12</span></div>
-                <div class="lp-tl-caps"><span>Fold.</span><span>Miss.</span><span>Again.</span><span>Made it.</span></div>
-                <div class="lp-tl-clips">
-                  <div class="lp-cut is-paper"><span>Fold.</span><b>F</b></div>
-                  <div class="lp-cut is-ink"><span>Miss.</span><b>M</b></div>
-                  <div class="lp-cut is-splice"><span>Again.</span><b>A</b></div>
-                  <div class="lp-cut is-ink"><span>Made it.</span><b>M</b></div>
-                </div>
-                <p class="lp-tl-leg">Voice</p>
-                <div class="lp-tl-lane is-voice"><i class="lp-wave"></i></div>
-                <p class="lp-tl-leg">Music</p>
-                <div class="lp-tl-lane is-music"><i class="lp-wave"></i></div>
-              </div>
-              <figcaption class="lp-pic-cap">A type-only sample</figcaption>
-            </figure>
+        <!-- 3 · three things, big -->
+        <section class="lp-big">
+          <div class="lp-big-row">
+            <h2>Free.</h2>
+            <p>Edit and export in 1080p at up to 60 fps, with no watermark and no account.</p>
           </div>
-          <div class="lp-wrap lp-own-row lp-quality">
-            <h2 class="lp-h2">Keep the quality.</h2>
-            <p class="lp-body">1080p at up to 60 fps. No watermark.</p>
+          <div class="lp-big-row lp-big-shot">
+            <div>
+              <h2>A real editor, <span>when you want one.</span></h2>
+              <p>Every cut lands on a timeline. Change anything: text, captions, sound, effects, speed.</p>
+            </div>
+            <picture>
+              <source media="(max-width: 760px)" srcset="site/editor-phone.webp" type="image/webp" width="390" height="844" />
+              <source srcset="site/editor.webp" type="image/webp" />
+              <img src="site/editor.jpg" width="1440" height="900" loading="lazy" alt="The vClyps editor with two clips and a heading on the timeline." />
+            </picture>
           </div>
         </section>
 
-        <!-- 4 · questions (the owner removed the privacy statement, 2026-11-01: it convinced nobody; the policy is in the footer) -->
-        <section class="lp-trust" id="lpFaq">
-          <div class="lp-wrap">
+        <!-- 4 · questions, quietly -->
+        <section class="lp-section" id="lpFaq">
+          <div class="lp-wrap lp-split">
+            <h2 class="lp-h2">Questions</h2>
             <div class="lp-faq">
-              <h2 class="lp-h2">Questions</h2>
               <details>
                 <summary>Is it free?</summary>
-                <p>Yes. Edit and export in 1080p at up to 60 fps, with no sign-up, no card and no watermark.</p>
+                <p>Yes. Editing and exporting are free, in 1080p at up to 60 fps, with no watermark and no account.</p>
               </details>
               <details>
-                <summary>Can I change the AI edit?</summary>
-                <p>Yes. Every cut, caption and sound stays on the timeline for you to change.</p>
+                <summary>Will the edit look like a robot made it?</summary>
+                <p>The Director edits around the story in your footage, not a template. And it is only the first cut: every clip, caption and sound is on a normal timeline for you to change before you export.</p>
               </details>
               <details>
-                <summary>What can I use?</summary>
-                <p>Videos, photos and audio from your phone or computer.</p>
+                <summary>What can I edit?</summary>
+                <p>Videos, photos and music from your phone or computer, Google Drive, Dropbox, or a link. Short clips and long recordings both work.</p>
               </details>
               <details>
                 <summary>Does it work on my phone?</summary>
-                <p>Yes. Use the browser on your phone or computer, or the app.</p>
+                <p>Yes. It runs in the browser on phones and computers, with nothing to install.</p>
               </details>
             </div>
           </div>
@@ -243,14 +167,12 @@
 
         <!-- 5 · the button, one last time -->
         <section class="lp-end">
-          <div class="lp-wrap">
-            <h2 class="lp-end-title">Your next video starts here.</h2>
-            <div class="lp-end-acts">
-              <button class="lp-btn lp-btn-main" type="button" data-pick>Choose your footage</button>
-              <button class="lp-quiet" type="button" data-start>Open the editor</button>
-            </div>
-            <p class="lp-note">Free. No sign-up. No card.</p>
+          <h2 class="lp-end-title">Your story is in there.</h2>
+          <div class="lp-stack lp-stack-row">
+            <button class="lp-btn lp-btn-big" type="button" data-pick>Choose your footage</button>
+            <button class="lp-btn lp-btn-ghost lp-btn-big" type="button" data-start>Open the editor</button>
           </div>
+          <p class="lp-cta-note">Free. No sign-up, no card, no watermark.</p>
         </section>
       </main>
 
