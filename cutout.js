@@ -142,7 +142,105 @@
   }
 
   // a new project: no masks from the last one (ids start again at 1)
-  function clear() { cache.clear(); last.clear(); }
+  function clear() { generation++; choices.clear(); cache.clear(); last.clear(); }
 
-  global.SenotelCutout = { load: load, ready: ready, onReady: onReady, apply: apply, mask: mask, failed: failedNow, clear: clear };
+  // Auto's rolling cache must not evict an analysed clip during export.
+  const choices = new Map();
+  let generation = 0;
+  function points(pts) {
+    return (pts || []).filter((p) => p.length >= 3 && Number.isFinite(p[0]) && Number.isFinite(p[1]))
+      .map((p) => [Math.max(0, Math.min(1, p[0])), Math.max(0, Math.min(1, p[1])), p[2] > 0 ? 1 : -1]);
+  }
+  function chooseKey(item, media, geometry) {
+    return JSON.stringify([media.url, item.id, item.cutout.pts, item.cutout.at, item.in, item.out, item.dur, geometry]);
+  }
+  function seed(a, w, h) {
+    let sx = 0, sy = 0, n = 0, x0 = w, y0 = h, x1 = 0, y1 = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] > 127) {
+      const x = i % w, y = Math.floor(i / w);
+      sx += x; sy += y; n++;
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    if (!n) throw new Error("The object was lost. Choose it again with more points.");
+    let best = Infinity, at = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] > 127) {
+      const d = (i % w - sx / n) ** 2 + (Math.floor(i / w) - sy / n) ** 2;
+      if (d < best) { best = d; at = i; }
+    }
+    const pts = [[(at % w + 0.5) / w, (Math.floor(at / w) + 0.5) / h, 1]];
+    // A little room around the box lets the object move between source frames.
+    pts.box = [Math.max(0, x0 / w - 0.05), Math.max(0, y0 / h - 0.05),
+      Math.min(1, (x1 + 1) / w + 0.05), Math.min(1, (y1 + 1) / h + 0.05)];
+    return pts;
+  }
+  function analyse(key, spec, progress) {
+    const old = choices.get(key);
+    if (old) return old.promise;
+    if (spec.owner != null) for (const [k, oldJob] of choices) if (oldJob.owner === spec.owner) {
+      oldJob.cancelled = true; choices.delete(k);
+    }
+    const job = { frames: new Map(), p: 0, ms: 0, owner: spec.owner }, epoch = generation;
+    choices.set(key, job);
+    job.promise = (async () => {
+      const worker = new Worker(new URL("cutout-worker.js", document.baseURI), { type: "module" });
+      let bootError = null;
+      worker.onerror = (e) => { bootError = new Error(e.message || "Object worker failed"); };
+      const infer = (image, pts) => new Promise((resolve, reject) => {
+        if (bootError) { reject(bootError); return; }
+        const timer = setTimeout(() => reject(new Error("Object analysis timed out. Try again.")), 180000);
+        worker.onerror = (e) => { clearTimeout(timer); reject(new Error(e.message || "Object worker failed")); };
+        worker.onmessage = ({ data }) => {
+          if (data.progress) { if (progress) progress(job.p, data.progress); return; }
+          clearTimeout(timer);
+          if (data.error) reject(new Error(data.error)); else resolve(data.alpha);
+        };
+        worker.postMessage({ rgba: image.data, w: image.width, h: image.height, pts, box: pts.box });
+      });
+      try {
+        const lo = Math.round(spec.from * 30), hi = Math.round(spec.to * 30);
+        const first = Math.max(lo, Math.min(hi, Math.round(spec.at * 30)));
+        let count = 0, previous = null;
+        const frame = async (index, pts) => {
+          if (epoch !== generation || job.cancelled) throw new Error("Object analysis cancelled");
+          const image = await spec.frame(index / 30), began = performance.now();
+          const a = await infer(image, pts);
+          if (epoch !== generation || job.cancelled) throw new Error("Object analysis cancelled");
+          job.ms = performance.now() - began;
+          const next = seed(a, image.width, image.height);
+          if (previous) for (let i = 0; i < a.length; i++) a[i] = a[i] * 0.65 + previous[i] * 0.35;
+          a.mw = image.width; a.mh = image.height;
+          job.frames.set(index, a); previous = a;
+          job.p = ++count / (hi - lo + 1);
+          if (progress) progress(job.p);
+          return next;
+        };
+        const original = await frame(first, points(spec.pts));
+        let pts = original;
+        for (let i = first + 1; i <= hi; i++) pts = await frame(i, pts);
+        previous = job.frames.get(first); pts = original;
+        for (let i = first - 1; i >= lo; i--) pts = await frame(i, pts);
+        job.p = 1;
+      } finally { worker.terminate(); if (spec.close) spec.close(); }
+    })().catch((e) => { if (choices.get(key) === job) choices.delete(key); throw e; });
+    return job.promise;
+  }
+  function choiceStatus(key) { return choices.get(key); }
+  let choiceMaskCv = null;
+  function applyChoice(ctx, W, H, key, time, soft) {
+    const job = choices.get(key), a = job && job.frames.get(Math.round(time * 30));
+    if (!a) return false;
+    const cv = choiceMaskCv || (choiceMaskCv = document.createElement("canvas"));
+    if (cv.width !== a.mw) cv.width = a.mw;
+    if (cv.height !== a.mh) cv.height = a.mh;
+    const x = cv.getContext("2d"), img = x.createImageData(a.mw, a.mh);
+    for (let i = 0; i < a.length; i++) img.data[i * 4 + 3] = a[i];
+    x.putImageData(img, 0, 0);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.filter = "blur(" + ((soft == null ? 0.3 : soft) * Math.max(W, H) * 0.006).toFixed(1) + "px)";
+    ctx.drawImage(cv, 0, 0, W, H); ctx.restore();
+    return true;
+  }
+
+  global.SenotelCutout = { points, chooseKey, seed, analyse, choiceStatus, applyChoice, load: load, ready: ready, onReady: onReady, apply: apply, mask: mask, failed: failedNow, clear: clear };
 })(typeof window !== "undefined" ? window : globalThis);

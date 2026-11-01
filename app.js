@@ -7094,6 +7094,11 @@
   }
   function cutoutHere(ctx, W, H, item, stream, srcT, local) {
     const C = window.SenotelCutout;
+    if (item.cutout.mode === "choose") {
+      if (chooseTap && activeTool === "cutout" && S.sel && S.sel.id === item.id) return false;
+      const info = chooseInfo(item);
+      return C.applyChoice(ctx, W, H, info.key, info.m.type === "video" ? srcT : 0, item.cutout.soft);
+    }
     if (!C.ready()) {
       if (!C.failed()) { C.load().then(() => syncOverlays()).catch(() => {}); }
       return false;
@@ -7109,6 +7114,36 @@
     const C = window.SenotelCutout;
     if (!C) return;
     const on = !!item.cutout;
+    const choose = item.cutout && item.cutout.mode === "choose";
+    box.appendChild(group("Object", chipsRow([[false, "Auto"], [true, "Tap to choose"]], !!choose, (v) => {
+      if (v) { pause(); item.cutout = { mode: "choose", pts: [], at: 0, soft: 0.3 }; }
+      else { item.cutout = { soft: 0.3 }; C.load().catch(() => {}); }
+      chooseTap = v ? 1 : 0; $("stage").classList.toggle("picking", !!v); commit(); syncOverlays(); renderInspector();
+    })));
+    if (choose) {
+      box.appendChild(group("Points", chipsRow([[1, "Add point"], [-1, "Erase point"], [0, "Done"]], chooseTap, (v) => {
+        chooseTap = v; if (v) pause(); $("stage").classList.toggle("picking", !!v);
+        if (!v && item.cutout.pts.length) runChoose(item).catch((e) => toast(e.message, 6000));
+        renderInspector();
+      })));
+      box.appendChild(mk("p", "panel-note", item.cutout.pts.length + " points selected"));
+      if (item.cutout.pts.length) {
+        const back = mk("button", "mask-act", "Undo last point"); back.type = "button";
+        back.onclick = () => { item.cutout.pts.pop(); commit(); syncOverlays(); renderInspector(); }; box.appendChild(back);
+      }
+      const state = C.choiceStatus(chooseInfo(item).key);
+      const note = mk("p", "panel-note", state ? (state.p < 1 ? (state.download && state.p === 0 ? "Downloading model " + Math.round(state.download.progress || 0) + "%" : "Finding it " + Math.round(state.p * 100) + "%") : "Object ready") : "Tap points on the object, then Done. Erase points exclude background. Downloads SlimSAM on first use (about 14 MB of model weights, plus the runtime). Runs on your device.");
+      box.appendChild(note);
+      const bar = document.createElement("progress"); bar.setAttribute("aria-label", "Object analysis progress"); bar.max = 1; bar.value = state ? (state.p || (state.download && state.download.progress || 0) / 100) : 0; box.appendChild(bar);
+      box.appendChild(group("Edge", slider(0, 1, 0.05, item.cutout.soft == null ? 0.3 : item.cutout.soft, (v) => { item.cutout.soft = v; syncOverlays(); }, () => commit(), (v) => Math.round(v * 100) + "%")));
+      if (item.cutout.pts.length && !state) {
+        const retry = mk("button", "mask-act", "Find object"); retry.type = "button";
+        retry.onclick = () => runChoose(item).catch((e) => toast(e.message, 6000)); box.appendChild(retry);
+      }
+      const off = mk("button", "mask-act", "Off"); off.type = "button";
+      off.onclick = () => { chooseTap = 0; $("stage").classList.remove("picking"); delete item.cutout; commit(); syncOverlays(); renderInspector(); }; box.appendChild(off);
+      return;
+    }
     box.appendChild(group("Remove background", chipsRow([[false, "Off"], [true, "Auto (person)"]], on, (v) => {
       if (v) { item.cutout = { soft: 0.3 }; C.load().then(() => { syncOverlays(); renderInspector(); }).catch(() => renderInspector()); }
       else delete item.cutout;
@@ -7123,6 +7158,93 @@
     box.appendChild(mk("p", "panel-note", C.failed() ? "The cutout model could not be loaded. Check the connection and try again."
       : C.ready() ? "Only the person is kept. Put this on an overlay to stand them in front of another video." : "Getting the cutout ready (first time only)…"));
   }
+
+  let chooseTap = 0;
+  function chooseInfo(item) {
+    item = S.clips.find((c) => c.id === item.id) || S.broll.find((b) => b.id === item.id) || item;
+    const overlay = S.broll.some((b) => b.id === item.id), m = mediaById(item.mediaId);
+    const size = exportSize(), g = overlay ? brollGeom(item, { x: 0, y: 0, w: size.w, h: size.h }) : null;
+    const W = g ? g.w : size.w, H = g ? g.h : size.h;
+    const k = 256 / Math.max(W, H), w = Math.max(8, Math.round(W * k)), h = Math.max(8, Math.round(H * k));
+    // Geometry and timing changes invalidate the entire analysis, softness does not.
+    const plain = Object.assign({}, item, { cutout: null });
+    const geometry = JSON.stringify([plain, w, h]);
+    return { key: SenotelCutout.chooseKey(item, m, geometry), overlay, m, w, h };
+  }
+  async function runChoose(item, progress) {
+    if (!item.cutout || item.cutout.mode !== "choose") return;
+    if (!item.cutout.pts.some((p) => p[2] > 0)) throw new Error("Add a point on the object first.");
+    chooseTap = 0; $("stage").classList.remove("picking");
+    const info = chooseInfo(item), C = SenotelCutout;
+    const existing = C.choiceStatus(info.key);
+    if (existing) {
+      const timer = progress ? setInterval(() => progress(existing.p), 200) : null;
+      try { return await existing.promise; } finally { if (timer) clearInterval(timer); }
+    }
+    const { m, overlay, w, h } = info;
+    const el = document.createElement(m.type === "video" ? "video" : "img");
+    const wait = (name, action) => new Promise((resolve, reject) => {
+      const done = (err) => { clearTimeout(timer); el.removeEventListener(name, ok); el.removeEventListener("error", bad); err ? reject(err) : resolve(); };
+      const ok = () => done(), bad = () => done(new Error("The source frame could not be read"));
+      const timer = setTimeout(bad, 15000);
+      el.addEventListener(name, ok, { once: true }); el.addEventListener("error", bad, { once: true }); action();
+    });
+    el.muted = true; el.playsInline = true; el.preload = "auto";
+    const loaded = wait(m.type === "video" ? "loadeddata" : "load", () => { el.src = m.url; });
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const x = cv.getContext("2d", { willReadFrequently: true });
+    const plain = JSON.parse(JSON.stringify(item)); plain.cutout = null;
+    let from = overlay ? (item.in || 0) : item.in;
+    let to = m.type === "video" ? (overlay ? from + item.dur : item.out) : from;
+    if (overlay && m.duration && to >= m.duration) { from = 0; to = m.duration; }
+    if (m.type !== "video") { from = 0; to = 0; }
+    return C.analyse(info.key, {
+      owner: m.url + ":" + item.id, from, to, at: clamp(overlay && m.duration ? item.cutout.at % m.duration : item.cutout.at, from, to), pts: item.cutout.pts,
+      frame: async (time) => {
+        await loaded;
+        const target = m.type === "video" ? clamp(overlay ? time % m.duration : time, 0, Math.max(0, m.duration - 0.001)) : 0;
+        if (m.type === "video" && Math.abs(el.currentTime - target) > 0.0001) await wait("seeked", () => { el.currentTime = target; });
+        const sw = el.videoWidth || el.naturalWidth, sh = el.videoHeight || el.naturalHeight;
+        x.clearRect(0, 0, w, h);
+        if (!overlay) drawClipPicture(x, plain, { el, w: sw, h: sh }, w, h, dispOff(item, time - item.in));
+        else {
+          const sc = Math.max(w / sw, h / sh), dw = sw * sc, dh = sh * sc;
+          const mcx = (m.analysis && m.analysis.vis && m.analysis.vis.avgMcx) || 0.5;
+          const dx = dw > w + 1 ? clamp(w / 2 - mcx * dw, w - dw, 0) : (w - dw) / 2;
+          x.drawImage(el, dx, (h - dh) / 2, dw, dh);
+        }
+        return x.getImageData(0, 0, w, h);
+      },
+      close: () => { if (el.pause) el.pause(); el.removeAttribute("src"); if (el.load) el.load(); }
+    }, (p, download) => {
+      if (progress) progress(p, download);
+      const state = C.choiceStatus(info.key);
+      if (state && download) state.download = download;
+      if (activeTool === "cutout") renderInspector();
+      syncOverlays();
+    }).finally(() => { syncOverlays(); renderInspector(); });
+  }
+  $("stage").addEventListener("pointerdown", (e) => {
+    if (!chooseTap || activeTool !== "cutout" || !S.sel) return;
+    const item = S.sel.type === "broll" ? brollById(S.sel.id) : S.clips.find((c) => c.id === S.sel.id);
+    if (!item || !item.cutout || item.cutout.mode !== "choose") return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    const r = $("layoutCanvas").getBoundingClientRect(), bx = pictureBox();
+    let u = (e.clientX - r.left - bx.x) / bx.w, v = (e.clientY - r.top - bx.y) / bx.h;
+    const info = chooseInfo(item);
+    if (info.overlay) {
+      const g = brollGeom(itemView(item, S.time - item.start), bx), a = -(g.rot || 0) * Math.PI / 180;
+      const dx = e.clientX - r.left - g.cx, dy = e.clientY - r.top - g.cy;
+      u = (dx * Math.cos(a) - dy * Math.sin(a)) / g.w + 0.5;
+      v = (dx * Math.sin(a) + dy * Math.cos(a)) / g.h + 0.5;
+    }
+    if (u < 0 || u > 1 || v < 0 || v > 1) return;
+    const at = info.overlay ? (item.in || 0) + S.time - item.start : item.in + srcOff(item, S.time - clipStartOf(item));
+    if (item.cutout.pts.length && Math.abs(item.cutout.at - at) > 1 / 30) item.cutout.pts = [];
+    item.cutout.at = at;
+    item.cutout.pts = SenotelCutout.points(item.cutout.pts.concat([[u, v, chooseTap]]));
+    commit(); renderInspector();
+  }, true);
 
   /* ═══════════ TRACKING (ccl18, 0.46.0) ═══════════
      CapCut's Tracking, in the text, sticker and overlay bars: a box appears
@@ -11962,7 +12084,12 @@
       // ccl16 + ccl19 body effects: a cutout in the edit needs its model before the first frame is drawn
       if (window.SenotelCutout && (S.clips.some((c) => c.cutout) || S.broll.some((b) => b.cutout) || S.effects.some((e) => /^body-/.test(e.type)))) {
         $("expStatus").textContent = "getting the cutout ready…";
-        try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
+        if (S.clips.concat(S.broll).some((c) => c.cutout && c.cutout.mode !== "choose") || S.effects.some((e) => /^body-/.test(e.type))) {
+          try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
+        }
+        for (const item of S.clips.concat(S.broll)) if (item.cutout && item.cutout.mode === "choose") {
+          await runChoose(item, (p) => { $("expStatus").textContent = "Finding object " + Math.round(p * 100) + "%"; });
+        }
         if (!stillHere()) return;
       }
 
@@ -12425,7 +12552,12 @@
       // ccl16 + ccl19 body effects: a cutout in the edit needs its model before the first frame is drawn
       if (window.SenotelCutout && (S.clips.some((c) => c.cutout) || S.broll.some((b) => b.cutout) || S.effects.some((e) => /^body-/.test(e.type)))) {
         $("expStatus").textContent = "getting the cutout ready…";
-        try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
+        if (S.clips.concat(S.broll).some((c) => c.cutout && c.cutout.mode !== "choose") || S.effects.some((e) => /^body-/.test(e.type))) {
+          try { await SenotelCutout.load(); } catch (e) { toast("The background removal could not be loaded, so this export keeps the backgrounds", 6000); }
+        }
+        for (const item of S.clips.concat(S.broll)) if (item.cutout && item.cutout.mode === "choose") {
+          await runChoose(item, (p) => { $("expStatus").textContent = "Finding object " + Math.round(p * 100) + "%"; });
+        }
         if (run !== EXP.run || EXP.cancelled) return;
       }
 
