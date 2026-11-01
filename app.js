@@ -7307,9 +7307,9 @@
         back.onclick = () => { item.cutout.pts.pop(); commit(); syncOverlays(); renderInspector(); }; box.appendChild(back);
       }
       const state = C.choiceStatus(chooseInfo(item).key);
-      const note = mk("p", "panel-note", state ? (state.p < 1 ? (state.download && state.p === 0 ? "Downloading model " + Math.round(state.download.progress || 0) + "%" : "Finding it " + Math.round(state.p * 100) + "%") : "Object ready") : "Tap points on the object, then Done. Erase points exclude background. Downloads SlimSAM on first use (about 14 MB on CPU or 21-40 MB on GPU, plus the runtime). Runs on your device.");
+      const note = mk("p", "panel-note", state ? (state.p < 1 ? (state.download && state.p === 0 ? "Downloading the model " + Math.round(state.download.progress || 0) + "%" : "Finding it " + Math.round(state.p * 100) + "%") : "Object ready") : "Tap the thing to keep, then Done. Erase point marks what to remove. Runs on your device; the first time it downloads its model (about 20 to 40 MB).");
       if (state && state.p < 1) {
-        if (state.device === "wasm") note.textContent += ". WebGPU unavailable. This will take a while";
+        if (state.device === "wasm") note.textContent += ". This device has no fast graphics for it, so it will take a while";
         if (state.remaining != null) note.textContent += state.remaining >= 60 ? "; about " + Math.max(1, Math.round(state.remaining / 60)) + " minutes remaining" : "; about " + Math.max(1, Math.round(state.remaining)) + " seconds remaining";
       }
       box.appendChild(note);
