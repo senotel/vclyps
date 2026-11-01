@@ -4,7 +4,7 @@
    texts in the project, with t.sticker set):
      emoji   drawn from Noto Color Emoji (free, SIL Open Font License),
              fetched only for the emoji actually used
-     shapes  drawn here in code: arrows, highlight circles, underlines,
+     shapes  65 drawn here in code: arrows, highlight circles, underlines,
              bursts, bubbles, buttons. Sharp at any size, in any colour.
    No image files, nothing bundled, nothing to license per use.
    Exposes window.SenotelStickers.
@@ -216,6 +216,74 @@
     ["link-bio", "Link in bio", "#ffe600"], ["rec", "REC", "#ff3b30"], ["tape", "Tape", "#f5d76e"], ["corners", "Viewfinder", "#ffffff"],
     ["pin", "Place", "#dc143c"], ["exclaim", "Alert", "#ff9500"]
   ];
+
+  // Static shapes use the existing text animation controls. No frame history.
+  function addShape(id, name, draw) {
+    SHAPES[id] = draw; SHAPE_LIST.push([id, name, "#edeae2"]);
+  }
+  function strokeShape(id, name, pts, width) {
+    addShape(id, name, function (c, s, col) {
+      c.strokeStyle = col; c.lineWidth = s * 0.055; c.lineCap = "round"; c.lineJoin = "round";
+      var start = true;
+      c.beginPath(); pts.forEach(function (p) {
+        if (!p) { start = true; return; }
+        c[start ? "moveTo" : "lineTo"](p[0] * s, p[1] * s); start = false;
+      }); c.stroke(); return s * width;
+    });
+  }
+  strokeShape("arrow-double", "Double arrow", [[-.7,0],[.7,0],[.4,-.25],[.7,0],[.4,.25],[.7,0],[-.7,0],[-.4,-.25],[-.7,0],[-.4,.25]], 1.5);
+  strokeShape("arrow-elbow", "Elbow arrow", [[-.6,.35],[-.6,-.25],[.6,-.25],[.35,-.48],[.6,-.25],[.35,0]], 1.4);
+  strokeShape("arrow-sketch", "Sketch arrow", [[-.65,.3],[-.3,.12],[0,-.08],[.6,-.25],[.3,-.4],[.6,-.25],[.4,.05]], 1.4);
+  strokeShape("pointer", "Pointer", [[-.5,.4],[.5,-.4],[.1,-.35],[.5,-.4],[.45,0]], 1.2);
+  strokeShape("arrow-u", "Turn arrow", [[-.55,.35],[-.55,-.3],[.45,-.3],[.45,.3],[.2,.05],[.45,.3],[.7,.05]], 1.5);
+  strokeShape("underline-wave", "Wave underline", [[-.8,0],[-.6,-.1],[-.4,.1],[-.2,-.1],[0,.1],[.2,-.1],[.4,.1],[.6,-.1],[.8,0]], 1.7);
+  strokeShape("strike", "Strike through", [[-.8,.08],[.8,-.08]], 1.7);
+  strokeShape("underline-double", "Double underline", [[-.8,-.08],[.8,-.08],null,[.8,.08],[-.8,.08]], 1.7);
+  strokeShape("zigzag", "Zigzag", [[-.7,.3],[-.35,-.3],[0,.3],[.35,-.3],[.7,.3]], 1.5);
+  strokeShape("accent-lines", "Accent lines", [[-.55,-.4],[-.25,-.15],null,[0,-.45],[0,-.1],null,[.55,-.4],[.25,-.15]], 1.2);
+  ["marker-swipe", "highlight-box", "rounded-border", "focus-box"].forEach(function (id, i) {
+    addShape(id, ["Marker swipe", "Highlight box", "Rounded border", "Focus box"][i], function (c, s, col) {
+      c.strokeStyle = c.fillStyle = col; c.lineWidth = s * .045;
+      rr(c, -s * .8, -s * (i ? .43 : .16), s * 1.6, s * (i ? .86 : .32), s * (i === 2 ? .16 : .02));
+      if (!i) { c.globalAlpha *= .55; c.fill(); } else c.stroke();
+      if (i === 3) { c.beginPath(); c.moveTo(-s*.12,0); c.lineTo(s*.12,0); c.moveTo(0,-s*.12); c.lineTo(0,s*.12); c.stroke(); }
+      return s * 1.7;
+    });
+  });
+  addShape("circle-scribble", "Circle scribble", function (c,s,col) {
+    c.strokeStyle=col; c.lineWidth=s*.035;
+    c.beginPath(); c.ellipse(0,0,s*.65,s*.4,-.08,0,Math.PI*2); c.stroke();
+    c.beginPath(); c.ellipse(s*.02,0,s*.68,s*.36,.08,0,Math.PI*1.9); c.stroke(); return s*1.45;
+  });
+  ["speech-sharp", "speech-round", "shout", "callout-left", "callout-right"].forEach(function(id,i) {
+    addShape(id,["Sharp bubble","Round bubble","Shout bubble","Callout left","Callout right"][i],function(c,s,col) {
+      c.fillStyle=col;
+      if(i===2) { c.save(); c.scale(1.5,.8); burst(c,s,12,.37,col); c.restore(); }
+      else { rr(c,-s*.7,-s*.4,s*1.4,s*.65,i===1?s*.24:s*.04); c.fill(); }
+      var x=i===4?s*.4:-s*.4;
+      c.beginPath(); c.moveTo(x-s*.12,s*.2); c.lineTo(x,s*.48); c.lineTo(x+s*.18,s*.2); c.closePath(); c.fill(); return s*1.5;
+    });
+  });
+  [["sale-tag","Sale","SALE"],["live-tag","Live","LIVE"],["share","Share","SHARE"],["save-button","Save","SAVE"],["comment-button","Comment","COMMENT"],["watch-button","Watch","WATCH"]].forEach(function(e) {
+    addShape(e[0],e[1],function(c,s,col){return label(c,e[2],s,"#111210",col,e[2].length*.22+.5);});
+  });
+  addShape("price-tag","Price tag",function(c,s,col) {
+    c.fillStyle=col; c.beginPath(); c.moveTo(-s*.75,0); c.lineTo(-s*.4,-s*.35); c.lineTo(s*.7,-s*.35); c.lineTo(s*.7,s*.35); c.lineTo(-s*.4,s*.35); c.closePath(); c.fill();
+    c.fillStyle="#111210"; c.beginPath(); c.arc(-s*.4,0,s*.065,0,Math.PI*2); c.fill(); return s*1.55;
+  });
+  for(var rating=1;rating<=5;rating++) (function(n) {
+    addShape("rating-"+n,n+" star rating",function(c,s,col) {
+      for(var j=0;j<5;j++) { c.save(); c.translate((j-2)*s*.36,0); c.globalAlpha*=j<n?1:.2; burst(c,s*.33,5,.2,col); c.restore(); } return s*1.85;
+    });
+  })(rating);
+  addShape("dots","Dots",function(c,s,col){ c.fillStyle=col; for(var i=-1;i<=1;i++){c.beginPath();c.arc(i*s*.38,0,s*.09,0,Math.PI*2);c.fill();}return s;});
+  addShape("confetti","Confetti pieces",function(c,s,col){c.fillStyle=col;for(var i=0;i<9;i++){c.save();c.translate(((i*7)%9-4)*s*.14,(Math.floor(i/3)-1)*s*.3);c.rotate(i*.7);c.fillRect(-s*.035,-s*.08,s*.07,s*.16);c.restore();}return s*1.4;});
+  strokeShape("bracket-left","Left bracket",[[.3,-.45],[-.3,-.45],[-.3,.45],[.3,.45]],.8);
+  strokeShape("bracket-right","Right bracket",[[-.3,-.45],[.3,-.45],[.3,.45],[-.3,.45]],.8);
+  addShape("oval-border","Oval border",function(c,s,col){c.strokeStyle=col;c.lineWidth=s*.04;c.beginPath();c.ellipse(0,0,s*.72,s*.43,0,0,Math.PI*2);c.stroke();return s*1.55;});
+  addShape("diamond-border","Diamond border",function(c,s,col){c.strokeStyle=col;c.lineWidth=s*.04;c.beginPath();c.moveTo(0,-s*.45);c.lineTo(s*.7,0);c.lineTo(0,s*.45);c.lineTo(-s*.7,0);c.closePath();c.stroke();return s*1.5;});
+  addShape("check-badge","Tick badge",function(c,s,col){burst(c,s,12,.43,col);SHAPES.check(c,s*.65,"#111210");return s;});
+  addShape("cross-badge","Cross badge",function(c,s,col){c.fillStyle=col;c.beginPath();c.arc(0,0,s*.48,0,Math.PI*2);c.fill();SHAPES.cross(c,s*.65,"#111210");return s;});
 
   // draw shape id, s high, centred on (0, 0); returns its width
   function drawShape(c, id, s, color) {
