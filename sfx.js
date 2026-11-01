@@ -3,7 +3,8 @@
    The editing app by Senotel.
 
    ── RECORDINGS FIRST (0.25.0) ─────────────────────────────────────────────
-   Twenty short-form sound effects, each a REAL RECORDING released as CC0
+   Short-form sound effects (twenty in 0.25.0, 59 since 2026-11-01), each
+   a REAL RECORDING released as CC0
    (public domain: commercial use, no credit owed) on Freesound, picked on
    2026-10-08 by downloads and rating, then checked by measurement: no
    clipping, a clean noise floor, a body that starts where it should. Each
@@ -18,8 +19,8 @@
    gap with better synthesis was tried and failed.
 
    The synthesised voices below are kept ONLY as a fallback for the first
-   ten, for a device that is offline before the recordings have loaded. The
-   ten added in 0.25.0 have no fallback.
+   ten, for a device that is offline before the recordings have loaded.
+   Every sound added since (0.25.0 and 2026-11-01) has no fallback.
 
    Licensing: CC0 only, checked on each sound's own page, and nothing whose
    title points at a meme, a show or a brand, because those are often
@@ -158,7 +159,59 @@
     shutter:     [270435, "270/270435_3177988-hq.mp3", 0, 0.16, 0.01, 0.9, "chrisvink"],
     kaching:     [209578, "209/209578_2558531-hq.mp3", 0.08, 2.3, 0.5, 0.762, "Zott820, after CapsLok"],
     drumroll:    [165523, "165/165523_1080202-hq.mp3", 6.03, 12.4, 1.4, 1.183, "zemidlo", 0.45],
-    gasp:        [324898, "324/324898_2104797-hq.mp3", 0.55, 2.4, 0.5, 0.796, "a Freesound member, account since deleted"]
+    gasp:        [324898, "324/324898_2104797-hq.mp3", 0.55, 2.4, 0.5, 0.796, "a Freesound member, account since deleted"],
+
+    /* The 39 added 2026-11-01 (round 2, stage 4), the same way: CC0 checked
+       on each page that day, picked by downloads and rating, then measured
+       (no clipping, a clean floor, the body where the trim says). Level is
+       the same loudness as the first 20 (their median on this meter, about
+       -16.5), except where the 0.9 peak cap holds a very peaky sound under
+       it: tick, typing, footsteps, heartbeat, slap and click sit 2 to 10dB
+       quieter, which suits sounds that are small in life too. Wind and rain
+       are cut from the middle of a long recording, so they swell in.
+       Splash is roboroo's own take: the more downloaded one by qubodup is a
+       mix whose oldest source page is gone, so its licence cannot be read.
+       Rain is soundrecorder7's (rated 4.9) and not morsine's, which is the
+       same quality in a 1.9MB file for a 4 second cut. */
+    boing:       [540790, "540/540790_11537497-hq.mp3", 0, 1.0, 0.25, 0.952, "magnuswaker"],
+    bonk:        [573047, "573/573047_12946586-hq.mp3", 0.465, 0.95, 0.1, 0.879, "thecoolcookie17"],
+    slidewhistle:[433567, "433/433567_6336990-hq.mp3", 2.35, 4.12, 0.15, 0.791, "reasanka"],
+    punch:       [104183, "104/104183_1690027-hq.mp3", 0.37, 0.8, 0.1, 0.382, "Ekokubza123"],
+    slap:        [444407, "444/444407_7231443-hq.mp3", 0.03, 0.4, 0.12, 1.11, "MootMcnoodles"],
+    glass:       [212698, "212/212698_2585359-hq.mp3", 0.46, 1.15, 0.2, 1.221, "dasebr"],
+    explosion:   [560510, "560/560510_9250976-hq.mp3", 3.0, 5.5, 0.9, 0.896, "Nox_Sound"],
+    thunder:     [399656, "399/399656_2341984-hq.mp3", 0.2, 3.6, 1.2, 0.641, "bajko"],
+    heartbeat:   [273150, "273/273150_3094998-hq.mp3", 0.3, 2.6, 0.3, 1.149, "michorvath"],
+    tick:        [130388, "130/130388_2037384-hq.mp3", 0, 3.0, 0.3, 14.286, "olver"],
+    alarm:       [14262, "14/14262_31076-hq.mp3", 0.15, 2.6, 0.4, 1.284, "xyzr_kx"],
+    vibrate:     [529979, "529/529979_1654547-hq.mp3", 0, 1.027, 0.05, 1.356, "lartti"],
+    notify:      [235911, "235/235911_2391840-hq.mp3", 0, 0.6, 0.1, 1.454, "yfjesse"],
+    typing:      [331656, "331/331656_5825863-hq.mp3", 4.5, 7.0, 0.4, 3.6, "Trollarch2"],
+    click:       [678248, "678/678248_7806746-hq.mp3", 0.36, 0.6, 0.05, 0.95, "Pixeliota"],
+    typewriter:  [138049, "138/138049_2423928-hq.mp3", 0.09, 2.5, 0.4, 2.711, "pakasit21"],
+    knock:       [256513, "256/256513_4772965-hq.mp3", 0.06, 0.75, 0.15, 1.017, "HunteR4708"],
+    creak:       [219499, "219/219499_4056007-hq.mp3", 0.36, 0.92, 0.15, 1.726, "JarredGibb"],
+    footsteps:   [50725, "50/50725_179538-hq.mp3", 12.08, 14.5, 0.4, 1.223, "RutgerMuller"],
+    cheer:       [365132, "365/365132_3279490-hq.mp3", 1.0, 4.5, 1.0, 1.719, "SoundsExciting"],
+    boo:         [353925, "353/353925_4161250-hq.mp3", 0.05, 2.6, 0.7, 0.458, "dr_skitz"],
+    aww:         [124996, "124/124996_687791-hq.mp3", 0.12, 1.99, 0.5, 0.933, "phmiller42"],
+    ooh:         [264499, "264/264499_3890365-hq.mp3", 6.05, 7.9, 0.4, 0.592, "noah0189"],
+    swipe:       [72190, "72/72190_1070711-hq.mp3", 0.03, 0.5, 0.1, 1.056, "snowflakes"],
+    bubbles:     [16740, "16/16740_26950-hq.mp3", 8.0, 10.4, 0.5, 3.576, "kijjaz"],
+    splash:      [436792, "436/436792_3206727-hq.mp3", 0, 1.6, 0.4, 0.952, "roboroo"],
+    wind:        [22331, "22/22331_124894-hq.mp3", 3.5, 7.5, 1.2, 1.463, "sleepCircle", 0.6],
+    rain:        [167034, "167/167034_2328971-hq.mp3", 5.0, 9.0, 1.0, 23.809, "soundrecorder7", 0.5],
+    birds:       [519120, "519/519120_6142149-hq.mp3", 21.75, 25.75, 0.8, 6.678, "LilMati"],
+    rewind:      [178555, "178/178555_2551263-hq.mp3", 0.36, 1.62, 0.05, 0.346, "richienoodles"],
+    glitch:      [332711, "332/332711_5695297-hq.mp3", 0, 1.15, 0.08, 0.925, "AmicaSys"],
+    levelup:     [442943, "442/442943_71257-hq.mp3", 0.02, 1.6, 0.3, 0.487, "qubodup"],
+    success:     [171671, "171/171671_2437358-hq.mp3", 0, 2.4, 0.6, 0.921, "Leszek_Szary"],
+    error:       [242503, "242/242503_4414128-hq.mp3", 0, 0.397, 0.05, 2.783, "GabrielAraujo"],
+    dogbark:     [386766, "386/386766_5768130-hq.mp3", 0.6, 1.75, 0.1, 0.882, "ken788"],
+    tada:        [397355, "397/397355_4284968-hq.mp3", 0.01, 1.6, 0.3, 1.125, "plasterbrain"],
+    honk:        [434878, "434/434878_3388578-hq.mp3", 0, 0.8, 0.15, 0.596, "MicktheMicGuy"],
+    schoolbell:  [378394, "378/378394_7020630-hq.mp3", 0.17, 2.8, 0.7, 0.582, "a Freesound member, account since deleted"],
+    swoosh2:     [701104, "701/701104_13504080-hq.mp3", 0.3, 1.5, 0.3, 0.961, "xkeril"]
   };
 
   /* Where the files come from. BUNDLED false: Freesound's own CDN, which
@@ -897,13 +950,176 @@
     gasp:    { label: "Crowd gasp", hit: 0.32, max: 1,
                tags: ["shock", "reveal", "crowd"],
                about: "A crowd, shocked.",
-               use: "A shocking reveal, a surprising number, something going badly wrong, in the breath after it. Once per video, never on something genuinely tragic." }
+               use: "A shocking reveal, a surprising number, something going badly wrong, in the breath after it. Once per video, never on something genuinely tragic." },
+
+    /* Added 2026-11-01. Comic sounds say "comedy only"; ambience (wind,
+       rain, birds) only goes under a pause or b-roll, never over a line. */
+    boing:   { label: "Boing", hit: 0.02, max: 2,
+               tags: ["bounce", "jump", "cartoon", "funny"],
+               about: "A twangy cartoon bounce.",
+               use: "Something bouncing, a jump, a silly recoil, a head popping into frame. Comedy only, at most twice per video." },
+    bonk:    { label: "Bonk", hit: 0.02, max: 2,
+               tags: ["hit", "head", "cartoon", "funny"],
+               about: "A hollow cartoon knock on the head.",
+               use: "A light hit for comedy: a bump on the head, a dumb idea landing, a light tap of correction. Comedy only, at most twice per video, never on a real injury." },
+    slidewhistle: { label: "Slide whistle", hit: 0.45, max: 1,
+               tags: ["fall", "drop", "cartoon", "fail"],
+               about: "A whistle sliding down. Something falling.",
+               use: "Something falling or deflating for comedy: a fall, a plan sinking, a number dropping. Comedy only, once per video, never over real bad news." },
+    punch:   { label: "Punch", hit: 0.03, max: 2,
+               tags: ["hit", "fight", "impact"],
+               about: "A solid punch landing.",
+               use: "A hit landing: a punchline delivered like a blow, a mock fight, a hard statement. At most twice per video, never over real violence." },
+    slap:    { label: "Slap", hit: 0.01, max: 1,
+               tags: ["hit", "reaction", "funny"],
+               about: "A sharp slap.",
+               use: "A mock slap or a 'snap out of it' moment, a reality check delivered as a joke. Comedy only, once per video." },
+    glass:   { label: "Glass break", hit: 0.02, max: 1,
+               tags: ["break", "shatter", "crash"],
+               about: "Glass shattering.",
+               use: "Something breaking: a myth shattered, a plan falling apart, an expectation smashed. Once per video, never under speech that matters." },
+    explosion: { label: "Explosion", hit: 0.03, max: 1,
+               tags: ["blast", "impact", "boom", "reveal"],
+               about: "A real blast with debris.",
+               use: "Something blowing up, figuratively: mind blown, a huge reveal, a result that wrecks expectations. Bigger and rougher than boom; never both on one moment. Once per video." },
+    thunder: { label: "Thunder", hit: 0.2, max: 1,
+               tags: ["storm", "drama", "ominous"],
+               about: "A thunderclap rolling away.",
+               use: "Ominous drama: a dark turn, a 'but then', a dramatic warning, a storm on screen. Once per video, in a pause, never under a line that matters." },
+    heartbeat: { label: "Heartbeat", hit: 0.06, max: 1,
+               tags: ["tension", "nervous", "suspense"],
+               about: "Two slow heartbeats.",
+               use: "Tension or nerves: waiting for a result, a nervous confession, the second before a reveal. Once per video, quiet under a pause." },
+    tick:    { label: "Clock ticking", hit: 0.03, max: 1,
+               tags: ["time", "waiting", "deadline", "clock"],
+               about: "A clock ticking.",
+               use: "Time passing or running out: a deadline, a countdown, waiting for something. Once per video, under a pause or b-roll." },
+    alarm:   { label: "Alarm clock", hit: 0.06, max: 1,
+               tags: ["wake", "morning", "ring"],
+               about: "An old bell alarm clock ringing.",
+               use: "Waking up, a morning routine starting, a wake-up call moment. Once per video, never over a line that matters." },
+    vibrate: { label: "Phone buzz", hit: 0.02, max: 2,
+               tags: ["phone", "message", "notification"],
+               about: "A phone vibrating twice.",
+               use: "A phone getting a message or a call on screen or in the story: 'then my phone buzzed'. At most twice per video." },
+    notify:  { label: "Message ping", hit: 0, max: 3,
+               tags: ["message", "notification", "chat", "ui"],
+               about: "A soft chat notification.",
+               use: "A message arriving: a text or DM appearing on screen, a comment popping up, a notification in the story." },
+    typing:  { label: "Keyboard typing", hit: 0.02, max: 2,
+               tags: ["computer", "work", "typing", "desk"],
+               about: "Typing on a mechanical keyboard.",
+               use: "Someone typing or working at a computer, a search being typed, a message being written. Quiet, under b-roll or a pause." },
+    click:   { label: "Mouse click", hit: 0.02,
+               tags: ["click", "computer", "ui", "select"],
+               about: "A mouse click.",
+               use: "Clicking or choosing something: a button pressed on screen, a cursor on a screen recording, a 'click' in the story." },
+    typewriter: { label: "Typewriter", hit: 0.02, max: 1,
+               tags: ["writing", "text", "title", "story"],
+               about: "Typewriter keys striking.",
+               use: "Text typing itself onto the screen, a title being written, a story or letter beginning. Once per video." },
+    knock:   { label: "Door knock", hit: 0.02, max: 1,
+               tags: ["door", "knock", "arrive"],
+               about: "Knocking on a wooden door.",
+               use: "Someone arriving, 'knock knock', opportunity knocking, a new chapter at the door. Once per video, in a pause." },
+    creak:   { label: "Door creak", hit: 0.08, max: 1,
+               tags: ["door", "creepy", "sneak", "open"],
+               about: "A door creaking.",
+               use: "Something creepy or sneaky: a door opening on a secret, a slow suspicious reveal. Once per video, in a pause." },
+    footsteps: { label: "Footsteps", hit: 0.04, max: 2,
+               tags: ["walk", "steps", "arrive", "leave"],
+               about: "Footsteps on a hard floor.",
+               use: "Someone walking in or away, sneaking up, leaving the room. Quiet, under b-roll or a pause, never over speech." },
+    cheer:   { label: "Crowd cheer", hit: 0.07, max: 1,
+               tags: ["crowd", "win", "celebrate", "hype"],
+               about: "A crowd cheering and whooping.",
+               use: "A big win or a hype moment: the result everyone wanted, a goal, a triumphant finish. Louder and wilder than applause; never both. Once per video, in a pause or the closing beat." },
+    boo:     { label: "Crowd boo", hit: 0.17, max: 1,
+               tags: ["crowd", "boo", "bad", "joke"],
+               about: "A small crowd booing.",
+               use: "A terrible take, a bad pun, a villain moment, played as a joke. Comedy only, once per video, never at a real person being hurt." },
+    aww:     { label: "Crowd aww", hit: 0.1, max: 1,
+               tags: ["crowd", "cute", "sad", "sympathy"],
+               about: "An audience going 'aww'.",
+               use: "Something cute or a small letdown met with sympathy: a pet, a baby, a tiny fail. Once per video, in the breath after it, never over real grief." },
+    ooh:     { label: "Crowd ooh", hit: 0.3, max: 1,
+               tags: ["crowd", "impressed", "wow", "reveal"],
+               about: "An audience going 'ooh', impressed.",
+               use: "Something impressive: a slick trick, a beautiful result, a fancy reveal, in the breath after it. Once per video." },
+    swipe:   { label: "Swipe", hit: 0.02,
+               tags: ["transition", "swipe", "fast", "motion"],
+               about: "A short sharp swish.",
+               use: "A quick swipe: text or a panel sliding in, a fast wipe between shots, a flick through options. Shorter and brighter than whoosh; never both on one cut." },
+    bubbles: { label: "Bubbles", hit: 0.08, max: 1,
+               tags: ["water", "underwater", "drink", "bubble"],
+               about: "Water bubbling.",
+               use: "Water, drinks or underwater shots, something brewing or fizzing. Once per video, under b-roll or a pause." },
+    splash:  { label: "Splash", hit: 0.01, max: 1,
+               tags: ["water", "splash", "jump", "spill"],
+               about: "A big water splash.",
+               use: "Something hitting water: a jump into a pool, a drink spilling, diving into a topic. Once per video." },
+    wind:    { label: "Wind", hit: 0, max: 1,
+               tags: ["ambience", "outdoors", "empty", "cold"],
+               about: "A hollow wind. Ambience.",
+               use: "Emptiness or the outdoors: a lonely moment, a tumbleweed silence, a cold or windy place on screen. Ambience only, under a pause or b-roll, never over a line. Once per video." },
+    rain:    { label: "Rain", hit: 0, max: 1,
+               tags: ["ambience", "weather", "calm", "sad"],
+               about: "Light steady rain. Ambience.",
+               use: "Rain on screen, a calm or melancholy mood, a cosy moment indoors. Ambience only, under a pause or b-roll, never over a line. Once per video." },
+    birds:   { label: "Birdsong", hit: 0.1, max: 1,
+               tags: ["ambience", "nature", "morning", "calm"],
+               about: "Small birds tweeting. Ambience.",
+               use: "Nature or a fresh start: a morning scene, a park, a peaceful outdoor shot. Ambience only, under a pause or b-roll, never over a line. Once per video." },
+    rewind:  { label: "Rewind", hit: 0, max: 1,
+               tags: ["rewind", "flashback", "back", "time"],
+               about: "A record wound backwards.",
+               use: "Going back in time: 'let's rewind', a flashback, replaying a moment. Once per video, on the cut into the flashback." },
+    glitch:  { label: "Glitch", hit: 0, max: 2,
+               tags: ["glitch", "digital", "error", "transition"],
+               about: "A digital glitch stutter.",
+               use: "Something digital breaking or a glitch transition: a tech fail, a brain short-circuiting, a glitchy cut. At most twice per video." },
+    levelup: { label: "Level up", hit: 0.01, max: 1,
+               tags: ["win", "upgrade", "game", "power"],
+               about: "A game power-up rising.",
+               use: "An upgrade or a new skill unlocked: a glow-up, a better version, a step up in the story. Once per video." },
+    success: { label: "Success chime", hit: 0.01, max: 2,
+               tags: ["success", "done", "correct", "win"],
+               about: "A bright success chime.",
+               use: "Something working or finished: a task done, a fix that works, the right answer. Brighter and longer than ding. At most twice per video." },
+    error:   { label: "Error beep", hit: 0, max: 2,
+               tags: ["error", "wrong", "fail", "ui"],
+               about: "A falling three-tone error.",
+               use: "A small digital mistake: a wrong click, a failed attempt, 'that didn't work'. Softer than buzz; never both on one moment. At most twice per video." },
+    dogbark: { label: "Dog bark", hit: 0.07, max: 1,
+               tags: ["dog", "pet", "animal"],
+               about: "A dog barking.",
+               use: "A dog on screen or in the story, or a joke reaction from the pet. Once per video, never over a line that matters." },
+    tada:    { label: "Ta-da", hit: 0.05, max: 1,
+               tags: ["reveal", "finish", "fanfare", "done"],
+               about: "A brass ta-da fanfare.",
+               use: "Presenting the result: the finished build, the after shot, 'and here it is'. Comedy or light content, once per video." },
+    honk:    { label: "Car horn", hit: 0.02, max: 1,
+               tags: ["car", "traffic", "horn", "interrupt"],
+               about: "A car horn, beep beep.",
+               use: "Traffic or a car on screen, or an interruption played for laughs. Once per video, never over a line that matters." },
+    schoolbell: { label: "Bell ring", hit: 0.1, max: 1,
+               tags: ["school", "bell", "time", "end"],
+               about: "A school bell ringing.",
+               use: "Class or time is up: the start or end of a lesson, a break, 'saved by the bell'. Once per video, in a pause." },
+    swoosh2: { label: "Soft swoosh", hit: 0.09,
+               tags: ["transition", "soft", "slide", "motion"],
+               about: "A light, soft air swoosh.",
+               use: "A gentle transition: a calm cut, a slide between topics, a soft zoom. Softer than whoosh, for calm or polished content; never both on one cut." }
   };
 
   /* Fixed order — the soundboard, any future picker and this file's own
      documentation all read from here, so they can never drift apart. */
   var NAMES = ["boom", "whoosh", "riser", "subdrop", "pop", "ding", "buzz", "airhorn", "sparkle", "coin",
-               "scratch", "rimshot", "sadtrombone", "crickets", "applause", "laugh", "shutter", "kaching", "drumroll", "gasp"];
+               "scratch", "rimshot", "sadtrombone", "crickets", "applause", "laugh", "shutter", "kaching", "drumroll", "gasp",
+               "boing", "bonk", "slidewhistle", "punch", "slap", "glass", "explosion", "thunder", "heartbeat", "tick",
+               "alarm", "vibrate", "notify", "typing", "click", "typewriter", "knock", "creak", "footsteps", "cheer",
+               "boo", "aww", "ooh", "swipe", "bubbles", "splash", "wind", "rain", "birds", "rewind",
+               "glitch", "levelup", "success", "error", "dogbark", "tada", "honk", "schoolbell", "swoosh2"];
   NAMES.forEach(function (n) {
     var r = RECORDED[n];
     SOUNDS[n].dur = Math.round((r[3] - r[2]) * 1000) / 1000;
