@@ -67,10 +67,11 @@
   </header>
 
   <!-- ══════════════ LANDING ══════════════
-       0.67.0, rebuilt from NO UPLOAD/research/landing-conversion-2026-11.md:
-       a light page, the hero takes your footage (choose or drop it), the real
-       editor as the picture, how it works, the tools, privacy in plain words,
-       questions answered, one action. No invented numbers. -->
+       0.68.0, the experience. Prime Video's lesson (owner, 2026-11-01): the
+       price at once, big buttons you press when you like, a picture that says
+       what it is without reading. Then one cinematic section (landing-show.js)
+       where raw footage flies onto a timeline, is cut into a story, becomes a
+       short, and becomes a wall of shorts. Few words everywhere else. -->
   <section class="screen active" id="screen-home">
     <div class="lp-root">
 
@@ -80,77 +81,69 @@
           <span><b>v</b>Clyps</span>
         </a>
         <nav class="lp-links" aria-label="Site">
-          <a href="#lpHow">How it works</a>
-          <a href="#lpTools">Features</a>
+          <a href="#lpShow">See it edit</a>
           <a href="#lpFaq">Questions</a>
         </nav>
-        <button class="lp-btn lp-btn-quiet lp-btn-sm" type="button" data-start>Open the editor</button>
+        <button class="lp-btn lp-btn-sm" type="button" data-pick>Start free</button>
       </header>
 
       <main>
+        <!-- 1 · the offer, Prime-style -->
         <section class="lp-hero" id="lpHero">
-          <div class="lp-wrap lp-hero-grid">
-            <div class="lp-hero-copy">
-              <h1 class="lp-title">The story was always there.</h1>
-              <p class="lp-lede">Drop in your footage. vClyps watches it, finds the story and edits a short around it. Then every cut is yours to change.</p>
-              <div class="lp-cta">
-                <button class="lp-btn" id="lpPlus" type="button" data-pick>Choose your footage</button>
-                <button class="lp-text-btn" type="button" data-start>or open the editor</button>
-              </div>
-              <p class="lp-cta-note">Free, no sign-up, no watermark.<span class="lp-drop-hint"> Or drop videos anywhere here.</span></p>
-              <input type="file" id="lpFiles" accept="video/*,image/*,audio/*" multiple hidden />
+          <div class="lp-hero-copy">
+            <h1 class="lp-title">The story was always there.</h1>
+            <p class="lp-lede">vClyps edits your videos for you. Drop in raw footage and get back a finished short, cut around the story. <strong>Free. No sign-up, no card, no watermark.</strong></p>
+            <div class="lp-stack">
+              <button class="lp-btn lp-btn-big" id="lpPlus" type="button" data-pick>Choose your footage</button>
+              <a class="lp-btn lp-btn-ghost lp-btn-big" href="#lpShow">Watch it edit first</a>
             </div>
-            <figure class="lp-shot">
-              <picture>
-                <source media="(max-width: 760px)" srcset="site/editor-phone.webp" type="image/webp" width="390" height="844" />
-                <source srcset="site/editor.webp" type="image/webp" />
-                <img src="site/editor.jpg" width="1440" height="900" alt="The vClyps editor: a tall video in the preview with a heading on it, two clips and the heading on the timeline, and the text settings open on the right." />
-              </picture>
-            </figure>
+            <p class="lp-cta-note">Just looking? <button class="lp-text-btn" type="button" data-start>Open the editor</button></p>
+            <input type="file" id="lpFiles" accept="video/*,image/*,audio/*" multiple hidden />
           </div>
+          <div class="lp-wall" id="lpWall" aria-hidden="true"></div>
           <div class="lp-drop" aria-hidden="true"><span>Drop to start editing</span></div>
         </section>
 
-        <section class="lp-section" id="lpHow">
-          <div class="lp-wrap">
-            <h2 class="lp-h2">From raw footage to a finished short</h2>
-            <ol class="lp-steps">
-              <li>
-                <span class="lp-step-n">1</span>
-                <h3>Add your footage</h3>
-                <p>Phone clips, a long recording, photos or a song, from your device, Google Drive, Dropbox or a link.</p>
-              </li>
-              <li>
-                <span class="lp-step-n">2</span>
-                <h3>The Director finds the story</h3>
-                <p>It watches your footage from beginning to end, finds the moments that matter, and cuts a short around that story, not just the highlights.</p>
-              </li>
-              <li>
-                <span class="lp-step-n">3</span>
-                <h3>Change anything, then export</h3>
-                <p>Every cut lands on a real timeline. Trim, add text, sound and effects, and export in 1080p at up to 60 fps.</p>
-              </li>
-            </ol>
+        <!-- 2 · the show: scroll and it edits -->
+        <section class="lp-show" id="lpShow" aria-label="How vClyps edits: raw footage becomes a timeline, the timeline becomes a short">
+          <div class="lp-show-pin">
+            <div class="lp-show-stage" id="lpStage"></div>
+            <div class="lp-show-say" aria-live="off">
+              <p class="is-on">Your raw footage.</p>
+              <p>vClyps watches all of it.</p>
+              <p>It finds the story and cuts out the rest.</p>
+              <p>Captions, music, timing. Done.</p>
+              <p>One upload. One finished short.</p>
+              <p>Every story deserves to be seen.</p>
+            </div>
+            <div class="lp-show-bar" aria-hidden="true"><i id="lpShowBar"></i></div>
           </div>
         </section>
 
-        <section class="lp-section" id="lpTools">
-          <div class="lp-wrap">
-            <h2 class="lp-h2">A full editor, not just a clipper</h2>
-            <p class="lp-sub">The Director gives you a first cut. Everything after it is yours.</p>
-            <dl class="lp-tools">
-              <div><dt>Captions</dt><dd>Written from what is said, timed word by word, in styles you can change.</dd></div>
-              <div><dt>Text and titles</dt><dd>Hundreds of fonts, text animations, lower thirds and title cards.</dd></div>
-              <div><dt>Effects and transitions</dt><dd>Filters, colour adjustment, video effects and transitions between clips.</dd></div>
-              <div><dt>Sound</dt><dd>Recorded sound effects, music, voice clean-up and voice effects.</dd></div>
-              <div><dt>Remove background</dt><dd>Cut a person out of the picture, or tap to choose what stays.</dd></div>
-              <div><dt>Auto reframe</dt><dd>Wide footage in a tall frame follows the subject.</dd></div>
-              <div><dt>Speed</dt><dd>Speed curves, reverse and smooth slow motion.</dd></div>
-              <div><dt>Two modes</dt><dd>Entertainment for stories, Business for product videos.</dd></div>
-            </dl>
+        <!-- 3 · three things, big -->
+        <section class="lp-big">
+          <div class="lp-big-row">
+            <h2>Free. <span>Really.</span></h2>
+            <p>Edit and export in 1080p at up to 60 fps, with no watermark and no account.</p>
+          </div>
+          <div class="lp-big-row">
+            <h2>Your footage stays <span>on your device.</span></h2>
+            <p>vClyps edits in your browser, so your videos are never copied to our servers. <a href="privacy.html">How privacy works</a></p>
+          </div>
+          <div class="lp-big-row lp-big-shot">
+            <div>
+              <h2>A real editor, <span>when you want one.</span></h2>
+              <p>Every cut lands on a timeline. Change anything: text, captions, sound, effects, speed.</p>
+            </div>
+            <picture>
+              <source media="(max-width: 760px)" srcset="site/editor-phone.webp" type="image/webp" width="390" height="844" />
+              <source srcset="site/editor.webp" type="image/webp" />
+              <img src="site/editor.jpg" width="1440" height="900" loading="lazy" alt="The vClyps editor with two clips and a heading on the timeline." />
+            </picture>
           </div>
         </section>
 
+        <!-- 4 · questions, quietly -->
         <section class="lp-section" id="lpFaq">
           <div class="lp-wrap lp-split">
             <h2 class="lp-h2">Questions</h2>
@@ -179,14 +172,14 @@
           </div>
         </section>
 
-        <section class="lp-section lp-end">
-          <div class="lp-wrap">
-            <h2 class="lp-h2">Every story deserves to be seen.</h2>
-            <div class="lp-cta">
-              <button class="lp-btn" type="button" data-pick>Choose your footage</button>
-              <button class="lp-text-btn" type="button" data-start>or open the editor</button>
-            </div>
+        <!-- 5 · the button, one last time -->
+        <section class="lp-end">
+          <h2 class="lp-end-title">Your story is in there.</h2>
+          <div class="lp-stack lp-stack-row">
+            <button class="lp-btn lp-btn-big" type="button" data-pick>Choose your footage</button>
+            <button class="lp-btn lp-btn-ghost lp-btn-big" type="button" data-start>Open the editor</button>
           </div>
+          <p class="lp-cta-note">Free. No sign-up, no card, no watermark.</p>
         </section>
       </main>
 
@@ -1175,5 +1168,6 @@
   <script defer src="export-fast.js"></script>
   <script defer src="app.js"></script>
   <script defer src="landing.js"></script>
+  <script defer src="landing-show.js"></script>
 </body>
 </html>
