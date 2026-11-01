@@ -7135,7 +7135,9 @@
      voice counts as speech, so the music steps back under it. */
   const TTS_VOICES = [["af_heart", "Heart", "F"], ["af_bella", "Bella", "F"], ["af_nicole", "Nicole", "F"], ["af_sarah", "Sarah", "F"],
     ["af_nova", "Nova", "F"], ["af_sky", "Sky", "F"], ["af_river", "River", "F"], ["am_michael", "Michael", "M"], ["am_adam", "Adam", "M"],
-    ["am_eric", "Eric", "M"], ["am_liam", "Liam", "M"], ["am_onyx", "Onyx", "M"], ["am_puck", "Puck", "M"], ["am_fenrir", "Fenrir", "M"]];
+    ["am_eric", "Eric", "M"], ["am_liam", "Liam", "M"], ["am_onyx", "Onyx", "M"], ["am_puck", "Puck", "M"], ["am_fenrir", "Fenrir", "M"],
+    // round 2: British voices (tts-worker.js reads them with British pronunciation)
+    ["bf_emma", "Emma", "F"], ["bf_isabella", "Isabella", "F"], ["bm_george", "George", "M"], ["bm_fable", "Fable", "M"]];
   let ttsWorker = null, ttsSeq = 0, ttsVoice = "af_heart", ttsSpeed = 1;
   const ttsState = { ready: false, p: 0, busy: null, error: null };
   const ttsWaits = new Map();
