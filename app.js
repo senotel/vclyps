@@ -2659,6 +2659,12 @@
       }
       at += dispDur(clip);
     });
+    // ccl23 Auto lyrics: a song's words, where the song sits on the timeline
+    S.audio.forEach((a) => {
+      const media = mediaById(a.mediaId);
+      if (!a.lyrics || !media || !media.capWords || !media.capWords.length) return;
+      mapped.push({ words: media.capWords, in: a.in, out: a.out != null ? a.out : media.duration, speed: a.speed || 1, timelineStart: a.start, lang: media.capLang, map: null });
+    });
     if (!mapped.length) return false;
     const old = S.captions;
     S.captions = C.mapCuesToTimeline(mapped, { maxWords: capWordsAtATime(), lang: S.capLang, emoji: S.capOpts.emoji });
@@ -2716,6 +2722,38 @@
     } finally {
       setCapBusy(false);
       if (capSheetOpen()) renderCaptionSheet();
+    }
+  }
+
+  /* ccl23 Auto lyrics, as CapCut's: the words of a song you added, as
+     captions in the current caption style, timed to the singing. The same
+     on-device model as Captions (singing is harder to hear than speech, so
+     the user can fix a word in Captions like any other). */
+  async function autoLyrics(a) {
+    const C = global_SenotelCaptions();
+    if (!a) {
+      a = S.audio.filter((x) => { const m = mediaById(x.mediaId); return m && m.type === "audio" && !m.voice && !m.fromTts; })
+        .sort((x, y) => audioDur(y) - audioDur(x))[0];
+      if (!a) { toast("Add your song first: Audio, then Your audio"); return; }
+    }
+    const m = mediaById(a.mediaId);
+    if (!C || !m || capBusy) return;
+    setCapBusy(true);
+    toast("Listening for the lyrics…", 4000);
+    try {
+      await C.transcribeCaptions(m, { lang: S.capOpts.lang, tier: S.capOpts.tier || C.defaultTier() }, (msg) => capSay(msg, true));
+      if (!m.capWords || !m.capWords.length) { toast("No singing found in this song"); return; }
+      a.lyrics = true;
+      remapCaptions();
+      commit();
+      syncOverlays();
+      renderTimeline();
+      toast("Lyrics added as captions. Change their look in Captions");
+      recordEdit("lyrics", { words: m.capWords.length });
+    } catch (e) {
+      toast("Couldn't hear the lyrics: " + ((e && e.message) || "an error"), 6000);
+    } finally {
+      setCapBusy(false);
     }
   }
 
@@ -4913,6 +4951,8 @@
     retouch: I('<circle cx="10" cy="12" r="7"/><path d="M7.5 14.5c1.4 1.2 3.6 1.2 5 0"/><line x1="8" y1="10" x2="8" y2="10.5"/><line x1="12" y1="10" x2="12" y2="10.5"/><path d="M19 3v4M17 5h4"/>'),
     // ccl17 stabilize: a frame held steady between two brackets
     stabilize: I('<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/>'),
+    // ccl23 auto lyrics: a note beside two caption lines
+    lyrics: I('<path d="M9 15V4l8-1.5v10"/><circle cx="6.5" cy="15" r="2.5"/><circle cx="14.5" cy="12.5" r="2.5"/><line x1="3" y1="20" x2="21" y2="20"/>'),
     // ccl21 enhance voice: a voice wave with a lift above it
     enhance: I('<path d="M2 14h2l2-4 2 8 2-12 2 10 2-6 2 4h6"/><polyline points="16 6 19 3 22 6"/><line x1="19" y1="3" x2="19" y2="9"/>'),
     // ccl14 reduce noise: a wave with its rough edge smoothed
@@ -5028,6 +5068,8 @@
       // ccl3: CapCut keeps Text templates right next to Add text
       { id: "templates", label: "Templates", icon: ICON.tmpl, run: openTemplates },
       { id: "captions", label: "Captions", icon: ICON.captions, run: () => $("tbCaptions").click() },
+      // ccl23: CapCut keeps Auto lyrics beside Auto captions in Text
+      { id: "lyrics", label: "Auto lyrics", icon: ICON.lyrics, run: () => autoLyrics(null) },
       { id: "stickers", label: "Stickers", icon: ICON.sticker, run: () => openStickers(null) }
     ];
   }
@@ -5248,6 +5290,7 @@
         tool("volume", "Volume", ICON.volume, (box) => box.appendChild(group("Volume", slider(0, 1.5, 0.05, typeof a.gain === "number" ? a.gain : 1, (v) => { a.gain = v; syncAudioClips(); }, () => commit(), pct)))),
         tool("denoise", "Reduce noise", ICON.denoise, (box) => denoisePanel(box, a, false)),
         tool("enhance", "Enhance voice", ICON.enhance, (box) => enhancePanel(box, a)),
+        act("lyrics", a.lyrics ? "Lyrics on" : "Auto lyrics", ICON.lyrics, () => autoLyrics(a)),
         tool("voice", "Voice effects", ICON.voice, (box) => voicePanel(box, a, () => a.start, () => audioDur(a))),
         tool("fade", "Fade", ICON.fade, (box) => {
           box.appendChild(group("Fade in", slider(0, 3, 0.05, a.fadeIn || 0, (v) => { a.fadeIn = v; }, () => commit(), (v) => v.toFixed(2) + "s")));
