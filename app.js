@@ -7784,7 +7784,14 @@
     radio: '<rect x="3" y="9" width="18" height="12" rx="2"/><line x1="7" y1="9" x2="17" y2="3"/><circle cx="15.5" cy="15" r="2.5"/><line x1="6.5" y1="13" x2="10" y2="13"/><line x1="6.5" y1="17" x2="10" y2="17"/>',
     lofi: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><circle cx="16" cy="11" r="2"/><path d="M6 19l2-4h8l2 4"/>',
     vibrato: '<path d="M2 12c1.5-4 3-4 4.5 0s3 4 4.5 0 3-4 4.5 0 3 4 4.5 0"/>',
-    tremolo: '<line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="5" x2="16" y2="19"/><line x1="20" y1="10" x2="20" y2="14"/>'
+    tremolo: '<line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="5" x2="16" y2="19"/><line x1="20" y1="10" x2="20" y2="14"/>',
+    giant: '<circle cx="12" cy="5" r="2.5"/><path d="M8 21v-8l-2-3 3-2h6l3 2-2 3v8"/><line x1="12" y1="14" x2="12" y2="21"/>',
+    baby: '<circle cx="12" cy="11" r="7"/><circle cx="9.5" cy="10.5" r="0.8"/><circle cx="14.5" cy="10.5" r="0.8"/><path d="M10 14.5a2.5 2.5 0 0 0 4 0"/><path d="M12 4c0-1.5 1.5-2 2-1"/>',
+    higher: '<path d="M3 16l3-3 3 3 3-3 3 3"/><line x1="19" y1="18" x2="19" y2="8"/><polyline points="16 11 19 8 22 11"/>',
+    lower: '<path d="M3 8l3 3 3-3 3 3 3-3"/><line x1="19" y1="6" x2="19" y2="16"/><polyline points="16 13 19 16 22 13"/>',
+    walkie: '<rect x="7" y="7" width="10" height="15" rx="2"/><line x1="10" y1="7" x2="10" y2="2"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="10" y1="15" x2="14" y2="15"/><line x1="10" y1="18" x2="14" y2="18"/>',
+    stadium: '<ellipse cx="12" cy="14" rx="10" ry="5"/><ellipse cx="12" cy="14" rx="5" ry="2"/><path d="M2 14V9c0-2.8 4.5-5 10-5s10 2.2 10 5v5"/>',
+    bathroom: '<path d="M3 12h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5z"/><path d="M6 12V5a2 2 0 0 1 4 0"/><line x1="7" y1="20" x2="6" y2="22"/><line x1="17" y1="20" x2="18" y2="22"/>'
   };
   function voicePanel(box, item, startOf, lenOf) {
     const V = window.SenotelVoice;
