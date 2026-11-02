@@ -463,6 +463,10 @@
     auto.prev = auto.expect = home.scrollTop;
   }
   var lastTs = 0, shown = -1;
+  // softer on touch: a finger's flick arrives in bursts, a wheel in small steps
+  var coarse = window.matchMedia("(pointer: coarse)");
+  var EASE_K = coarse.matches ? 7 : 12;
+  if (coarse.addEventListener) coarse.addEventListener("change", function () { EASE_K = coarse.matches ? 7 : 12; });
   function frame(ts) {
     raf = 0;
     clock = ts || 0;
@@ -472,7 +476,7 @@
     var target = progress();
     // ease toward the scroll position; snap when far away (a jump, a link, a resize)
     if (shown < 0 || Math.abs(target - shown) > 0.08) shown = target;
-    else shown += (target - shown) * (1 - Math.exp(-12 * Math.min(dt || 0.016, 0.05)));
+    else shown += (target - shown) * (1 - Math.exp(-EASE_K * Math.min(dt || 0.016, 0.05)));
     render(shown);
     var moving = Math.abs(target - shown) > 0.00005;
     if ((visible || moving) && !still.matches && !document.hidden) raf = requestAnimationFrame(frame);

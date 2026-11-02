@@ -316,3 +316,10 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
   .lp-wall-strip { animation: none; }
   .lp-root * { transition: none !important; }
 }
+
+/* Touch screens (0.71.2): a flick throws the page far, so the show gets about twice
+   the scroll room there and the same swipe moves half as much of the story.
+   Everything inside is a fraction of the section, so only the pace changes. */
+@media (pointer: coarse) {
+  .lp-show:not(.is-still) { height: 1400vh; }
+}
