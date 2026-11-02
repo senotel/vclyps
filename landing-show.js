@@ -187,10 +187,15 @@
   phoneScreen.appendChild(heroShort);
   var live = heroShort.querySelector(".lp-live");
   var tiles = [];   // made in layout(), as many as the screen needs
-  /* The field's footage (0.71.1): 815 different moments from 375 everyday
-     shorts (free Pexels stock, NO UPLOAD/stock/field/build.mjs), one sprite
-     sheet of 72x128 frames, 32 across. Loaded only when the show is reached. */
-  var ATLAS = { src: "site/field.webp", n: 815, cols: 32, w: 72, h: 128 };
+  /* The field's footage (0.71.3): 1,510 different videos, one frame each
+     (free Pexels stock; NO UPLOAD/stock/field2/build.mjs drops siblings from
+     one shoot and any picture that looks like another), one sprite sheet of
+     64x114 frames, 40 across. Loaded only when the show is reached.
+     No image appears twice: every cell maps to its own frame (cellFrame), and
+     the pull-back stops before the screen holds more cells than there are
+     frames (layout: FC, FR). The 15 captioned clips are not in the sheet. */
+  var ATLAS = { src: "site/field.webp", n: 1510, cols: 40, w: 64, h: 114 };
+  var FC = 1, FR = 1;   // the field's half width and half height in cells, set in layout()
   ATLAS.rows = Math.ceil(ATLAS.n / ATLAS.cols);
   var atlas = new Image(), atlasTiles = [], atlasAwake = false;
   atlas.decoding = "async";
@@ -200,19 +205,27 @@
     atlas.src = ATLAS.src;
     atlasTiles.forEach(function (el) { el.style.backgroundImage = "url(" + ATLAS.src + ")"; });
   }
-  // a frame for a grid cell: well mixed, so the field never shows a pattern
+  /* A frame for a grid cell, never the same for two cells: the cells are
+     numbered row by row inside the field's rectangle (fewer than n of them),
+     and the number is multiplied by 389 mod n, which only reorders 0..n-1
+     (389 shares no factor with 1510), so neighbours look unrelated. */
   function cellFrame(c, r) {
-    var h = (c * 374761393 + r * 668265263) | 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h ^= h >>> 16;
-    return ((h % ATLAS.n) + ATLAS.n) % ATLAS.n;
+    if (Math.abs(c) > FC || Math.abs(r) > FR) return -1;
+    var idx = (r + FR) * (2 * FC + 1) + (c + FC);
+    return (idx * 389) % ATLAS.n;
   }
-  function atlasTile(f) {
+  function paintAtlasTile(el) {
+    var f = cellFrame(el._c, el._r);
+    if (f < 0) { el.style.visibility = "hidden"; return; }
+    el.style.visibility = "";
+    var x = f % ATLAS.cols, y = Math.floor(f / ATLAS.cols);
+    el.style.backgroundPosition = (x / (ATLAS.cols - 1) * 100).toFixed(4) + "% " + (y / (ATLAS.rows - 1) * 100).toFixed(4) + "%";
+  }
+  function atlasTile(c, r) {
     var el = document.createElement("div");
     el.className = "lp-short lp-atlas";
-    var x = f % ATLAS.cols, y = Math.floor(f / ATLAS.cols);
+    el._c = c; el._r = r;
     el.style.backgroundSize = ATLAS.cols * 100 + "% " + ATLAS.rows * 100 + "%";
-    el.style.backgroundPosition = (x / (ATLAS.cols - 1) * 100).toFixed(4) + "% " + (y / (ATLAS.rows - 1) * 100).toFixed(4) + "%";
     if (atlasAwake) el.style.backgroundImage = "url(" + ATLAS.src + ")";
     atlasTiles.push(el);
     return el;
@@ -242,16 +255,25 @@
     var pinH = stage.parentNode.clientHeight;
     var cols = Math.ceil(W / (tf + tg)) + 2, rows = Math.ceil(pinH * 1.25 / (tfh + tg)) + 2;
     if (cols % 2 === 0) cols++; if (rows % 2 === 0) rows++;
+    // how far the field may pull back: until the screen would need more cells than there are frames
+    var zEnd = narrow ? 0.34 : 0.24;
+    for (;;) {
+      FC = Math.ceil(W / 2 / ((tf + tg) * zEnd)) + 1;
+      FR = Math.ceil(pinH * 0.66 / ((tfh + tg) * zEnd)) + 2;   // +2: columns slide up to a tile apart
+      if ((2 * FC + 1) * (2 * FR + 1) <= ATLAS.n || zEnd >= 1) break;
+      zEnd *= 1.04;
+    }
     // the wall mixes its clips, so no column repeats one
     // the tiles near the phone are the 15 captioned clips, each once; the rest come from the field's 815
     while (tiles.length < cols * rows) {
       var ti = tiles.length, tc = ti % cols - Math.floor(cols / 2), tr = Math.floor(ti / cols) - Math.floor(rows / 2);
       var near = Math.abs(tc) <= 2 && Math.abs(tr) <= 1 && nearUsed < SHORTS.length;
-      var nt = near ? short(nearUsed++, false) : atlasTile(cellFrame(tc, tr));
+      var nt = near ? short(nearUsed++, false) : atlasTile(tc, tr);
       nt.classList.add("lp-tile"); stage.insertBefore(nt, phone); tiles.push(nt);
     }
+    atlasTiles.forEach(paintAtlasTile);   // the field's rectangle may have changed size
     L = { narrow: narrow, tlX: tlX, tlW: tlW, vh: vh, th: th, ah: ah, y: y, pps: tlW / RAW, pW: pW, pH: pH, px: (W - pW) / 2, py: (H - pH) / 2,
-      tf: tf, tg: tg, tfh: tfh, cols: cols, rows: rows };
+      tf: tf, tg: tg, tfh: tfh, cols: cols, rows: rows, zEnd: zEnd };
     lanes[0].style.cssText = box(tlX, y.text, tlW, th);
     lanes[1].style.cssText = box(tlX, y.video, tlW, vh);
     lanes[2].style.cssText = box(tlX, y.voice, tlW, ah);
@@ -364,7 +386,7 @@
     var wallK = ease(span(p, 0.76, 0.94));
     var cols = L.cols, tw = L.tf, thh = L.tfh, g = L.tg;
     // the wall settles back as it fills, then keeps pulling away into the field
-    var zoom = mix(1.3, 1, wallK) * mix(1, L.narrow ? 0.34 : 0.24, tail);
+    var zoom = mix(1.3, 1, wallK) * mix(1, L.zEnd, tail);
     var drift = function (col) { return (col % 2 ? 1 : -1) * tail * thh * 0.9; };   // neighbouring columns slide apart
     var pw = mix(L.pW, tw, wallK), phh = mix(L.pH, thh, wallK);
     var pS = mix(0.55, 1, ph1);
@@ -411,6 +433,7 @@
             var X = cx + c2 * sx - w0 / 2, Y = oy + cy + r2 * sy - h0 / 2 + dy;
             if (X > FW || X + w0 < 0 || Y > FH || Y + h0 < 0) continue;
             var fr = cellFrame(c2, r2);
+            if (fr < 0) continue;
             if (atlas.complete && atlas.naturalWidth) fx.drawImage(atlas, (fr % ATLAS.cols) * ATLAS.w, Math.floor(fr / ATLAS.cols) * ATLAS.h, ATLAS.w, ATLAS.h, X, Y, w0, h0);
             else { fx.fillStyle = "#1c1c1c"; fx.fillRect(X, Y, w0, h0); }
           }
