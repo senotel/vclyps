@@ -105,21 +105,23 @@
           </div>
           <div class="lp-wall" id="lpWall" aria-hidden="true"></div>
           <div class="lp-drop" aria-hidden="true"><span>Drop to start editing</span></div>
+          <!-- pauses everything on the page that moves by itself (the wall, the show's autoplay, the loops) -->
+          <button class="lp-motion" type="button" data-motion aria-pressed="false" aria-label="Pause motion" title="Pause motion"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="0.5"/><rect x="9.5" y="2" width="3.5" height="12" rx="0.5"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2v11.6a.6.6 0 0 0 .9.5l9.2-5.8a.6.6 0 0 0 0-1L4.9 1.7a.6.6 0 0 0-.9.5z"/></svg></button>
         </section>
 
         <!-- 2 · the show: scroll and it edits -->
         <section class="lp-show" id="lpShow" aria-label="How vClyps edits: raw footage becomes a timeline, the timeline becomes a short">
           <div class="lp-show-pin">
-            <div class="lp-show-stage" id="lpStage"></div>
+            <div class="lp-show-stage" id="lpStage" aria-hidden="true"></div>
             <div class="lp-show-say" aria-live="off">
               <p class="is-on">Your raw footage.</p>
               <p>vClyps watches all of it.</p>
               <p>It finds the story and cuts out the rest.</p>
               <p>Captions, music, timing. Done.</p>
-              <p>One upload. One finished short.</p>
+              <p>One video in. One finished short.</p>
               <p>Every story deserves to be seen.</p>
             </div>
-            <div class="lp-show-bar" aria-hidden="true"><i id="lpShowBar"></i></div>
+            <button class="lp-motion" type="button" data-motion aria-pressed="false" aria-label="Pause motion" title="Pause motion"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="0.5"/><rect x="9.5" y="2" width="3.5" height="12" rx="0.5"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2v11.6a.6.6 0 0 0 .9.5l9.2-5.8a.6.6 0 0 0 0-1L4.9 1.7a.6.6 0 0 0-.9.5z"/></svg></button>
           </div>
         </section>
 
