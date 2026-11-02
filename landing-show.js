@@ -455,35 +455,29 @@
   var visible = false, raf = 0, last = -1;
 
   /* Autoplay, as lusion.co's astronaut scene (owner, 2026-11-01): scroll a
-     little into the show and it plays by itself, with no progress bar. It
-     plays by moving the page, so the visitor's own scrolling still steers
-     it: scrolling down speeds it up, scrolling up slows it or plays it
-     backwards (autoplay steps aside while they pull back, then carries on).
-     Any scroll inside the show (wheel, touch, keys, scrollbar) sets it going
-     again, from wherever the visitor is; it stops at the very end, and never
-     runs with reduced motion.
-     Smoothness (0.71.1): the picture never jumps to the scroll position, it
-     eases toward it (shown += (target - shown) x (1 - e^(-12 dt))), and the
-     page is moved by fractions of a pixel, so it glides. */
+     little into the show and it plays by itself, with no progress bar.
+     It plays in the direction the visitor last scrolled (0.71.4, owner:
+     "if i scroll back the autoplay should play in reverse"): scroll down and
+     it plays on; scroll up and it plays backwards, at the same pace, until
+     they scroll down again. Their own scrolling always wins and adds to it.
+     It stops at either end of the show and never runs with reduced motion.
+     Smoothness (0.71.1): the picture eases toward the scroll position
+     (shown += (target - shown) x (1 - e^(-k dt))) and the page is moved by
+     fractions of a pixel, so it glides. */
   var PLAY_SECS = 34;                 // the whole show, start to end, untouched
-  var auto = { on: false, pos: 0, prev: 0, wait: 0, touched: 0, expect: -1 };
+  var auto = { on: false, pos: 0, dir: 1, touched: 0, expect: -1, seen: -1 };
   function autoplay(ts, dt) {
     var pr = progress();
     var range = Math.max(1, show.offsetHeight - home.clientHeight);
-    if (pr <= 0) { auto.on = false; return; }
-    // any scroll by the visitor inside the show (not at its very end) sets it going
-    if (!auto.on && auto.touched && pr < 0.99) { auto.on = true; auto.pos = home.scrollTop; auto.prev = home.scrollTop; }
-    auto.touched = 0;
+    if (pr <= 0 || pr >= 1) { auto.on = false; auto.touched = 0; return; }   // outside the show: nothing to play
+    // the visitor scrolled inside the show: play on from there, in their direction
+    if (auto.touched) { auto.on = true; auto.pos = home.scrollTop; auto.touched = 0; }
     if (!auto.on) return;
-    if (pr >= 0.995) { auto.on = false; return; }
-    var now = home.scrollTop;
-    // the visitor moved it back: let them, and wait a moment before carrying on
-    if (now < auto.prev - 1) auto.wait = ts + 900;
-    if (now > auto.prev + 1 || now < auto.prev - 1) auto.pos = now;   // follow the visitor wherever they went
-    if (ts < auto.wait) { auto.prev = now; return; }
-    auto.pos += (range / PLAY_SECS) * Math.min(dt, 0.05);
+    // the far end in the direction of play: stop there
+    if ((auto.dir > 0 && pr >= 0.995) || (auto.dir < 0 && pr <= 0.004)) { auto.on = false; return; }
+    auto.pos += auto.dir * (range / PLAY_SECS) * Math.min(dt, 0.05);
     home.scrollTop = auto.pos;       // fractional: browsers keep sub-pixel scroll offsets
-    auto.prev = auto.expect = home.scrollTop;
+    auto.expect = home.scrollTop;
   }
   var lastTs = 0, shown = -1;
   // softer on touch: a finger's flick arrives in bursts, a wheel in small steps
@@ -522,8 +516,14 @@
     }, { root: home, threshold: [0, 0.02] }).observe(show);
   } else { visible = true; }
   home.addEventListener("scroll", function () {
-    // autoplay's own step lands where it put the page; anything else is the visitor
-    if (!(auto.on && Math.abs(home.scrollTop - auto.expect) < 1.5)) auto.touched = 1;
+    // autoplay's own step lands where it put the page; anything else is the visitor,
+    // and the way they moved sets the way it plays
+    var st = home.scrollTop;
+    if (!(auto.on && Math.abs(st - auto.expect) < 1.5)) {
+      if (auto.seen >= 0 && Math.abs(st - auto.seen) > 0.5) auto.dir = st > auto.seen ? 1 : -1;
+      auto.touched = 1;
+    }
+    auto.seen = st;
     if (!still.matches) kick();
   }, { passive: true });
   window.addEventListener("resize", function () { L = null; settle(); });
