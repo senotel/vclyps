@@ -11640,24 +11640,15 @@
     btn.textContent = "Working…";
     const line = $("aiStatus");
     const elapsed0 = Date.now();
-    /* The AI edit's progress card (0.74.2, owner: "much much more designed,
-       not just thick white text"): which of the four steps it is on, the
-       step's own message under it, a thin bar and the time so far. */
-    const AW_STEPS = ["Footage", "Structure and cuts", "Titles and sound", "Music timing"];
-    const awStep = (s) => /beat/i.test(s) ? 3 : /b-roll|caption|finishing/i.test(s) ? 2 : /direct/i.test(s) ? 1 : 0;
-    let awAt = 0;
+    /* While the AI edits: one quiet line, the step it is on and the time so
+       far, after the line spinner from ldrs (MIT, GriffinJohnston/ldrs). */
+    const SPIN = '<span class="ldr-line-spinner" aria-hidden="true">' + '<i></i>'.repeat(12) + "</span>";
     const progress = (s) => {
-      awAt = Math.max(awAt, awStep(s));
       const secs = Math.round((Date.now() - elapsed0) / 1000);
-      const detail = String(s).replace(/…$/, "");
       line.classList.add("working");
       line.classList.remove("hidden", "open");
-      line.innerHTML =
-        '<div class="aw-head"><span class="aw-kicker">AI edit</span><span class="aw-time">' + (secs > 1 ? secs + "s" : "") + "</span></div>" +
-        '<div class="aw-title">' + escHtml(AW_STEPS[awAt]) + '</div>' +
-        '<div class="aw-detail">' + escHtml(detail) + "</div>" +
-        '<div class="aw-bar"><i style="width:' + Math.round(((awAt + 0.5) / AW_STEPS.length) * 100) + '%"></i></div>' +
-        '<ol class="aw-steps">' + AW_STEPS.map((n, i) => '<li class="' + (i < awAt ? "done" : i === awAt ? "now" : "") + '">' + escHtml(n) + "</li>").join("") + "</ol>";
+      line.innerHTML = SPIN + '<span class="aw-text">' + escHtml(String(s).replace(/…$/, "")) + "</span>" +
+        (secs > 2 ? '<span class="aw-time">' + secs + "s</span>" : "");
     };
     progress("Getting started…");
 
