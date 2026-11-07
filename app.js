@@ -459,7 +459,7 @@
     $("bizWhat").value = S.brief.what || "";
     $("bizCta").value = S.brief.cta || "";
     $("bizTone").value = S.brief.tone || "polished";
-    $("semiPrompt").placeholder = biz ? "Anything else? e.g. make it 20 seconds, lead with the price" : "Describe your edit…";
+    $("semiPrompt").placeholder = biz ? "Anything else? e.g. make it 20 seconds, lead with the price" : "Describe the edit";
   }
   [["bizName", "name"], ["bizWhat", "what"], ["bizCta", "cta"], ["bizTone", "tone"]].forEach(([id, key]) => {
     const el = $(id);
@@ -11036,14 +11036,56 @@
     };
   }
 
-  function applyGenerated(g) {
+  /* What the creator made by hand that an AI edit would replace (F03): texts,
+     stickers, overlays and captions that carry no by:"director" mark. The
+     Director marks what it makes (applyGenerated, runEdit), so anything
+     unmarked was added by a person. Sounds and music are not counted: an AI
+     edit already leaves hand-placed ones where they are. */
+  function handMade(S) {
+    const mine = (x) => !!x && x.by !== "director";
+    const texts = (S.texts || []).filter(mine);
+    return {
+      texts: texts.filter((t) => !t.sticker).length,
+      stickers: texts.filter((t) => t.sticker).length,
+      overlays: (S.broll || []).filter(mine).length,
+      captions: (S.captions || []).filter(mine).length
+    };
+  }
+
+  // "2 texts, 1 sticker and captions": the counts in words, "" when nothing
+  function handMadeWords(h) {
+    const n = (k, one, many) => (h[k] ? h[k] + " " + (h[k] === 1 ? one : many) : null);
+    const bits = [n("texts", "text", "texts"), n("stickers", "sticker", "stickers"),
+      n("overlays", "overlay", "overlays"), h.captions ? "captions" : null].filter(Boolean);
+    if (bits.length < 2) return bits.join("");
+    return bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1];
+  }
+
+  /* Keep them: the new edit's texts plus everything made by hand, unchanged
+     (same ids, same times), the way hand-placed sounds already stay. The
+     Director's own texts and overlays from the last edit still go. Captions
+     follow the words, so kept captions are re-timed to the new cuts
+     (remapCaptions) rather than left on the old ones. */
+  function keepHandMade(prev, g) {
+    const mine = (x) => !!x && x.by !== "director";
+    return {
+      texts: g.texts.concat((prev.texts || []).filter(mine)),
+      broll: (prev.broll || []).filter(mine),
+      captions: (prev.captions || []).some(mine)
+    };
+  }
+
+  function applyGenerated(g, keep) {
+    // read before anything is replaced
+    const kept = keep ? keepHandMade(S, g) : null;
     S.vertical = !!g.vertical;
     g.clips.forEach((c) => { if (c.id === undefined) c.id = nextId++; });
-    g.texts.forEach((t) => { if (t.id === undefined) t.id = nextId++; });
+    // the Director's texts are marked, so the next AI edit can tell them from hand-made ones
+    g.texts.forEach((t) => { if (t.id === undefined) t.id = nextId++; t.by = "director"; });
     S.clips = g.clips;
-    S.texts = g.texts;
+    S.texts = kept ? kept.texts : g.texts;
     S.captions = []; // fresh edit → drop any prior karaoke; rebuilt below
-    S.broll = [];    // and any b-roll from the previous draft
+    S.broll = kept ? kept.broll : [];    // and any b-roll from the previous draft (hand-made kept on Keep them)
     /* The Director's sounds and music belong to the edit they were made for,
        so a new edit replaces them. Anything placed or chosen by hand carries
        no `by` mark and stays exactly where it is. */
@@ -11068,6 +11110,8 @@
         at += dispDur(c);
       });
     }
+    // kept captions come back from their words, on the new cuts
+    if (kept && kept.captions) { try { remapCaptions(); } catch (e) {} }
     S.sel = null;
     S.time = 0;
     commit();
@@ -11495,6 +11539,48 @@
     runEdit({ prompt: $("semiPrompt").value.trim(), media: S.media.filter((m) => m.type !== "audio") });
   });
 
+  /* Asks, in the status line, whether an AI edit keeps what was made by hand.
+     Resolves "keep", "replace", or null (Escape: no edit). Keep them is the
+     default: it is first, filled, and has the focus, so Enter keeps. Not a
+     modal: the question is about the edit about to run, so it sits where that
+     edit's progress will appear. Replace everything is undoable. */
+  let askingKeep = null;
+  function askKeep(h) {
+    return new Promise((resolve) => {
+      const line = $("aiStatus");
+      const box = mk("span", "ai-ask");
+      box.setAttribute("role", "group");
+      box.setAttribute("aria-label", "Keep what you added");
+      const q = mk("span", "");
+      const one = h.texts + h.stickers + h.overlays + (h.captions ? 2 : 0) === 1;
+      q.textContent = "You added " + handMadeWords(h) + ". Keep " + (one ? "it" : "them") + " in the AI edit?";
+      const keepBtn = mk("button", "secondary-btn", one ? "Keep it" : "Keep them");
+      const replaceBtn = mk("button", "ghost-btn", "Replace everything");
+      [keepBtn, replaceBtn].forEach((b) => { b.type = "button"; b.style.height = "44px"; b.style.marginLeft = "8px"; });
+      box.append(q, keepBtn, replaceBtn);
+      const done = (answer) => {
+        askingKeep = null;
+        line.classList.remove("open");
+        line.textContent = "";
+        if (!answer) line.classList.add("hidden");
+        resolve(answer);
+      };
+      // a tap on the status line normally opens or folds it: not on the question
+      box.addEventListener("click", (e) => e.stopPropagation());
+      keepBtn.addEventListener("click", () => done("keep"));
+      replaceBtn.addEventListener("click", () => done("replace"));
+      box.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(null); $("semiGenerate").focus(); }
+      });
+      line.innerHTML = "";
+      line.appendChild(box);
+      line.classList.remove("hidden");
+      line.classList.add("open");   // wraps on a phone instead of cutting the buttons off
+      askingKeep = keepBtn;
+      keepBtn.focus();
+    });
+  }
+
   /* One edit, start to finish. Edit runs it over everything in the project;
      Make runs it over one found clip (opts.range), with the clip's own
      keyframes and a direction built from why it was chosen. */
@@ -11504,6 +11590,17 @@
     if (generating) return;
     if (finding) { toast("Clips are still being found. Stop that first, or wait for it to finish."); return; }
     warmAudio();   // while this click still counts as a gesture: see warmAudio()
+    /* The guard (F03): an AI edit used to replace hand-made texts, overlays
+       and captions without a word. Now it asks first, in the status line,
+       and keeping them is the default. */
+    let keep = true;
+    if (askingKeep) { askingKeep.focus(); return; }   // the question is already up
+    if (handMadeWords(handMade(S))) {
+      const answer = await askKeep(handMade(S));
+      if (!answer) return;
+      keep = answer === "keep";
+      if (generating || finding || EXP.active || EXP.starting) return;   // something else started meanwhile
+    }
     if (window.SenotelNotices) SenotelNotices.dismiss("doneCard");
     generating = true;
     stayAwake("generate");
@@ -11562,7 +11659,7 @@
     try {
       if (directorFailure) throw directorFailure;
       if (!g || !g.clips.length) throw new Error("The AI Director could not prepare an edit. Reload the app and retry; your timeline has not been changed.");
-      applyGenerated(g);
+      applyGenerated(g, keep);
       // Business mode: the product name and call to action, as the video's last clip
       if (g.endCard) {
         try {
@@ -11570,8 +11667,9 @@
           if (card) {
             // the card is the last word: no title runs onto it
             const cardStart = total() - dispDur(card);
-            S.texts = S.texts.filter((t) => t.start < cardStart - 0.6);
-            S.texts.forEach((t) => { t.dur = Math.min(t.dur, cardStart - t.start); });
+            // (only the Director's titles: texts kept by hand stay as they were)
+            S.texts = S.texts.filter((t) => t.by !== "director" || t.start < cardStart - 0.6);
+            S.texts.forEach((t) => { if (t.by === "director") t.dur = Math.min(t.dur, cardStart - t.start); });
             commit();
             renderTimeline();
           }
@@ -11582,8 +11680,13 @@
       // owned until both have settled; only then is a completion alert honest.
       let extrasFailed = false;
       let entrances = [];
+      const ownBroll = new Set(S.broll.map((b) => b.id)), ownCaptions = S.captions.length > 0;
       try { entrances = await addBroll(g.broll, progress); } catch (_) { extrasFailed = true; }
       try { await autoCaption(); } catch (_) { extrasFailed = true; }
+      /* What this edit added is the Director's (handMade): its cutaways, and
+         its captions unless the creator's own were kept and re-timed. */
+      S.broll.forEach((b) => { if (!ownBroll.has(b.id)) b.by = "director"; });
+      if (!ownCaptions) S.captions.forEach((c) => { c.by = "director"; });
       /* Sound last: effects are timed against the finished timeline, cutaways
          included, and a cutaway that was never found takes its sound with it. */
       try { placeDirectorSounds(g.sfx, entrances); } catch (_) { extrasFailed = true; }
@@ -11640,7 +11743,7 @@
     chip.classList.toggle("selected", on);
     chip.setAttribute("aria-pressed", on ? "true" : "false");
     $("findRow").classList.toggle("hidden", !on);
-    if (!finding) $("semiGenerate").textContent = on ? "Find" : "Edit";
+    if (!finding) $("semiGenerate").textContent = on ? "Find" : "AI edit";
     $("findLen").value = S.find.len || "auto";
     $("findGenre").value = S.find.genre || "auto";
     $("findFrom").value = S.find.from || "";
@@ -11870,7 +11973,7 @@
     if (e.key === "Enter") $("semiGenerate").click();
   });
 
-  /* The prompt bar shares its row with ✦ and Edit, so on a phone there is
+  /* The prompt bar shares its row with ✦ and AI edit, so on a phone there is
      very little width left. Keep the placeholder to something that actually
      fits and only spell the invitation out where there is room for it; the
      full sentence stays on the input's title either way. */
@@ -11879,7 +11982,7 @@
     const wide = el.clientWidth >= 340;
     el.placeholder = S.find.on
       ? (wide ? "What should the clips be about? Blank finds the best" : "Clips about…")
-      : (wide ? "Tell vClyps what you want, or leave blank" : "Describe your edit…");
+      : "Describe the edit";   // short enough for a phone; the invitation stays on the title
   }
   window.addEventListener("resize", fitPromptPlaceholder);
   window.addEventListener("resize", () => {
@@ -12691,12 +12794,17 @@
   const ASPECTS = {
     "9:16": { w: 720, h: 1280 },
     "1:1":  { w: 1000, h: 1000 },
-    "16:9": { w: 1280, h: 720 }
+    "4:5":  { w: 1024, h: 1280 },   // the feed post: same long side as 9:16
+    "16:9": { w: 1280, h: 720 },
+    /* Original follows the footage (the automatic choice below). null, not a
+       size, but still a key, so a restored session keeps it (restoreSession). */
+    original: null
   };
 
   function exportSize() {
     if (S.aspect && ASPECTS[S.aspect]) return ASPECTS[S.aspect];
-    if (S.vertical) return { w: 720, h: 1280 };   // Shorts are always 9:16
+    // Shorts are always 9:16, unless the creator asked for the footage's own shape
+    if (S.vertical && S.aspect !== "original") return { w: 720, h: 1280 };
     let portrait = 0, landscape = 0, square = 0;
     S.clips.forEach((c) => {
       const m = mediaById(c.mediaId);
@@ -12717,6 +12825,115 @@
     if (square > landscape) return { w: 900, h: 900 };
     return { w: 1280, h: 720 };
   }
+
+  /* ─── Ratio (F07): the top-bar chip and its menu ───
+     CapCut's Ratio: one chip in the top bar names the project's shape and
+     opens a short menu. Changing it is one undoable step; the preview and the
+     export both read exportSize(), so they change together. */
+  const RATIO_CHOICES = [
+    ["9:16", "TikTok, Reels, Shorts"],
+    ["1:1", "Square"],
+    ["4:5", "Instagram feed"],
+    ["16:9", "YouTube"],
+    ["original", "Follows your footage"]
+  ];
+  function ratioLabel(a) { return a && ASPECTS[a] ? a : "Original"; }
+
+  function ratioChip() {
+    const b = $("ratioBtn");
+    if (!b) return;
+    $("ratioLabel").textContent = ratioLabel(S.aspect);
+    b.setAttribute("aria-label", "Ratio " + ratioLabel(S.aspect));
+  }
+
+  function setRatio(a) {
+    if (!Object.prototype.hasOwnProperty.call(ASPECTS, a) || a === S.aspect) return;
+    S.aspect = a;
+    commit();
+    ratioChip();
+    syncOverlays();
+    toast("Ratio " + ratioLabel(a));
+  }
+
+  /* The ratio rides along with undo and redo. The snapshots belong to
+     HISTORY (commit/restore), so rather than widening them from here, each
+     snapshot gets the ratio stamped on its end the first time it is saved,
+     and a stamped snapshot saved again (undo or redo just put it back) brings
+     its ratio back with it. saveSession runs at the end of both commit() and
+     restore(); nothing changes S.aspect without a commit(). */
+  function keepRatioInHistory() {
+    const h = hist[histIdx];
+    if (typeof h !== "string" || h[h.length - 1] !== "}") return;
+    const m = /,"ratio":("[^"]*"|null)\}$/.exec(h);
+    if (!m) hist[histIdx] = h.slice(0, -1) + ',"ratio":' + JSON.stringify(S.aspect || null) + "}";
+    else {
+      const was = JSON.parse(m[1]);
+      if (was !== (S.aspect || null)) { S.aspect = was; try { syncOverlays(); } catch (e) {} }
+    }
+    try { ratioChip(); } catch (e) {}   // a commit during boot may come before the chip code has run
+  }
+
+  /* A small menu under the chip (the house menu look, .kf-menu): arrows move,
+     Enter picks, Escape or a tap elsewhere closes and gives focus back. */
+  let ratioMenu = null;
+  function closeRatioMenu(focusChip) {
+    if (!ratioMenu) return;
+    ratioMenu.remove();
+    ratioMenu = null;
+    document.removeEventListener("pointerdown", ratioOutside, true);
+    $("ratioBtn").setAttribute("aria-expanded", "false");
+    if (focusChip) $("ratioBtn").focus();
+  }
+  function ratioOutside(e) {
+    if (ratioMenu && !ratioMenu.contains(e.target) && !$("ratioBtn").contains(e.target)) closeRatioMenu(false);
+  }
+  function openRatioMenu() {
+    if (ratioMenu) { closeRatioMenu(true); return; }
+    const btn = $("ratioBtn");
+    const menu = mk("div", "kf-menu");
+    menu.id = "ratioMenu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Ratio");
+    menu.appendChild(mk("span", "kf-menu-title", "Ratio"));
+    const items = RATIO_CHOICES.map(([a, hint]) => {
+      const on = (S.aspect || "original") === a;
+      const it = mk("button", "kf-ease" + (on ? " on" : ""));
+      it.type = "button";
+      it.setAttribute("role", "menuitemradio");
+      it.setAttribute("aria-checked", on ? "true" : "false");
+      const name = mk("span", "");
+      name.textContent = ratioLabel(a);
+      name.style.cssText = "min-width:64px;font-weight:600";
+      const sub = mk("span", "");
+      sub.textContent = hint;
+      sub.style.color = "var(--t2)";
+      it.append(name, sub);
+      it.addEventListener("click", () => { closeRatioMenu(true); setRatio(a); });
+      menu.appendChild(it);
+      return it;
+    });
+    menu.addEventListener("keydown", (e) => {
+      const i = items.indexOf(document.activeElement);
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRatioMenu(true); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); e.stopPropagation();
+        items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+      } else if (e.key === "Tab") closeRatioMenu(false);
+    });
+    document.body.appendChild(menu);
+    ratioMenu = menu;
+    // under the chip, its right edge on the chip's, never off screen
+    const r = btn.getBoundingClientRect(), w = menu.offsetWidth;
+    menu.style.top = Math.round(r.bottom + 6) + "px";
+    menu.style.left = Math.round(clamp(r.right - w, 8, window.innerWidth - w - 8)) + "px";
+    btn.setAttribute("aria-expanded", "true");
+    document.addEventListener("pointerdown", ratioOutside, true);
+    (items.find((x) => x.classList.contains("on")) || items[0]).focus();
+  }
+  $("ratioBtn").addEventListener("click", openRatioMenu);
+  // a turned phone moves the chip; a phone's address bar showing or hiding (height only) does not
+  let ratioW = window.innerWidth;
+  window.addEventListener("resize", () => { if (window.innerWidth !== ratioW) { ratioW = window.innerWidth; closeRatioMenu(false); } });
 
   function pickMime() {
     // Every candidate names an AUDIO codec too — an mp4/webm string with only
@@ -13998,6 +14215,7 @@
 
   let sessionTimer = null;
   function saveSession() {
+    keepRatioInHistory();   // the ratio travels with undo/redo (see there)
     clearTimeout(sessionTimer);
     sessionTimer = setTimeout(writeSession, 500);
   }
