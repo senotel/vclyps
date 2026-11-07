@@ -75,8 +75,8 @@
   function accessMessage(message, personal) {
     if (/ALLOWED_ORIGIN/i.test(message)) return "This website address is not allowed by the AI server. Open https://vclyps.com, or ask the owner to allow this exact site address in Cloudflare. " + message;
     if (/HTTP 40[13]|API key not valid|API_KEY_INVALID|permission.denied/i.test(message)) {
-      return (personal ? "The Gemini key saved on this device was refused. Remove or replace it in Settings to use the shared Director. "
-        : "The shared Gemini server was refused access. The owner needs to check its API key and Google access restrictions. ") + message;
+      return (personal ? "The AI key saved on this device was refused. Remove or replace it in Settings to use the shared AI. "
+        : "The shared AI server was refused access. The owner needs to check its key. ") + message;
     }
     return message;
   }
@@ -115,7 +115,7 @@
 
   const GeminiProvider = {
     id: "gemini",
-    label: "Gemini Director",
+    label: "vClyps AI",
     available: () => (!!PROXY_URL || !!getKey()) && navigator.onLine,
     plan: geminiPlan
   };
@@ -274,14 +274,14 @@
      used before ("mistral-small-4-0-26-03") was never a real id, so this
      fallback had been dead since 2026-09-05 (found 2026-10-07). */
   const MISTRAL_MODELS = ["mistral-small-2603", "ministral-14b-2512", "ministral-8b-2512"];
-  const MistralProvider = openAiCompatProvider("mistral", "Mistral Director", "/mistral", MISTRAL_MODELS);
+  const MistralProvider = openAiCompatProvider("mistral", "vClyps AI (backup)", "/mistral", MISTRAL_MODELS);
   /* Groq shut both Llamas down on 2026-08-16 and names gpt-oss as their
      replacement. gpt-oss reasons, but on Groq the reasoning comes back apart
      from the answer, so json_object holds: a 4,500-token pass-1 prompt came
      back as clean JSON on both sizes (2026-10-07). Not qwen: its reasoning
      breaks Groq's JSON validation on the long pass 1. */
   const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
-  const GroqProvider = openAiCompatProvider("groq", "Groq Director", "/groq", GROQ_MODELS);
+  const GroqProvider = openAiCompatProvider("groq", "vClyps AI (second backup)", "/groq", GROQ_MODELS);
 
   /* Order = quality first, then vendor diversity. Mistral before Groq because
      its free tier is token-generous (1B/month) where Groq's is token-tight;
@@ -948,7 +948,7 @@
         if (out) { DIAG.last.provider = "gemini"; DIAG.last.gemini = "ok"; return out; }
         DIAG.last.gemini = "returned no usable clips";
       } catch (e) { DIAG.last.gemini = (e && e.message) || String(e); }
-      tried.push("Gemini: " + DIAG.last.gemini);
+      tried.push("Main AI: " + DIAG.last.gemini);
     }
     const prompt = clipBrief(req) + "\n" + findText(req);
     const backups = [["mistral", "/mistral", MISTRAL_MODELS], ["groq", "/groq", GROQ_MODELS]];
@@ -994,8 +994,8 @@
       try {
         const out = pick(await callWithRetry([{ text: prompt }], 8192));
         if (out) return out;
-        tried.push("Gemini: no lines");
-      } catch (e) { tried.push("Gemini: " + ((e && e.message) || e)); }
+        tried.push("Main AI: no lines");
+      } catch (e) { tried.push("Main AI: " + ((e && e.message) || e)); }
     }
     for (const [path, models] of [["/mistral", MISTRAL_MODELS], ["/groq", GROQ_MODELS]]) {
       if (!PROXY_URL) break;
@@ -1059,8 +1059,8 @@
       try {
         const out = pick(await callWithRetry([{ text: prompt }], 2048));
         if (out) return out;
-        tried.push("Gemini: nothing usable");
-      } catch (e) { tried.push("Gemini: " + ((e && e.message) || e)); }
+        tried.push("Main AI: nothing usable");
+      } catch (e) { tried.push("Main AI: " + ((e && e.message) || e)); }
     }
     for (const [path, models] of [["/mistral", MISTRAL_MODELS], ["/groq", GROQ_MODELS]]) {
       if (!PROXY_URL) break;
@@ -1603,7 +1603,7 @@
       }
     }
     DIAG.last.provider = "unavailable";
-    throw directorError("No AI Director is available. Your timeline has not been changed. Gemini: " + (DIAG.last.gemini || "unavailable") + ". Check the connection/settings and retry.");
+    throw directorError("No AI Director is available. Your timeline has not been changed. Reason: " + (DIAG.last.gemini || "unavailable") + ". Check the connection/settings and retry.");
   }
 
   /* ───────── Training dataset (local, exportable) ───────── */

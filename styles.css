@@ -586,6 +586,28 @@ body.dark .logo-img { filter: invert(1); }
   color: var(--t2);
 }
 .ai-status b { color: var(--text); }
+/* the AI edit's progress card (0.74.2) */
+.ai-status.working {
+  white-space: normal; overflow: visible; cursor: default; max-height: none;
+  padding: 12px 14px 12px; border: 1px solid var(--line); border-radius: var(--r-2);
+  background: var(--bg1); color: var(--t2); line-height: 1.35;
+}
+.aw-head { display: flex; justify-content: space-between; align-items: baseline; }
+.aw-kicker { font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--acc); }
+.aw-time { font-size: var(--fs-11); color: var(--t2); font-variant-numeric: tabular-nums; }
+.aw-title { margin-top: 4px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+.aw-detail { margin-top: 2px; font-size: var(--fs-12); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aw-bar { position: relative; height: 3px; margin-top: 10px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.aw-bar i { position: absolute; inset: 0 auto 0 0; background: var(--acc); border-radius: 2px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.aw-bar::after { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; left: -30%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent); animation: aw-sweep 1.6s ease-in-out infinite; }
+@keyframes aw-sweep { to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .aw-bar::after { animation: none; display: none; } }
+.aw-steps { display: flex; gap: 12px; margin: 8px 0 0; padding: 0; list-style: none; font-size: var(--fs-11); color: var(--t2); flex-wrap: wrap; }
+.aw-steps li { position: relative; padding-left: 12px; }
+.aw-steps li::before { content: ""; position: absolute; left: 0; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; border: 1px solid var(--line); box-sizing: border-box; }
+.aw-steps li.done::before { background: var(--t2); border-color: var(--t2); }
+.aw-steps li.now { color: var(--text); font-weight: 600; }
+.aw-steps li.now::before { background: var(--acc); border-color: var(--acc); }
 .ai-status .warn { color: var(--acc); font-weight: 600; }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }

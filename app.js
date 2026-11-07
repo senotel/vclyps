@@ -11497,18 +11497,19 @@
 
   function renderAiStatus(summary) {
     const el = $("aiStatus");
+    el.classList.remove("working");
     const D = (window.SenotelDiag && window.SenotelDiag.last) || {};
     // every diagnostic dump carries the build, so a pasted console log is
     // enough to know exactly what the user was running
     if (window.SenotelVersion) D.build = window.SenotelVersion.label;
     const bits = [];
-    const NAMES = { gemini: "Gemini", mistral: "Mistral", groq: "Groq", "vision-1": "Vision-1.0" };
+    const NAMES = { gemini: "vClyps AI", mistral: "vClyps AI (backup)", groq: "vClyps AI (second backup)", "vision-1": "Vision-1.0" };
     if (NAMES[D.provider]) {
       bits.push("<b>Director: " + NAMES[D.provider] + " ✓</b>");
       // a fallback that ran silently looks like nothing happened — say which
       // one stepped in, and why the preferred one didn't
       if (D.provider !== "gemini" && D.gemini && D.gemini !== "ok") {
-        bits.push('<span class="warn">Gemini unavailable: ' + escHtml(D.gemini) + "</span>");
+        bits.push('<span class="warn">Main AI unavailable: ' + escHtml(D.gemini) + "</span>");
       }
     } else {
       bits.push("<b>Director: on-device brain</b>");
@@ -11639,10 +11640,24 @@
     btn.textContent = "Working…";
     const line = $("aiStatus");
     const elapsed0 = Date.now();
+    /* The AI edit's progress card (0.74.2, owner: "much much more designed,
+       not just thick white text"): which of the four steps it is on, the
+       step's own message under it, a thin bar and the time so far. */
+    const AW_STEPS = ["Footage", "Structure and cuts", "Titles and sound", "Music timing"];
+    const awStep = (s) => /beat/i.test(s) ? 3 : /b-roll|caption|finishing/i.test(s) ? 2 : /direct/i.test(s) ? 1 : 0;
+    let awAt = 0;
     const progress = (s) => {
+      awAt = Math.max(awAt, awStep(s));
       const secs = Math.round((Date.now() - elapsed0) / 1000);
-      line.innerHTML = "<b>✦ " + escHtml(s) + "</b>" + (secs > 3 ? " &nbsp;·&nbsp; " + secs + "s" : "");
-      line.classList.remove("hidden");
+      const detail = String(s).replace(/…$/, "");
+      line.classList.add("working");
+      line.classList.remove("hidden", "open");
+      line.innerHTML =
+        '<div class="aw-head"><span class="aw-kicker">AI edit</span><span class="aw-time">' + (secs > 1 ? secs + "s" : "") + "</span></div>" +
+        '<div class="aw-title">' + escHtml(AW_STEPS[awAt]) + '</div>' +
+        '<div class="aw-detail">' + escHtml(detail) + "</div>" +
+        '<div class="aw-bar"><i style="width:' + Math.round(((awAt + 0.5) / AW_STEPS.length) * 100) + '%"></i></div>' +
+        '<ol class="aw-steps">' + AW_STEPS.map((n, i) => '<li class="' + (i < awAt ? "done" : i === awAt ? "now" : "") + '">' + escHtml(n) + "</li>").join("") + "</ol>";
     };
     progress("Getting started…");
 
@@ -11729,7 +11744,7 @@
     } catch (e) {
       const message = "Couldn't finish the edit. " + ((e && e.message) || "Please try again.");
       line.textContent = message;
-      line.classList.remove("hidden");
+      line.classList.remove("hidden", "working");
       toast(message, 6000);
     } finally {
       /* Always, even if the above threw. Leaving generating true locks the
@@ -11854,8 +11869,7 @@
       const D = (window.SenotelDiag && window.SenotelDiag.last) || {};
       line.innerHTML = n
         ? "<b>" + n + " clip" + (n === 1 ? "" : "s") + " found in " + escHtml(item.name) + "</b>" +
-          (D.provider && D.provider !== "gemini" ? " &nbsp;·&nbsp; Director: " + escHtml(D.provider) : "") +
-          (res.signals ? "" : ' &nbsp;·&nbsp; <span class="warn">Sound and face detection unavailable, found from speech and picture changes</span>')
+                    (res.signals ? "" : ' &nbsp;·&nbsp; <span class="warn">Sound and face detection unavailable, found from speech and picture changes</span>')
         : "<b>No clips found</b>" + (res.prompt ? " about “" + escHtml(res.prompt) + "”. Try other words, or clear the box for the best moments." : ". Try a different stretch of the video.");
       if (n) {
         notifyDone("Your clips are ready", n + " clip" + (n === 1 ? "" : "s") + " found in " + item.name + ".", "edit");
