@@ -5249,7 +5249,7 @@
       const level = inside && !silent ? audioLevel(a, S.time) : 0;
       if (v.gain) { v.el.volume = 1; v.gain.gain.value = clamp(level, 0, 2); }
       else v.el.volume = clamp(level, 0, 1);
-      if (v.slot) setVoiceSlot(v.slot, a.voice, a.voiceAmt, a.enhance);
+      if (v.slot) setVoiceSlot(v.slot, a.voice, a.voiceAmt, a.enhance, a.eqFix);
       // ccl14: with Reduce noise on, the element plays the cleaned sound (same timing as the file)
       {
         const am = mediaById(a.mediaId);
@@ -8597,6 +8597,31 @@
     })));
     if (on) box.appendChild(group("Strength", slider(0.1, 1, 0.05, item.enhance, (v) => { item.enhance = v; }, () => commit(), (v) => Math.round(v * 100) + "%")));
     box.appendChild(mk("p", "panel-note", "Makes speech clearer and fuller: takes out rumble and boxiness, brings the words forward and evens out loud and quiet."));
+    /* 0.75.0: fix one thing you hear, by its range (Rumble, Muddy, Thin,
+       Boxy, Nasal, Harsh, Muffled, Add air); several can be on at once. */
+    const V = window.SenotelVoice;
+    if (!V || !V.FIXES) return;
+    const row = mk("div", "filter-chips");
+    V.FIXES.forEach(([id, label]) => {
+      const b = mk("button", "fchip" + ((item.eqFix || []).indexOf(id) >= 0 ? " on" : ""), label);
+      b.type = "button";
+      b.setAttribute("aria-pressed", b.classList.contains("on") ? "true" : "false");
+      b.addEventListener("click", () => {
+        let f = (item.eqFix || []).slice();
+        f = f.indexOf(id) >= 0 ? f.filter((x) => x !== id) : f.concat([id]);
+        // opposite moves on one range cancel out: keep the newest
+        if (id === "harsh") f = f.filter((x) => x !== "muffled");
+        if (id === "muffled") f = f.filter((x) => x !== "harsh");
+        if (id === "thin") f = f.filter((x) => x !== "muddy");
+        if (id === "muddy") f = f.filter((x) => x !== "thin");
+        if (f.length) item.eqFix = f; else delete item.eqFix;
+        commit();
+        recordEdit("voice-fix", { fix: item.eqFix || [] });
+        renderInspector();
+      });
+      row.appendChild(b);
+    });
+    box.appendChild(group("Fix what you hear", row));
   }
   function voicePanel(box, item, startOf, lenOf) {
     const V = window.SenotelVoice;
@@ -12253,7 +12278,7 @@
     // ccl9: the voice effect of the clip being heard
     if (pvVoice) {
       const at = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
-      setVoiceSlot(pvVoice, at && at.clip.voice, at && at.clip.voiceAmt, at && at.clip.enhance);
+      setVoiceSlot(pvVoice, at && at.clip.voice, at && at.clip.voiceAmt, at && at.clip.enhance, at && at.clip.eqFix);
     }
   }
 
@@ -12292,13 +12317,14 @@
     inp.connect(dest);
     return { inp: inp, dest: dest, key: "", chain: null, busy: false };
   }
-  function setVoiceSlot(slot, id, amount, enhance) {
-    const on = !!(((id && id !== "none") || enhance > 0) && window.SenotelVoice);
-    const key = on ? (id || "none") + ":" + (amount == null ? 1 : amount) + ":" + (enhance || 0) : "";
+  function setVoiceSlot(slot, id, amount, enhance, fix) {
+    const hasFix = !!(fix && fix.length);
+    const on = !!(((id && id !== "none") || enhance > 0 || hasFix) && window.SenotelVoice);
+    const key = on ? (id || "none") + ":" + (amount == null ? 1 : amount) + ":" + (enhance || 0) + ":" + (hasFix ? fix.join(",") : "") : "";
     if (slot.key === key || slot.busy) return;
     slot.busy = true;
     slot.key = key;
-    (on ? SenotelVoice.build(slot.inp.context, id, amount, enhance) : Promise.resolve(null)).then((ch) => {
+    (on ? SenotelVoice.build(slot.inp.context, id, amount, enhance, fix) : Promise.resolve(null)).then((ch) => {
       try { slot.inp.disconnect(); } catch (e) {}
       if (slot.chain) { try { slot.chain.output.disconnect(); slot.chain.stop(); } catch (e) {} }
       slot.chain = ch;
@@ -13272,8 +13298,8 @@
       const d = seg.duration;
       level(g.gain, at, d, edge);
       src.connect(g);
-      const fx = voice && ((voice.voice && voice.voice !== "none") || voice.enhance > 0) && window.SenotelVoice
-        ? await SenotelVoice.build(ctx, voice.voice, voice.voiceAmt, voice.enhance).catch(() => null) : null;
+      const fx = voice && ((voice.voice && voice.voice !== "none") || voice.enhance > 0 || (voice.eqFix && voice.eqFix.length)) && window.SenotelVoice
+        ? await SenotelVoice.build(ctx, voice.voice, voice.voiceAmt, voice.enhance, voice.eqFix).catch(() => null) : null;
       if (fx) { g.connect(fx.input); fx.output.connect(dest); }
       else g.connect(dest);
       src.start(at);

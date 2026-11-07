@@ -769,8 +769,13 @@
   // PASS 2 — execute the locked story into precise cuts + captions
   function editBrief(req, story, lean) {
     const lock = structureLock(req, story);
-    return editBriefFor(req, story, lean) + (lock ? "\n" + lock : "");
+    return editBriefFor(req, story, lean) + (lock ? "\n" + lock : "") + "\n" + CRAFT_RULE;
   }
+  /* 0.75.0, from the owner's saved reels: a finished edit is layers, each
+     doing a job (luka.visual, "Raw vs Edited Hook"); and AI-written text
+     gives itself away by being too tidy in its shape, not by single words
+     (Maryland + Google DeepMind, 61,000 stories). */
+  const CRAFT_RULE = "CRAFT: an edit is LAYERS, each doing a job to keep someone watching: the cut (pacing), framing (punch-ins on what matters), colour (one look), captions or titles, and sound (music, effects, silence). Use every layer the footage supports, each for a reason; fancy animation never replaces them. ON-SCREEN WORDS must sound like the speaker or a person, not a tidy AI summary: uneven lengths, concrete nouns, the speaker's own phrasing, no balanced three-part lists, no neat moral at the end.";
   function editBriefFor(req, story, lean) {
     if (req.mode === "business") return bizEditBrief(req, story, lean);
     if (req.mode === "trailer") return trailerEditBrief(req, story, lean);

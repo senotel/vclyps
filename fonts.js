@@ -357,10 +357,10 @@
   function cssUrl(family, weight, italic) {
     var f = BY[family];
     var fam = "family=" + family.replace(/ /g, "+");
-    if (!f) return "https://fonts.googleapis.com/css2?" + fam + "&display=swap";
+    if (!f) return "https://fonts.bunny.net/css2?" + fam + "&display=swap";
     var w = pick(family, weight);
     var axis = italic && f.italic ? ":ital,wght@1," + w : ":wght@" + w;
-    return "https://fonts.googleapis.com/css2?" + fam + axis + "&display=swap";
+    return "https://fonts.bunny.net/css2?" + fam + axis + "&display=swap";
   }
 
   function ready(family, weight, italic) {
@@ -418,7 +418,7 @@
           var info = BY[f];
           return "family=" + f.replace(/ /g, "+") + ":wght@" + pick(f, info.kind === "caption" ? 700 : 400);
         }).join("&");
-        var url = "https://fonts.googleapis.com/css2?" + fams + "&text=" + encodeURIComponent(Object.keys(chars).join("")) + "&display=swap";
+        var url = "https://fonts.bunny.net/css2?" + fams + "&text=" + encodeURIComponent(Object.keys(chars).join("")) + "&display=swap";
         jobs.push(fetch(url).then(function (r) { return r.ok ? r.text() : ""; }).then(function (css) {
           if (!css) { chunk.forEach(function (f) { previewed[f] = false; }); return; }
           var st = document.createElement("style");

@@ -426,7 +426,7 @@
     }).join("&");
     var link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?" + fam + "&display=swap";
+    link.href = "https://fonts.bunny.net/css2?" + fam + "&display=swap";
     document.head.appendChild(link);
   }
 

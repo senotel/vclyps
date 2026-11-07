@@ -158,7 +158,36 @@
     chain(ctx, [hp, mud, pres, air, comp, make]);
     return { input: hp, output: make, stop: () => {} };
   }
-  async function build(ctx, id, amount, enhance) {
+  /* Voice fixes by range (0.75.0), from a mixing engineer's map of the
+     voice: below 100 Hz is room rumble, 100-400 the body (too much is muddy,
+     too little thin), 400-800 boxy, 800-1500 nasal, 1.5-5k the words'
+     clarity (too much harsh, too little muffled), above 12k air. Each fix is
+     one move on its range. */
+  const FIXES = {
+    rumble:  { label: "Rumble",  make: (ctx) => filt(ctx, "highpass", 100, 0.7) },
+    muddy:   { label: "Muddy",   make: (ctx) => filt(ctx, "peaking", 250, 1.0, -4) },
+    thin:    { label: "Thin",    make: (ctx) => filt(ctx, "peaking", 180, 0.9, 3) },
+    boxy:    { label: "Boxy",    make: (ctx) => filt(ctx, "peaking", 600, 1.2, -4) },
+    nasal:   { label: "Nasal",   make: (ctx) => filt(ctx, "peaking", 1100, 1.4, -4) },
+    harsh:   { label: "Harsh",   make: (ctx) => filt(ctx, "peaking", 3200, 1.2, -4) },
+    muffled: { label: "Muffled", make: (ctx) => filt(ctx, "peaking", 3000, 0.8, 4) },
+    air:     { label: "Add air", make: (ctx) => filt(ctx, "highshelf", 12000, null, 3) }
+  };
+  function fixChain(ctx, fix) {
+    const nodes = (fix || []).filter((f) => FIXES[f]).map((f) => FIXES[f].make(ctx));
+    if (!nodes.length) return null;
+    chain(ctx, nodes);
+    return { input: nodes[0], output: nodes[nodes.length - 1], stop: () => {} };
+  }
+  async function build(ctx, id, amount, enhance, fix) {
+    const fx0 = fixChain(ctx, fix);
+    const fx1 = await buildMain(ctx, id, amount, enhance);
+    if (!fx0) return fx1;
+    if (!fx1) return fx0;
+    fx0.output.connect(fx1.input);
+    return { input: fx0.input, output: fx1.output, stop: fx1.stop };
+  }
+  async function buildMain(ctx, id, amount, enhance) {
     const en = enhance > 0 ? enhanceChain(ctx, Math.min(1, enhance)) : null;
     const fx = await buildEffect(ctx, id, amount);
     if (!en) return fx;
@@ -318,5 +347,6 @@
   }
 
   const nameOf = (id) => { const e = LIST.find((x) => x[0] === id); return e ? e[1] : ""; };
-  global.SenotelVoice = { LIST: LIST, SEMI: SEMI, build: build, prepare: prepare, nameOf: nameOf, pitchCore: pitchCore };
+  const FIX_LIST = Object.keys(FIXES).map((k) => [k, FIXES[k].label]);
+  global.SenotelVoice = { LIST: LIST, SEMI: SEMI, FIXES: FIX_LIST, build: build, prepare: prepare, nameOf: nameOf, pitchCore: pitchCore };
 })(typeof window !== "undefined" ? window : globalThis);
