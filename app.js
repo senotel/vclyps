@@ -353,7 +353,6 @@
     showScreen("editor");
     if (hasRestored) {
       hasRestored = false;
-      toast("Picked up where you left off", 3000);
     }
     mountPreview($("editorStage"));
     $("mediaStrip").classList.remove("hidden");
@@ -365,7 +364,6 @@
        reached; the rest load when first used (primeSfx). */
     if (sfxEngine() && sfxEngine().prepare) { sfxEngine().prepare(); primeSfx(); }
     if (!S.media.length) {
-      toast("Add your footage with +, then tell vClyps what you want or let it decide");
     }
   }
 
@@ -408,7 +406,6 @@
       // added first, so the editor opens on them (and not on "add your footage")
       addFiles(list, "editor");
       enterEditor();
-      if (!fresh) toast("Added to the project you had open");
     });
   };
   window.vcEnterEditor = enterEditor;
@@ -614,7 +611,6 @@
     } else {
       sounds.forEach((m) => mediaDuration(m).then(() => {
         const a = addAudioClip(m, { at: at, quiet: ctx === "extract" });
-        if (a && ctx === "extract") toast("Audio from “" + m.name + "” is on the timeline and saved to Your audio");
       }));
     }
     if (!sounds.length) {
@@ -1235,7 +1231,6 @@
     });
     if (withCommit) {
       commit();
-      toast('"' + m.name + '" added to timeline');
     }
     renderTimeline();
   }
@@ -1382,7 +1377,6 @@
     renderTimeline();
     renderInspector();
     syncNow();
-    toast("Frozen for 3 seconds. Drag its edge to make it longer");
   }
 
   /* ─── Reverse (ccl10, 0.41.0) ───
@@ -1405,7 +1399,6 @@
       c.mediaId = o.mediaId; c.in = from; c.out = to;
       delete c.reversed;
       commit(); renderTimeline(); renderInspector(); syncNow();
-      toast("Plays forwards again");
       return;
     }
     const F = window.SenotelFastExport, m = mediaById(c.mediaId);
@@ -1505,7 +1498,6 @@
       cc.out = N / fps;
       if (cc.mask) delete cc.mask.track;   // a tracked path belongs to the forwards footage
       commit(); renderTimeline(); renderInspector(); syncNow();
-      toast("Reversed. Tap Forwards to undo it");
       recordEdit("reverse", { secs: +len.toFixed(2) });
     } catch (e) {
       toast("This clip could not be reversed here: " + ((e && e.message) || "unknown"), 6000);
@@ -1533,7 +1525,6 @@
       c.mediaId = o.mediaId; c.in = o.in; c.out = o.out; c.speed = o.speed;
       delete c.smooth;
       commit(); renderTimeline(); renderInspector(); syncNow();
-      toast("Back to the original slow motion");
       return;
     }
     const F = window.SenotelFastExport, m = mediaById(c.mediaId), sp = c.speed || 1;
@@ -1627,7 +1618,6 @@
       if (cc.mask) delete cc.mask.track;
       delete cc.stab; delete cc.reframe;   // measured on the old footage
       commit(); renderTimeline(); renderInspector(); syncNow();
-      toast("Smooth slow motion is on");
       recordEdit("smooth-slowmo", { speed: sp, secs: +outLen.toFixed(1) });
     } catch (e) {
       toast("This clip could not be smoothed here: " + ((e && e.message) || "unknown"), 6000);
@@ -2402,7 +2392,6 @@
     renderTimeline();
     renderInspector();
     syncNow();
-    toast(where === "start" ? "The card now opens the video" : "The card now ends the video");
   }
 
   function duplicateSelection() {
@@ -2605,7 +2594,6 @@
     renderInspector();
     syncNow();
     closeSheets();
-    toast("Music added: " + t.title);
   }
 
   function fmtLen(sec) {
@@ -2810,7 +2798,7 @@
   $("voiceStop").addEventListener("click", (e) => {
     e.stopPropagation();
     if (VO.rec) stopVoiceover();
-    else { clearInterval(VO.timer); cleanupVoice(); toast("Recording cancelled"); }
+    else { clearInterval(VO.timer); cleanupVoice(); }
   });
   $("stkSearch").addEventListener("input", renderStickerSheet);
 
@@ -2996,7 +2984,6 @@
       commit();
       syncOverlays();
       capSay(capSummary(), true);
-      if (!opts.silent && !capSheetOpen()) toast(S.captions.length + " captions added");
       return true;
     } finally {
       setCapBusy(false);
@@ -3027,7 +3014,6 @@
       commit();
       syncOverlays();
       renderTimeline();
-      toast("Lyrics added as captions. Change their look in Captions");
       recordEdit("lyrics", { words: m.capWords.length });
     } catch (e) {
       toast("Couldn't hear the lyrics: " + ((e && e.message) || "an error"), 6000);
@@ -3699,7 +3685,6 @@
     if (!multi.items.length) { endMulti(); return; }
     renderTimeline();
     renderInspector();
-    toast(multi.items.length + " selected");
   }
   // Everything selected that can move along the timeline (not the main track)
   function multiMovers() {
@@ -3813,7 +3798,6 @@
     renderTimeline();
     renderInspector();
     syncOverlays();
-    toast(copies.length + " copied");
   }
 
   /* On a touchscreen a finger on a clip means one of three things, as in
@@ -4373,7 +4357,6 @@
     renderTimeline();
     renderInspector();
     syncNow();
-    toast(m.name + " added as an overlay. Drag it anywhere");
     return b;
   }
 
@@ -4652,7 +4635,6 @@
       add.addEventListener("click", () => {
         addSfxAt(s.name);
         closeSheets();
-        toast(s.label + " added at " + fmt(S.time));
       });
 
       row.appendChild(hear);
@@ -5142,7 +5124,6 @@
     renderTimeline();
     renderInspector();
     syncNow();
-    if (!opts.quiet) toast("“" + a.name + "” added to the audio track at " + fmt(a.start) + ". Drag it anywhere");
     return a;
   }
 
@@ -5685,7 +5666,7 @@
         if (c.filter && c.filter !== "none" && S.clips.length > 1) {
           const all = mk("button", "fchip", "Use on every clip");
           all.type = "button";
-          all.addEventListener("click", () => { S.clips.forEach((x) => { x.filter = c.filter; if (c.filterAmt != null) x.filterAmt = c.filterAmt; else delete x.filterAmt; }); commit(); syncNow(); toast("This filter is on every clip now"); });
+          all.addEventListener("click", () => { S.clips.forEach((x) => { x.filter = c.filter; if (c.filterAmt != null) x.filterAmt = c.filterAmt; else delete x.filterAmt; }); commit(); syncNow(); });
           box.appendChild(group("", all));
         }
       }));
@@ -6276,24 +6257,26 @@
 
   /* ─── Fullscreen preview (with exit + scrubber, phone-friendly) ─── */
   function inFs() { return document.body.classList.contains("previewFs"); }
-  /* Our own full-viewport mode, NOT the Fullscreen API. Every browser shows an
-     unsuppressable "press Esc to exit full screen" toast when you call
-     requestFullscreen(), and the owner does not want it — so we simply never
-     call it. The CSS class was always what guaranteed the fill and the controls
-     on every phone anyway; the API only added the browser chrome hiding, and
-     its own popup with it. */
+  /* Real fullscreen again (owner 2026-11-07: "it doesnt go full screen"):
+     the CSS class alone only filled the browser window, so the address bar
+     and tabs stayed. The class still lays the preview out, and the Fullscreen
+     API (webkit on older Safari) hides the browser around it. iPhone Safari
+     has no page fullscreen, so there the class is the whole of it. No notice
+     of our own either way: the change on screen says it. */
   function enterFs() {
     document.body.classList.add("previewFs");
-    fsNotice("Fullscreen preview", "Press Esc or use the exit button to return.");
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req && !(document.fullscreenElement || document.webkitFullscreenElement)) {
+      try { const p = req.call(el, { navigationUI: "hide" }); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
   }
   function exitFs() {
     document.body.classList.remove("previewFs");
-    fsNotice("Back to the editor", "Your preview is now in compact view.");
-  }
-
-  /* Shared accessible notice: close, swipe, keyboard and attention-aware timer. */
-  function fsNotice(title, detail) {
-    if (window.SenotelNotices) SenotelNotices.show("fsNotice", title, detail, 5000);
+    const ex = document.exitFullscreen || document.webkitExitFullscreen;
+    if (ex && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      try { const p = ex.call(document); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
   }
   function toggleFs() { if (inFs()) exitFs(); else enterFs(); }
 
@@ -6303,9 +6286,9 @@
   /* Kept for the case where a browser puts the PAGE into fullscreen by some
      other route (F11). We never request it ourselves any more, so this only
      tidies up if the two states ever disagree. */
-  document.addEventListener("fullscreenchange", () => {
-    if (!document.fullscreenElement && inFs()) document.body.classList.remove("previewFs");
-  });
+  const fsLeft = () => { if (!(document.fullscreenElement || document.webkitFullscreenElement) && inFs()) document.body.classList.remove("previewFs"); };
+  document.addEventListener("fullscreenchange", fsLeft);
+  document.addEventListener("webkitfullscreenchange", fsLeft);
 
   // tap the video: enter fullscreen, or toggle play/pause once already fullscreen
   /* ─── Text on the picture (CapCut) ───
@@ -6756,7 +6739,7 @@
     if (S.clips.length > 1) {
       const all = mk("button", "fchip", "Use on every clip");
       all.type = "button";
-      all.addEventListener("click", () => { S.clips.forEach((x) => { if (c.adj) x.adj = JSON.parse(JSON.stringify(c.adj)); else delete x.adj; }); commit(); syncNow(); toast("Adjustments copied to every clip"); });
+      all.addEventListener("click", () => { S.clips.forEach((x) => { if (c.adj) x.adj = JSON.parse(JSON.stringify(c.adj)); else delete x.adj; }); commit(); syncNow(); });
       row.appendChild(all);
     }
     const reset = mk("button", "fchip", adjTab === "basic" ? "Reset" : "Reset this tab");
@@ -7327,7 +7310,7 @@
         for (let i = 0; i + 2 < old.length; i += 3) if (old[i] < t0 - 0.01) keep.push(old[i], old[i + 1] + (ot.dx || 0), old[i + 2] + (ot.dy || 0));
         c.mask.track = { pts: keep.concat(pts), dx: 0, dy: 0 };
         commit();
-        toast(lost > n * 0.4 ? "Tracked, but the thing was often lost: check the path" : "Tracked");
+        if (lost > n * 0.4) toast("Tracked, but the thing was often lost: check the path");
         recordEdit("mask-track", { frames: n, lost: lost });
       }
     } catch (e) {
@@ -7421,7 +7404,6 @@
           list.unshift(t);
           storeTemplates(list.slice(0, 30));
           wrap.remove(); openVideoTemplates();
-          toast("Template added: " + t.name);
         } catch (e) { toast("That file is not a vClyps template"); }
       });
       inp.click();
@@ -7463,7 +7445,6 @@
           all.splice(i, 1);
           storeTemplates(all);
           wrap.remove(); openVideoTemplates();
-          toast("Template removed");
         });
         row.replaceChild(ask, rm);
         ask.focus();
@@ -8067,7 +8048,6 @@
       if (!cc) return;
       cc.stab = { lvl: lvl, fps: fps, t0: from, t1: to, raw: raw };
       commit();
-      toast("Stabilized");
       recordEdit("stabilize", { level: lvl, secs: +(to - from).toFixed(1) });
     } catch (e) {
       toast("This clip could not be stabilized here: " + ((e && e.message) || "unknown"), 6000);
@@ -8169,7 +8149,6 @@
       if (seen >= Math.max(2, raw.length * 0.2)) cc.reframe = { by: "face", t0: c.in, t1: c.out, pts: RF.smooth(raw, c.in, c.out) };
       else if (!reframeFromMotion(cc)) { toast("Nothing to follow was found in this clip"); return; }
       commit();
-      toast(cc.reframe.by === "face" ? "Following the face" : "Following the action");
       recordEdit("reframe", { by: cc.reframe.by, secs: +(c.out - c.in).toFixed(1) });
     } catch (e) {
       toast("This clip could not be reframed here: " + ((e && e.message) || "unknown"), 6000);
@@ -8778,11 +8757,9 @@
     if (at != null) {
       K.unmark(tg.item, at);
       K.settle(tg.item, tg.t);
-      toast("Keyframe removed");
     } else {
       kfFill(tg);
       K.mark(tg.item, tg.t, tg.paths);
-      if (K.times(tg.item).length === 1) toast("Keyframe added. Move the playhead and change it to add another");
     }
     kfSeen = "";
     kfCommit();
@@ -9494,7 +9471,7 @@
       const all = mk("button", "fchip", "Use on every cut");
       all.addEventListener("click", () => {
         S.clips.forEach((x, i) => { if (i > 0) { x.tIn = c.tIn; if (c.tDur != null) x.tDur = c.tDur; else delete x.tDur; if (c.tAudio === false) x.tAudio = false; else delete x.tAudio; } });
-        commit(); renderTimeline(); toast(FX.nameOf(c.tIn) + " is on every cut now");
+        commit(); renderTimeline();
       });
       ins.appendChild(group("", all));
     }
@@ -9815,7 +9792,6 @@
     renderInspector();
     syncOverlays();
     recordEdit("text-template", { id: id });
-    toast("Template added. Tap Edit to change the words");
   }
 
   function openStickers(replace) {
@@ -10028,7 +10004,6 @@
     const a = addAudioClip(item, { at: VO.startAt });
     S.time = VO.startAt;
     syncNow();
-    if (a) toast(name + " is on the audio track", 4000);
   }
 
   /* ═══════════ WAVEFORMS ═══════════
@@ -10121,7 +10096,6 @@
     renderTimeline();
     renderInspector();
     recordEdit("paste-style", { texts: list.length });
-    toast(list.length > 1 ? "Style pasted on " + list.length + " texts" : "Style pasted");
   }
 
   const TEXT_PRESETS = [
@@ -11389,7 +11363,6 @@
     // the CAPTION model (caption-worker.js), not the Director's small one
     if (C && C.tierReady) { try { ready = await C.tierReady(C.defaultTier()); } catch (e) {} }
     if (!ready) {
-      toast("Tap Captions to add word-by-word subtitles (one-time model download)", 5000);
       return;
     }
     try { await buildCaptions({ silent: true }); } catch (e) { /* leave uncaptioned */ }
@@ -12911,7 +12884,6 @@
     commit();
     ratioChip();
     syncOverlays();
-    toast("Ratio " + ratioLabel(a));
   }
 
   /* The ratio rides along with undo and redo. The snapshots belong to
@@ -13844,7 +13816,6 @@
     try { if (EXP.rec && EXP.rec.state !== "inactive") EXP.rec.stop(); } catch (e) {}
     if (EXP.stream) { EXP.stream.getTracks().forEach((track) => track.stop()); EXP.stream = null; }
     $("exportOverlay").classList.add("hidden");
-    toast("Export cancelled");
   });
 
   /* ═══════════ SHEETS ═══════════ */
@@ -14496,7 +14467,6 @@
       disarm();
       if (resetProject()) {
         closeSheets();
-        toast("New video started. Add your footage with +");
       }
     });
 

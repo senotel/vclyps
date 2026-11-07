@@ -181,7 +181,7 @@
      each now walks a chain and only gives up once every model is refused. */
   async function chatPlanOn(req, path, model) {
     // lean = transcripts only, trimmed, and the shorter sound brief — see the note above
-    const story = await callChat(storyBrief(req, true) + "\n" + footageText(req, 3500), 1500, path, model);
+    const story = lockStructure(await callChat(storyBrief(req, true) + "\n" + footageText(req, 3500), 1500, path, model), req);
     const edit = await callChat(editBrief(req, story, true) + "\n" + footageText(req, 3500), 4096, path, model);
     if (story && story.hook && !edit.hook) edit.hook = story.hook;
     if (story && story.look && !edit.look) edit.look = story.look;
@@ -675,8 +675,46 @@
     return L.join("\n");
   }
 
+  /* ───────── Structures (0.74.0) ─────────
+     Owner 2026-11-07: the AI "can never edit without a structure anymore".
+     Pass 1 must choose one from structures.js (offered as a menu fitted to
+     the mode and its tone or genre); lockStructure() checks the choice and
+     falls back to the closest one; pass 2 gets the chosen structure in full,
+     timed to the length, and is held to it. */
+  const SX = () => (typeof window !== "undefined" ? window.SenotelStructures : null);
+  function structureKind(req) {
+    return (req.mode === "business" || req.mode === "trailer") && req.brief ? req.brief.tone || null : null;
+  }
+  function structureMenu(req, lean) {
+    const X = SX();
+    if (!X || !X.count()) return "";
+    const list = X.menu(req.mode, structureKind(req), lean ? 18 : 40);
+    return "STRUCTURE (REQUIRED: no edit is made without one). Choose exactly ONE structure from this list for this footage and put its id in the JSON as \"structure\". Its beats, in its order, ARE your beats: name each beat by its role, keep each beat's share of the length within about 10%, and cut its shots to its shot lengths. Pick the one the footage can actually fill; never force footage into a beat it cannot serve.\nSTRUCTURES:\n" +
+      list.map(X.line).join("\n");
+  }
+  // after pass 1: a valid structure id on the story, whatever the model wrote
+  function lockStructure(story, req) {
+    const X = SX();
+    if (!X || !X.count() || !story || typeof story !== "object") return story;
+    let st = X.get(String(story.structure || ""));
+    if (!st || st.modes.indexOf(req.mode || "entertainment") < 0) st = X.closest(req.mode, structureKind(req), story.beats);
+    if (st) { story.structure = st.id; req.structure = st.id; }
+    return story;
+  }
+  function structureLock(req, story) {
+    const X = SX();
+    const st = X && story && X.get(story.structure);
+    if (!st) return "";
+    const secs = req.target || Math.round((st.len[0] + st.len[1]) / 2);
+    return "LOCKED STRUCTURE (follow it beat by beat; every editPlan entry's 'beat' is one of its roles, in this order; shots within its shot lengths):\n" + X.detail(st, secs);
+  }
+
   // PASS 1 — understand the footage and design the story (no exact cuts yet)
   function storyBrief(req, lean) {
+    const sm = structureMenu(req, lean);
+    return storyBriefFor(req, lean) + (sm ? "\n" + sm + "\nThe JSON above MUST also include \"structure\": \"<the id you chose>\"." : "");
+  }
+  function storyBriefFor(req, lean) {
     if (req.mode === "business") return bizStoryBrief(req, lean);
     if (req.mode === "trailer") return trailerStoryBrief(req, lean);
     const L = [];
@@ -730,6 +768,10 @@
 
   // PASS 2 — execute the locked story into precise cuts + captions
   function editBrief(req, story, lean) {
+    const lock = structureLock(req, story);
+    return editBriefFor(req, story, lean) + (lock ? "\n" + lock : "");
+  }
+  function editBriefFor(req, story, lean) {
     if (req.mode === "business") return bizEditBrief(req, story, lean);
     if (req.mode === "trailer") return trailerEditBrief(req, story, lean);
     const L = [];
@@ -1189,7 +1231,7 @@
        spending 489 on thinking for 200 of actual answer — a longer transcript
        can consume the whole allowance and return a candidate with no content,
        which reads as "the Director failed" for no visible reason. */
-    const story = await callWithRetry([{ text: storyBrief(req) }].concat(footageParts(req, true)), 4096);
+    const story = lockStructure(await callWithRetry([{ text: storyBrief(req) }].concat(footageParts(req, true)), 4096), req);
 
     // Pass 2 — EXECUTE the story into precise cuts (transcripts only; already "seen")
     const edit = await callWithRetry([{ text: editBrief(req, story) }].concat(footageParts(req, false)), 8192);
@@ -1491,6 +1533,7 @@
       music: normMusic(plan.music, req, brandSafe),
       story: storySummary,
       endCard: endCard,
+      structure: req.structure || null,
       confidence: typeof plan.confidence === "number" ? clamp(plan.confidence, 0, 1) : null,
       reasons: Array.isArray(plan.reasoning) ? plan.reasoning.slice(0, 6).map(String) : [],
       raw: plan // full director output — becomes training data
