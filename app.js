@@ -69,13 +69,37 @@
 
   /* ═══════════ TOAST ═══════════ */
 
+  /* toast(msg) is a one-line receipt; toast(msg, 6000) keeps it longer;
+     toast(msg, { action: "Undo" }) adds a button that takes the step back
+     (round 3, R8: every change answers with an Undo, as CapCut does). A new
+     toast replaces the old one. With a button it stays 4 s, and the timer
+     waits while a finger, mouse or keyboard is on it. Words go in as text,
+     never as HTML: some name a file the user picked. */
   let toastTimer = null;
-  function toast(msg, ms) {
+  function toast(msg, opts) {
     const el = $("toast");
-    el.textContent = msg;
+    const o = typeof opts === "number" ? { ms: opts } : (opts || {});
+    const hide = () => { clearTimeout(toastTimer); el.classList.add("hidden"); };
+    const ms = o.ms || (o.action ? 4000 : 2600);
+    const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(hide, ms); };
+    el.textContent = "";
+    const words = document.createElement("span");
+    words.className = "toast-msg";
+    words.textContent = msg;
+    el.appendChild(words);
+    el.classList.toggle("has-action", !!o.action);
+    if (o.action) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "toast-act";
+      b.textContent = o.action;
+      b.addEventListener("click", () => { hide(); (o.run || undo)(); });
+      el.appendChild(b);
+    }
     el.classList.remove("hidden");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.add("hidden"), ms || 2600);
+    el.onpointerenter = el.onfocusin = () => clearTimeout(toastTimer);
+    el.onpointerleave = el.onfocusout = arm;
+    arm();
   }
 
   /* ═══════════ HELPERS ═══════════ */
@@ -164,10 +188,50 @@
   /* ═══════════ HISTORY (undo / redo) ═══════════ */
 
   let hist = [], histMedia = [], histIdx = -1;
-  function commit() {
+  /* Round 3 (R8): every step keeps a short name, so Undo can say what it
+     undid ("Undid: split"). A step is named by commit(name), or by the
+     recordEdit() that goes with it, whether that runs just before the
+     commit (adding an effect, a sticker) or just after it (split, delete). */
+  let histNames = [], stepPending = "", stepFresh = false;
+  const STEP_NAMES = {
+    "multi-delete": "delete", "multi-duplicate": "duplicate", "multi-move": "move",
+    "sticker": "add sticker", "effect": "add effect", "text-template": "add text",
+    "track-item": "tracking", "mask-track": "mask tracking", "rename-clip": "rename",
+    "smooth-slowmo": "smooth slow motion", "tts": "text to speech", "text-look": "text style",
+    "cut-to-beat": "cut to the beat", "template-use": "use template", "card-clip": "add card"
+  };
+  // the steps that answer with their own Undo toast here, because the
+  // function that makes them has no toast of its own (or one without Undo)
+  const STEP_TOASTS = {
+    "split": () => "Clip split",
+    "sticker": () => "Sticker added",
+    "effect": () => "Effect added",
+    "multi-delete": (d) => (d && d.items) + " deleted",
+    "multi-duplicate": (d) => (d && d.items) + " duplicated"
+  };
+  // what a selection is called in a toast: "Clip deleted", "Sticker duplicated"
+  function kindWord(sel) {
+    if (!sel) return "Item";
+    if (sel.type === "text") { const t = textById(sel.id); return t && t.sticker ? "Sticker" : "Text"; }
+    return { clip: "Clip", broll: "Overlay", uaudio: "Audio", effect: "Effect", sfx: "Sound effect", music: "Music" }[sel.type] || "Item";
+  }
+  function nameStep(action, details) {
+    const name = STEP_NAMES[action] || String(action || "").replace(/-/g, " ").trim();
+    if (stepFresh) { if (!histNames[histIdx]) histNames[histIdx] = name; }
+    else stepPending = name;
+    const say = STEP_TOASTS[action];
+    // after the whole tap has run, so it follows the commit and replaces any plainer toast
+    queueMicrotask(() => { stepPending = ""; if (say) toast(say(details), { action: "Undo" }); });
+  }
+  function commit(name) {
     try { kfCapture(); } catch (e) {}   // ccl13: an edit of a keyframed thing is kept as a keyframe
     hist = hist.slice(0, histIdx + 1);
     histMedia = histMedia.slice(0, histIdx + 1);
+    histNames = histNames.slice(0, histIdx + 1);
+    histNames.push(typeof name === "string" && name ? name : stepPending);
+    stepPending = "";
+    stepFresh = true;
+    queueMicrotask(() => { stepFresh = false; });
     // Cache only IDs so releasing removed files never parses project snapshots.
     const media = new Set(S.media.map((m) => m.id));
     [...S.clips, ...S.broll, ...S.audio].forEach((c) => {
@@ -178,7 +242,7 @@
     histMedia.push(media);
     if (typeof primeSfx === "function") primeSfx();   // the sounds this edit uses start loading
     hist.push(JSON.stringify({ media: S.media.map((m) => m.id), c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
-    if (hist.length > 80) { hist.shift(); histMedia.shift(); }
+    if (hist.length > 80) { hist.shift(); histMedia.shift(); histNames.shift(); }
     histIdx = hist.length - 1;
     if (removeMedia.collect) removeMedia.collect();
     saveSession();   // every edit is also a resume point
@@ -219,18 +283,37 @@
     S.audio = o.a || [];      // and the audio clips
     S.effects = o.e || [];    // and the video effects
     loadMusicElement();
-    S.sel = null;
+    // the selection stays when its item is still there (round 3, spec 4.4)
+    S.sel = keptSel(S.sel, S);
     S.time = clamp(S.time, 0, total());
     renderTimeline();
     renderInspector();
     saveSession();
   }
+  // The selection after an undo or redo: the same item if it still exists
+  // (matched by id), else nothing. A group is dropped: its members change.
+  function keptSel(sel, st) {
+    if (!sel) return null;
+    if (sel.type === "all") return st.clips.length ? sel : null;
+    if (sel.type === "music") return st.music ? sel : null;
+    const list = { clip: st.clips, text: st.texts, broll: st.broll, uaudio: st.audio, sfx: st.sfx, effect: st.effects }[sel.type];
+    return list && list.some((x) => x.id === sel.id) ? sel : null;
+  }
   function undo() {
-    if (histIdx > 0) { histIdx--; restore(hist[histIdx]); }
+    if (histIdx > 0) {
+      const name = histNames[histIdx];
+      histIdx--;
+      restore(hist[histIdx]);
+      toast(name ? "Undid: " + name : "Undone");
+    }
     else toast("Nothing to undo");
   }
   function redo() {
-    if (histIdx < hist.length - 1) { histIdx++; restore(hist[histIdx]); }
+    if (histIdx < hist.length - 1) {
+      histIdx++;
+      restore(hist[histIdx]);
+      toast(histNames[histIdx] ? "Redid: " + histNames[histIdx] : "Redone");
+    }
     else toast("Nothing to redo");
   }
 
@@ -1583,9 +1666,10 @@
     S.texts.push(t);
     pendingTool = "edit";   // a new text opens on its words, as CapCut opens the keyboard
     S.sel = { type: "text", id: t.id };
-    commit();
+    commit("add text");
     renderTimeline();
     renderInspector();
+    toast("Text added", { action: "Undo" });
   }
 
   function deleteSelection() {
@@ -1595,13 +1679,13 @@
       S.music = null;
       loadMusicElement();
       S.sel = null;
-      commit();
+      commit("remove music");
       renderTimeline();
       renderInspector();
-      toast("Music removed");
+      toast("Music removed", { action: "Undo" });
       return;
     }
-    const selType = S.sel.type;
+    const selType = S.sel.type, word = kindWord(S.sel);
     const removed = selType === "effect" ? effectById(S.sel.id) : selType === "clip" ? clipById(S.sel.id)
       : selType === "text" ? textById(S.sel.id)
       : selType === "broll" ? brollById(S.sel.id)
@@ -1614,7 +1698,7 @@
     else S.sfx = S.sfx.filter((x) => x.id !== S.sel.id);
     S.sel = null;
     S.time = clamp(S.time, 0, total());
-    commit();
+    commit("delete " + word.toLowerCase());
     recordEdit("delete", {
       type: selType,
       mediaId: removed && removed.mediaId,
@@ -1622,6 +1706,8 @@
     });
     renderTimeline();
     renderInspector();
+    // one tap and an Undo, as CapCut (owner decision 2, 2026-11-06)
+    toast(word + " deleted", { action: "Undo" });
   }
 
   /* ═══════════ TIDY: pauses, filler words, editing by the transcript ═══════
@@ -2276,13 +2362,19 @@
   function duplicateSelection() {
     if (S.sel && S.sel.type === "multi") { duplicateMulti(); return; }
     if (!S.sel || S.sel.type === "all") { toast("Select something on the timeline to copy"); return; }
+    // one step named for Undo, and a toast that can take it back (round 3, R8)
+    const done = () => {
+      const w = kindWord(S.sel);
+      commit("duplicate " + w.toLowerCase());
+      toast(w + " duplicated", { action: "Undo" });
+    };
     if (S.sel.type === "broll") {
       const b = brollById(S.sel.id);
       if (!b) return;
       const copy = copyClip(b, { id: nextId++, start: b.start + b.dur });
       S.broll.push(copy);
       S.sel = { type: "broll", id: copy.id };
-      commit(); renderTimeline(); renderInspector();
+      done(); renderTimeline(); renderInspector();
       return;
     }
     if (S.sel.type === "sfx") {
@@ -2292,7 +2384,7 @@
       delete copy.by;   // a copy you made is yours: the next generate leaves it alone
       S.sfx.push(copy);
       S.sel = { type: "sfx", id: copy.id };
-      commit(); renderTimeline(); renderInspector();
+      done(); renderTimeline(); renderInspector();
       return;
     }
     if (S.sel.type === "music") {
@@ -2305,7 +2397,7 @@
       const copy = copyClip(e, { id: nextId++, start: e.start + e.dur });
       S.effects.push(copy);
       S.sel = { type: "effect", id: copy.id };
-      commit(); renderTimeline(); renderInspector(); syncOverlays();
+      done(); renderTimeline(); renderInspector(); syncOverlays();
       return;
     }
     if (S.sel.type === "uaudio") {
@@ -2314,7 +2406,7 @@
       const copy = copyClip(a, { id: nextId++, start: a.start + audioDur(a) });
       S.audio.push(copy);
       S.sel = { type: "uaudio", id: copy.id };
-      commit(); renderTimeline(); renderInspector();
+      done(); renderTimeline(); renderInspector();
       return;
     }
     if (S.sel.type === "clip") {
@@ -2330,7 +2422,7 @@
       S.texts.push(copy);
       S.sel = { type: "text", id: copy.id };
     }
-    commit();
+    done();
     renderTimeline();
     renderInspector();
   }
@@ -5590,7 +5682,7 @@
           act("replace", "Replace", ICON.replace, () => openStickers(t))].concat(common());
       }
       const heading = textStyleOf(t) === "heading";
-      const list = [tp("edit", "Edit", ICON.rename, "text"), tp("font", "Font", ICON.font, "font")];
+      const list = [tp("edit", "Edit text", ICON.rename, "text"), tp("font", "Font", ICON.font, "font")];
       if (heading) list.push(tp("style", "Style", ICON.style, "style"), tp("anim", "Animation", ICON.anim, "anim"), tp("place", "Position", ICON.place, "place"),
         tool("tracking", "Tracking", ICON.track, (box) => trackItemPanel(box, t)));
       // ccl15: after Animation, where CapCut has it
@@ -8588,11 +8680,12 @@
     const K = KF(), tg = kfTarget();
     const show = !!(K && tg && tg.inside);
     const on = show && K.keyAt(tg.item, tg.t) != null;
-    b.classList.toggle("hidden", !show);
+    // dimmed, never hidden: the play row keeps its shape so Play stays put (round 3, R4)
+    b.setAttribute("aria-disabled", show ? "false" : "true");
     b.classList.toggle("on", on);
     b.setAttribute("aria-label", on ? "Remove keyframe" : "Add keyframe");
     b.title = on ? "Remove keyframe" : "Add keyframe";
-    e.classList.toggle("hidden", !on);
+    e.setAttribute("aria-disabled", on ? "false" : "true");
   }
   function kfToggle() {
     const K = KF(), tg = kfTarget();
@@ -11287,6 +11380,7 @@
   /* Manual edits are learning signals for Vision-1.0: what users fix by
      hand is what the AI got wrong. Stored on-device only, like all data. */
   function recordEdit(action, details) {
+    nameStep(action, details);   // round 3: the same name labels the undo step
     if (!window.IntelligenceEngine) return;
     IntelligenceEngine.record({
       kind: "user-edit", action: action, details: details || null,

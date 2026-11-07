@@ -2744,9 +2744,15 @@ body[data-screen="editor"] #screen-editor { display: flex; flex-direction: colum
 #screen-editor .tl-top { border-bottom: 0; padding: 4px 16px 0; }
 #screen-editor .tl-time, #screen-editor .tl-hint { display: none; }
 
-/* the play row: time | play | undo redo mute fullscreen */
+/* the play row: time | play | ease keyframe undo redo mute fullscreen.
+   Round 3 (R4): Play never moves. Its column is a fixed 48, and every
+   button on the right is always there (the keyframe pair is dimmed when it
+   does not apply, never removed), so the right column is the same width
+   with or without a selection. On a wide screen both sides are equal and
+   Play sits dead centre; on a phone the right cluster needs more than half,
+   so Play sits a little left of centre, but in the same place every time. */
 body:not(.previewFs) .transport {
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  display: grid; grid-template-columns: 1fr 48px 1fr; align-items: center;
   height: 48px; padding: 0 4px; gap: 0; position: static; background: none;
 }
 .tr-time { justify-self: start; padding-left: 8px; font-size: var(--fs-12); font-variant-numeric: tabular-nums; color: var(--t2); white-space: nowrap; }
@@ -2758,6 +2764,22 @@ body:not(.previewFs) .transport {
 .tr-right { justify-self: end; display: flex; }
 .tr-right .icon-btn { width: 44px; height: 44px; border: none; background: none; color: var(--t1); }
 .tr-right .icon-btn:hover { color: var(--text); background: var(--bg1); }
+.tr-right .icon-btn:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+/* not applicable now: dimmed, still in place, a tap does nothing */
+.tr-right .icon-btn[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
+/* fullscreen only plays: the keyframe pair is not shown there */
+body.previewFs #kfBtn, body.previewFs #kfEaseBtn { display: none; }
+/* the Undo inside a toast (round 3, R8): the toast is inverted, so the
+   button takes its colours; 44 tall to hit, without making the toast taller */
+.toast.has-action { display: flex; align-items: center; gap: 12px; padding-right: 4px; }
+.toast-act {
+  min-height: 44px; min-width: 44px; margin: -10px 0; padding: 0 10px;
+  border: none; border-left: 1px solid currentColor; border-radius: 0;
+  background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer;
+}
+.toast-act:hover { text-decoration: underline; }
+.toast-act:active { opacity: 0.7; }
+.toast-act:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
 body:not(.previewFs) .transport .seek { display: none; }
 body.previewFs .transport { display: flex; align-items: center; height: auto; }
 body.previewFs .transport .seek { display: block; flex: 1 1 auto; order: 1; }
@@ -2905,7 +2927,7 @@ body.previewFs .tr-right .icon-btn, body.previewFs .tr-time .tcode:first-child {
   #screen-editor .ruler { position: sticky; top: 0; z-index: 4; background: var(--bg0); }
   .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 }
-/* play stays dead centre: the right-hand buttons fit their third */
+/* the right-hand buttons as narrow as a finger allows, so Play sits as near the centre as six of them let it */
 .tr-right .icon-btn { width: 40px; }
 @media (max-width: 760px) { #screen-editor .tl-zoom { display: none; } #screen-editor .tl-top { padding: 0; min-height: 0; } }
 /* Where the panel goes on bigger screens: a tablet or small laptop gets the
