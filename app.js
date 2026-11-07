@@ -3289,6 +3289,41 @@
   const PADX = 20;
   const CLIP_TILE = 56;   // width of one frame in the strip; about the main track's height
 
+  /* Which cut squares the main track shows, and how far each one's target
+     reaches to either side (T25, spec 7.3). A finger on a selected clip's
+     trim handle must always get the handle: before this, every cut had a
+     46px invisible target that sat over both handles, so a drag scrolled
+     the timeline or opened Transition instead of trimming. So:
+     - the selected clip's own two cuts show no square (they come back on
+       deselect; Transition is still in the clip's tools);
+     - a clip narrower than 44px shows no squares, as there is no room for one
+       to be aimed at beside its neighbour's;
+     - every other square keeps a 44px target (22 each side of the cut) but
+       stops where a handle's target begins.
+     Pure: widthOf(clip) gives a clip's width in px, handleHit how far a
+     handle's target reaches out from the clip's edge (44 touch, 17 mouse). */
+  function cutButtonsFor(clips, selId, widthOf, handleHit) {
+    const HALF = 22, MIN_W = 44;
+    const xs = [];
+    let x = 0;
+    clips.forEach((c) => { xs.push(x); x += widthOf(c); });
+    const s = selId == null ? -1 : clips.findIndex((c) => c.id === selId);
+    const zones = s < 0 ? [] : [[xs[s] - handleHit, xs[s]], [xs[s] + widthOf(clips[s]), xs[s] + widthOf(clips[s]) + handleHit]];
+    const out = [];
+    for (let i = 1; i < clips.length; i++) {
+      if (i - 1 === s || i === s) continue;
+      if (widthOf(clips[i - 1]) < MIN_W || widthOf(clips[i]) < MIN_W) continue;
+      const at = xs[i];
+      let hitL = HALF, hitR = HALF;
+      zones.forEach(([a, b]) => {
+        if (b <= at) hitL = Math.min(hitL, Math.max(0, at - b));
+        else if (a >= at) hitR = Math.min(hitR, Math.max(0, a - at));
+      });
+      out.push({ i, x: at, hitL, hitR });
+    }
+    return out;
+  }
+
   function renderTimeline() {
     const vt = $("videoTrack"), tt = $("textTrack"), ruler = $("ruler");
     const ot = $("overlayTrack"), at = $("audioTrack"), mt = $("musicTrack"), ut = $("uaudioTrack"), et = $("effectTrack");
@@ -3380,29 +3415,32 @@
 
     /* CapCut's cut button: a small square on every cut between two clips.
        Tap it for the transitions into the clip after it; it is filled in when
-       that cut already has one. */
+       that cut already has one. Never on a selected clip's handles
+       (cutButtonsFor). */
     {
-      let at = 0;
-      S.clips.forEach((c, i) => {
-        if (i > 0) {
-          const b = mk("button", "cut-btn" + (c.tIn && c.tIn !== "none" ? " on" : ""));
-          b.type = "button";
-          b.title = c.tIn && window.SenotelFX ? SenotelFX.nameOf(c.tIn) : "Add a transition";
-          b.setAttribute("aria-label", b.title);
-          b.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>';
-          b.style.left = at + "px";
-          b.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-          b.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            pendingTool = "trans";
-            S.sel = { type: "clip", id: c.id };
-            lastSelKey = "";   // open the panel even if this clip was already selected
-            renderTimeline();
-            renderInspector();
-          });
-          vt.appendChild(b);
-        }
-        at += Math.max(dispDur(c) * S.pps, 26);
+      const selId = S.sel && S.sel.type === "clip" ? S.sel.id : null;
+      const cuts = cutButtonsFor(S.clips, selId, (c) => Math.max(dispDur(c) * S.pps, 26), touchDevice.matches ? 44 : 17);
+      cuts.forEach(({ i, x: at, hitL, hitR }) => {
+        const c = S.clips[i];
+        const b = mk("button", "cut-btn" + (c.tIn && c.tIn !== "none" ? " on" : ""));
+        b.type = "button";
+        b.title = c.tIn && window.SenotelFX ? SenotelFX.nameOf(c.tIn) : "Add a transition";
+        b.setAttribute("aria-label", b.title);
+        b.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>';
+        b.style.left = at + "px";
+        // the target's reach either side of the cut, clipped at a handle's (styles.css .cut-btn::before)
+        b.style.setProperty("--hit-l", hitL + "px");
+        b.style.setProperty("--hit-r", hitR + "px");
+        b.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        b.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          pendingTool = "trans";
+          S.sel = { type: "clip", id: c.id };
+          lastSelKey = "";   // open the panel even if this clip was already selected
+          renderTimeline();
+          renderInspector();
+        });
+        vt.appendChild(b);
       });
     }
 
