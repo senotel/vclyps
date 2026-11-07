@@ -659,7 +659,7 @@
     L.push("EFFECTS: a punch-in on the TURN and on the peak of Act 3; slow-mo on one striking image in Act 2 or 3 at most.");
     L.push("BROLL: none; a trailer is made only of the creator's footage.");
     const sound = soundBrief(req, lean);
-    if (sound) L.push(sound + "\nIN TRAILER MODE: 4-8 sounds: a boom or braam on the TURN, impacts on the slates and on Act 3 cuts, a riser that ends exactly where the SILENCE starts, one hit on the title. Nothing comic unless the genre is comedy.");
+    if (sound) L.push(sound + "\nIN TRAILER MODE: 4-8 sounds: braam on the TURN (and at most once more, on the title), trailerhit on slates landing and on 1-2 Act 3 cuts, a suckback into a hard cut or into the SILENCE (its end lands on the moment), a riser that ends exactly where the SILENCE starts. Nothing comic unless the genre is comedy.");
     L.push("Respond with ONLY this compact JSON, short enough to finish completely:");
     const shape = {
       editPlan: [{ mediaId: exampleId(req), in: 0.0, out: 3.2, beat: "act1|turn|act2|act3|button", reason: "brief" }],
@@ -668,7 +668,7 @@
       broll: [],
       effects: [{ clip: 1, type: "punch-in" }]
     };
-    if (sound) shape.sfx = [{ sound: sfxName(req, "boom"), clip: 2, at: "cut", why: "the turn" }];
+    if (sound) shape.sfx = [{ sound: sfxName(req, "braam"), clip: 2, at: "cut", why: "the turn" }];
     shape.reasoning = ["≤3 brief decisions"];
     shape.confidence = 0.95;
     L.push(JSON.stringify(shape));

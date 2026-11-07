@@ -12661,7 +12661,10 @@
      remapped). A cut that would land inside a spoken word, or past the
      footage, stays. strongLast: the last cut takes only a strong beat (the
      Business end card). Returns how many cuts moved. */
-  function cutsToBeats(win, strongLast) {
+  /* wide (Movie trailer, 0.73.1): {from, win}: a cut after `from` seconds
+     (the trailer's Act 3 montage) may move up to `win` to land on a beat,
+     because a montage that cuts on every beat is the point of it. */
+  function cutsToBeats(win, strongLast, wide) {
     const beats = musicBeatTimes(true);
     if (!beats.length || S.clips.length < 2) return 0;
     const lists = [S.texts, S.broll, S.sfx, S.audio, S.effects];
@@ -12670,8 +12673,9 @@
       const c = S.clips[i];
       acc += dispDur(c);
       const pool = strongLast && i === S.clips.length - 2 ? beats.filter((b) => b.strong) : beats;
+      const w = wide && acc >= wide.from ? Math.max(win, wide.win) : win;
       let best = null;
-      pool.forEach((b) => { const d = b.t - acc; if (Math.abs(d) <= win && (best === null || Math.abs(d) < Math.abs(best))) best = d; });
+      pool.forEach((b) => { const d = b.t - acc; if (Math.abs(d) <= w && (best === null || Math.abs(d) < Math.abs(best))) best = d; });
       if (best === null || Math.abs(best) < 0.01) continue;
       if (hasCurve(c)) continue;   // a speed curve is timed to its own moments: leave its cut alone
       const sp = c.speed || 1, m = mediaById(c.mediaId);
@@ -12741,7 +12745,15 @@
     if (!a) { D.beats = "the music could not be read for beats"; return; }
     if (!a.beats.length) { D.beats = "no steady beat in this music"; return; }
     if (!S.music || S.music.url !== url) return;
-    const moved = cutsToBeats(0.15, hasBrief());
+    /* a trailer's last act (its last 35% of footage before the title) cuts on
+       the beat: a cut may move up to just under half a beat to land on one */
+    let wide = null;
+    if (S.mode === "trailer" && a.bpm) {
+      const card = S.clips.findIndex((c) => { const m = mediaById(c.mediaId); return m && /^Card - /.test(m.name || ""); });
+      const upto = S.clips.slice(0, card > 0 ? card : S.clips.length).reduce((t, c) => t + dispDur(c), 0);
+      wide = { from: upto * 0.65, win: Math.min(0.35, 0.45 * 60 / a.bpm) };
+    }
+    const moved = cutsToBeats(0.15, S.mode === "business", wide);
     D.beats = a.bpm + " BPM · " + moved + (moved === 1 ? " cut" : " cuts") + " on the beat";
     if (moved) { commit(); renderTimeline(); }
   }

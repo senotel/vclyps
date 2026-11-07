@@ -211,7 +211,13 @@
     tada:        [397355, "397/397355_4284968-hq.mp3", 0.01, 1.6, 0.3, 1.125, "plasterbrain"],
     honk:        [434878, "434/434878_3388578-hq.mp3", 0, 0.8, 0.15, 0.596, "MicktheMicGuy"],
     schoolbell:  [378394, "378/378394_7020630-hq.mp3", 0.17, 2.8, 0.7, 0.582, "a Freesound member, account since deleted"],
-    swoosh2:     [701104, "701/701104_13504080-hq.mp3", 0.3, 1.5, 0.3, 0.961, "xkeril"]
+    swoosh2:     [701104, "701/701104_13504080-hq.mp3", 0.3, 1.5, 0.3, 0.961, "xkeril"],
+    /* Movie trailer mode (0.73.1): CC0 checked on each page 2026-11-07,
+       levels matched to boom by EBU R128 (trailerhit held by the 0.9 peak cap).
+       Notes and page links: NO UPLOAD/stock/sfx-trailer/PICKS.md. */
+    braam:       [431316, "431/431316_6802113-hq.mp3", 0.55, 3.5, 0.6, 0.45, "vykroft"],
+    suckback:    [677710, "677/677710_10403690-hq.mp3", 0.8, 2.34, 0.012, 0.85, "Cloud-10"],
+    trailerhit:  [754423, "754/754423_726853-hq.mp3", 0, 2.2, 0.6, 1.35, "zazz.sound.design"]
   };
 
   /* Where the files come from. BUNDLED false: Freesound's own CDN, which
@@ -1109,7 +1115,19 @@
     swoosh2: { label: "Soft swoosh", hit: 0.09,
                tags: ["transition", "soft", "slide", "motion"],
                about: "A light, soft air swoosh.",
-               use: "A gentle transition: a calm cut, a slide between topics, a soft zoom. Softer than whoosh, for calm or polished content; never both on one cut." }
+               use: "A gentle transition: a calm cut, a slide between topics, a soft zoom. Softer than whoosh, for calm or polished content; never both on one cut." },
+    braam:   { label: "Braam", hit: 0.23, max: 2,
+               tags: ["trailer", "impact", "epic", "tension"],
+               about: "A huge low brass blast, the film trailer sound.",
+               use: "A film trailer's big moments: the turn, a black title slate arriving, the title card. Serious, epic or tense videos only; never comedy or tender footage." },
+    suckback: { label: "Suck-back", hit: 1.54, max: 2,
+               tags: ["trailer", "build", "reverse", "tension"],
+               about: "A reversed swell that rushes in and stops dead.",
+               use: "Pulling into a hard cut, a slate or a silence: it swells and stops exactly on the moment. Trailer-style, before a hit or a cut to black." },
+    trailerhit: { label: "Trailer hit", hit: 0.02, max: 4,
+               tags: ["trailer", "impact", "cut", "slate"],
+               about: "A big cinematic hit with a short tail.",
+               use: "A trailer's punctuation: a title slate landing, a hard cut in the montage, the last shot before the title. Sharper than boom; never two within a second." }
   };
 
   /* Fixed order — the soundboard, any future picker and this file's own
@@ -1119,7 +1137,8 @@
                "boing", "bonk", "slidewhistle", "punch", "slap", "glass", "explosion", "thunder", "heartbeat", "tick",
                "alarm", "vibrate", "notify", "typing", "click", "typewriter", "knock", "creak", "footsteps", "cheer",
                "boo", "aww", "ooh", "swipe", "bubbles", "splash", "wind", "rain", "birds", "rewind",
-               "glitch", "levelup", "success", "error", "dogbark", "tada", "honk", "schoolbell", "swoosh2"];
+               "glitch", "levelup", "success", "error", "dogbark", "tada", "honk", "schoolbell", "swoosh2",
+               "braam", "suckback", "trailerhit"];
   NAMES.forEach(function (n) {
     var r = RECORDED[n];
     SOUNDS[n].dur = Math.round((r[3] - r[2]) * 1000) / 1000;
