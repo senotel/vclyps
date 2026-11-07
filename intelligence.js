@@ -252,6 +252,11 @@
     req.media.forEach((m) => {
       let t = "SOURCE id " + m.id + " · " + m.type + " · \"" + m.name + "\" · " + (m.duration || 0).toFixed(1) + "s";
       if (m.stats) t += " · motion " + m.stats.avgMot + " · loudness " + m.stats.loud;
+      if (m.moments && (m.moments.peaks.length || m.moments.shots.length)) {
+        // 0.78.0: scored in code on the device; see brain.js momentsOf
+        if (m.moments.peaks.length) t += "\nACTION PEAKS (source second, strength 0-1, scored from motion and loudness): " + m.moments.peaks.map((p) => p[0].toFixed(1) + "s " + p[1]).join(", ");
+        if (m.moments.shots.length) t += "\nSHOT CHANGES (cut on these when nobody is speaking): " + m.moments.shots.map((t) => t.toFixed(1)).join(", ");
+      }
       if (m.transcript && m.transcript.length) {
         t += "\nTRANSCRIPT:";
         for (const c of m.transcript) {
@@ -714,7 +719,7 @@
   // PASS 1 — understand the footage and design the story (no exact cuts yet)
   function storyBrief(req, lean) {
     const sm = structureMenu(req, lean);
-    return storyBriefFor(req, lean) + "\n" + PICK_RULE + (sm ? "\n" + sm + "\nThe JSON above MUST also include \"structure\": \"<the id you chose>\"." : "");
+    return storyBriefFor(req, lean) + "\n" + PICK_RULE + "\n" + MOMENTS_RULE + (sm ? "\n" + sm + "\nThe JSON above MUST also include \"structure\": \"<the id you chose>\"." : "");
   }
   function storyBriefFor(req, lean) {
     if (req.mode === "business") return bizStoryBrief(req, lean);
@@ -779,6 +784,7 @@
      (Maryland + Google DeepMind, 61,000 stories). */
   const CRAFT_RULE = "CRAFT: an edit is LAYERS, each doing a job to keep someone watching: the cut (pacing), framing (punch-ins on what matters), colour (one look), captions or titles, and sound (music, effects, silence). Use every layer the footage supports, each for a reason; fancy animation never replaces them. ON-SCREEN WORDS must sound like the speaker or a person, not a tidy AI summary: uneven lengths, concrete nouns, the speaker's own phrasing, no balanced three-part lists, no neat moral at the end. Let tension build and leave something open; never explain the point (AI text over-explains 77% of the time).";
   /* 0.76.0, from the owner's saved reels (vclyps-editing skill): hook kinds and music by video type, decided in pass 1 */
+  const MOMENTS_RULE = "ACTION PEAKS are scored in code from motion and loudness: for gaming, sports, trailers, vlogs and any footage nobody talks over, build the hook, the climax and every montage beat from the strongest peaks (a clip should contain its peak, cut 0.5-1.5s before it), and cut on SHOT CHANGES rather than mid-shot. For talk-led footage, the transcript leads and peaks only mark reactions.";
   const PICK_RULE = "HOOK KINDS to choose from: anticipation (promise what is coming), visual (the strongest frame first), result first, a number, a contrarian claim, a question it then answers, a confession, a reaction/stitch. Use the speaker's own line where one exists. MUSIC BY VIDEO TYPE: emotional = soft piano or strings building slowly; tactical or educational = light, steady, low under the voice; challenge = driving, upbeat, tense; storytelling = cinematic, changing when the story turns; deep or reflective = ambient, sparse, dark.";
   function editBriefFor(req, story, lean) {
     if (req.mode === "business") return bizEditBrief(req, story, lean);
@@ -1097,6 +1103,11 @@
       if (m.stats) {
         txt += " · motion " + m.stats.avgMot + " · loudness " + m.stats.loud + (m.stats.bpm ? " · ~" + m.stats.bpm + " bpm" : "");
       }
+      if (m.moments && (m.moments.peaks.length || m.moments.shots.length)) {
+        // 0.78.0: scored in code on the device; see brain.js momentsOf
+        if (m.moments.peaks.length) txt += "\nACTION PEAKS (source second, strength 0-1, scored from motion and loudness): " + m.moments.peaks.map((p) => p[0].toFixed(1) + "s " + p[1]).join(", ");
+        if (m.moments.shots.length) txt += "\nSHOT CHANGES (cut on these when nobody is speaking): " + m.moments.shots.map((t) => t.toFixed(1)).join(", ");
+      }
       if (m.transcript && m.transcript.length) {
         txt += "\nTRANSCRIPT:";
         for (const c of m.transcript) {
@@ -1342,7 +1353,13 @@
   }
   function snapCuts(m, a, b, lo, hi) {
     const W = wordsOf(m), L = (m.transcript || []).filter((c) => isFinite(c.s) && isFinite(c.e));
-    if (!W.length && !L.length) return { in: a, out: b };
+    if (!W.length && !L.length) {
+      // nobody speaks: a cut within 0.3s of a shot change lands on it (0.78.0)
+      const shots = (m.moments && m.moments.shots) || [];
+      const near = (t) => { const s = shots.filter((x) => Math.abs(x - t) <= 0.3).sort((p, q) => Math.abs(p - t) - Math.abs(q - t))[0]; return s == null ? t : s; };
+      const a2 = clamp(near(a), lo, Math.max(lo, hi - 0.3));
+      return { in: a2, out: clamp(near(b), a2 + 0.3, hi) };
+    }
     // a cut inside a spoken line moves to the line's edge when it is within reach
     const lineIn = L.find((c) => a > c.s + 0.05 && a < c.e - 0.05);
     if (lineIn && a - lineIn.s <= LINE_REACH) a = lineIn.s;

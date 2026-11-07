@@ -775,6 +775,36 @@
   /* Gaps between words longer than 0.8s, with whether something audible
      filled them (mean energy over 0.2: laughter, applause, music). For
      Vision-1.0, which reads a filled pause after a line as a punchline. */
+  /* Moments scored in code (0.78.0, research "candidate generation +
+     code scoring"): the peaks where something happens, from what the device
+     already measured: motion per sample (a.vis.samples) and loudness per
+     50ms (a.aud.energy), each against the clip's own median, plus the shot
+     changes. The Director builds action-led edits (gaming, sports, trailers,
+     vlogs, footage nobody talks over) from these instead of guessing. */
+  function momentsOf(a, r) {
+    const vis = a && a.vis, aud = a && a.aud;
+    const S = (vis && vis.samples) || [];
+    if (S.length < 4 && !(aud && aud.energy && aud.energy.length)) return { peaks: [], shots: [] };
+    const med = (xs) => { const v = xs.slice().sort((p, q) => p - q); return v.length ? v[Math.floor(v.length / 2)] || 1e-6 : 1e-6; };
+    const mMed = med(S.map((x) => x.mot || 0)) || 1e-6;
+    const E = (aud && aud.energy) || [], hop = (aud && aud.hop) || 0.05, eMed = med(E) || 1e-6;
+    const energyAt = (t) => { if (!E.length) return 0; let m = 0; for (let i = Math.max(0, Math.floor((t - 0.4) / hop)); i < Math.min(E.length, Math.ceil((t + 0.4) / hop)); i++) m = Math.max(m, E[i]); return m; };
+    const pts = S.map((x) => ({ t: x.t, v: 0.55 * Math.min(4, (x.mot || 0) / mMed) + 0.45 * Math.min(4, energyAt(x.t) / eMed) }))
+      .filter((p) => !r || (p.t >= r.start && p.t <= r.end));
+    const peaks = [];
+    pts.slice().sort((p, q) => q.v - p.v).forEach((p) => {
+      if (peaks.length >= 12 || p.v < 1.4) return;
+      if (peaks.some((q) => Math.abs(q.t - p.t) < 2)) return;
+      peaks.push(p);
+    });
+    const top = peaks.length ? peaks[0].v : 1;
+    const shots = ((vis && vis.sceneCuts) || []).filter((t) => !r || (t >= r.start && t <= r.end)).slice(0, 40);
+    return {
+      peaks: peaks.sort((p, q) => p.t - q.t).map((p) => [Math.round(p.t * 10) / 10, Math.round((p.v / top) * 100) / 100]),
+      shots: shots.map((t) => Math.round(t * 100) / 100)
+    };
+  }
+
   function pausesOf(m, aud) {
     const ws = m.words || [];
     const out = [];
@@ -833,6 +863,7 @@
           prosody: RX ? kept.map((c) => Math.round(RX.prosodyOf(a.aud, c.s, c.e) * 100) / 100) : [],
           // pauses over 0.8s between words, and whether the room filled them (a laugh, applause)
           pauses: pausesOf(m, a.aud),
+          moments: momentsOf(a, mine ? r : null),
           stats: a.vis ? {
             avgMot: Math.round(a.vis.avgMot * 1000) / 1000,
             loud: a.aud ? Math.round(a.aud.loud * 100) / 100 : 0,
