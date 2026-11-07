@@ -1,5 +1,5 @@
-/* vClyps landing (0.67.0). The page is plain HTML and CSS; this only wires
-   it up.
+/* vClyps landing (0.67.0, links reworked in T21). The page is plain HTML
+   and CSS; this only wires it up.
    · "Choose your footage" ([data-pick]) opens the file picker, and files
      dropped anywhere on the hero do the same: both go to app.js
      vcStartWith, which opens the editor with them on the timeline.
@@ -48,11 +48,15 @@
     });
   }
 
+  /* The show's autoplay steps aside until a jump has landed, so it never
+     cuts the smooth scroll short (T21); the links to the show then play it
+     forwards from its first frame (landing-show.js vcLandingShow). */
   var still = window.matchMedia("(prefers-reduced-motion: reduce)");
   home.querySelectorAll('a[href^="#"]').forEach(function (a) {
     a.addEventListener("click", function (e) {
       var id = a.getAttribute("href").slice(1);
       e.preventDefault();
+      if (window.vcLandingShow) window.vcLandingShow.navigate(id === "lpShow");
       if (!id) { home.scrollTo({ top: 0, behavior: still.matches ? "auto" : "smooth" }); return; }
       var to = document.getElementById(id);
       if (to) to.scrollIntoView({ behavior: still.matches ? "auto" : "smooth", block: "start" });

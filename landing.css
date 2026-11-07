@@ -11,6 +11,9 @@ body[data-screen="home"] .topbar { display: none; }
   overflow-y: auto; overflow-x: hidden;
   background: #ffffff; color: #121211;
   scrollbar-width: thin;
+  /* landing-show.js keeps the visitor's place itself when the show's height
+     changes (a rotation, a resize); the browser's own anchoring would fight it */
+  overflow-anchor: none;
 }
 
 .lp-root {
@@ -24,6 +27,9 @@ body[data-screen="home"] .topbar { display: none; }
   --lp-night: #0b0b0c;
   --lp-gut: max(32px, calc((100vw - 1240px) / 2));
   min-height: 100%;
+  /* the screen is a flex column (styles.css .screen): without this the root
+     shrank to one screen tall and the sticky nav scrolled away with it (T19-11) */
+  flex: 0 0 auto;
   font-family: "Switzer", -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 16px; line-height: 1.55;
   color: var(--lp-ink);
@@ -95,20 +101,44 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
 .lp-lede { max-width: 30em; margin-top: 28px; font-size: clamp(18px, 1.5vw, 20px); color: var(--lp-t1); }
 .lp-lede strong { display: block; margin-top: 12px; color: var(--lp-ink); font-weight: 600; }
 
+/* The wall's columns (landing-show.js buildWall: 3 or 4, the 15 clips each
+   once). It fades out to the left and at its top and bottom: both masks are
+   kept and intersected (the unprefixed one used to carry only the first,
+   so the tiles were cut hard under the nav, F19). */
 .lp-wall {
+  --wall-gap: 14px;
   position: absolute; top: 0; right: 0; bottom: 0; width: 50%;
-  display: flex; gap: 14px; padding: 0 14px 0 0;
+  display: flex; gap: var(--wall-gap); padding: 0 14px 0 0;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 100%), linear-gradient(180deg, transparent 0, #000 12%, #000 88%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 100%), linear-gradient(180deg, transparent 0, #000 12%, #000 88%, transparent 100%);
+  mask-composite: intersect;
 }
 .lp-wall-col { flex: 1; min-width: 0; overflow: hidden; }
-.lp-wall-strip { display: flex; flex-direction: column; gap: 14px; animation: lpUp var(--dur, 50s) linear infinite; }
+.lp-wall-strip { display: flex; flex-direction: column; gap: var(--wall-gap); animation: lpUp var(--dur, 50s) linear infinite; }
 .lp-wall-col.is-down .lp-wall-strip { animation-direction: reverse; }
+.lp-root.is-motion-paused .lp-wall-strip { animation-play-state: paused; }
 .lp-wall-col:nth-child(2) { margin-top: -60px; }
 .lp-wall-col:nth-child(3) { margin-top: -160px; }
 .lp-wall-col:nth-child(4) { margin-top: -30px; }
 .lp-wall .lp-short { width: 100%; aspect-ratio: 9 / 16; flex: 0 0 auto; }
-@keyframes lpUp { from { transform: translateY(0); } to { transform: translateY(calc(-50% - 7px)); } }
+/* one period = half the strip plus half a gap, whatever the gap is (no seam on phones) */
+@keyframes lpUp { from { transform: translateY(0); } to { transform: translateY(calc(-50% - var(--wall-gap) / 2)); } }
+
+/* the pause button: square, quiet, always reachable by keyboard (T19-08 / F10) */
+.lp-motion {
+  position: absolute; z-index: 6; right: 28px; bottom: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 4px;
+  background: rgba(11, 11, 12, 0.72); color: #fff;
+  cursor: pointer; transition: background 120ms;
+}
+.lp-motion:hover { background: rgba(11, 11, 12, 0.92); }
+.lp-motion svg { display: block; width: 16px; height: 16px; fill: currentColor; }
+.lp-motion .i-play, .lp-motion[aria-pressed="true"] .i-pause { display: none; }
+.lp-motion[aria-pressed="true"] .i-play { display: block; }
+.lp-root .lp-motion:focus-visible { outline: 2px solid #fff; outline-offset: -5px; }
 
 .lp-drop {
   position: absolute; inset: 16px; z-index: 5;
@@ -182,11 +212,19 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
 .lp-field { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .lp-show-stage { position: absolute; left: 0; right: 0; top: 2%; height: 72%; }
 .lp-show-pin::after { content: ""; position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: 36%; background: linear-gradient(180deg, rgba(11, 11, 12, 0), rgba(11, 11, 12, 0.94) 58%); pointer-events: none; }
-.lp-show-stage > * { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; }
+.lp-show-stage > * { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+/* Layers only for what moves, only while the show is on screen (F16): the
+   timeline's pieces while visible, the wall's tiles while the wall moves. */
+.lp-show-stage.is-live > .lp-clip, .lp-show-stage.is-live > .lp-word, .lp-show-stage.is-live > .lp-voice,
+.lp-show-stage.is-live > .lp-music, .lp-show-stage.is-live > .lp-playhead, .lp-show-stage.is-live > .lp-phone-f,
+.lp-show-stage.is-live.is-wall > .lp-tile { will-change: transform, opacity; }
+.lp-show-stage > .lp-tile, .lp-show-stage > .lp-clip { contain: layout paint; }
+/* a field tile is drawn once into its own small canvas from the decoded page */
+.lp-atlas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 .lp-lane { background: rgba(255, 255, 255, 0.045); border-radius: 4px; }
 .lp-ruler { font-size: 11px; color: #75736d; font-variant-numeric: tabular-nums; }
-.lp-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
+.lp-ruler span { position: absolute; top: 0; left: 0; white-space: nowrap; }
 @media (max-width: 760px) { .lp-ruler span.is-odd { display: none; } }
 .lp-clip {
   border-radius: 4px; overflow: hidden;
@@ -227,7 +265,9 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
 .lp-phone-s .lp-short { width: 100%; height: 100%; border-radius: 0; }
 .lp-phone-s .lp-short-cap { top: 62%; }
 
-.lp-show-say { position: absolute; z-index: 2; left: var(--lp-gut); right: var(--lp-gut); bottom: 9%; height: 1.2em; font-size: clamp(30px, 4.6vw, 64px); }
+/* the headline leaves room for the pause button at its right */
+.lp-show-say { position: absolute; z-index: 2; left: var(--lp-gut); right: calc(var(--lp-gut) + 52px); bottom: 9%; height: 1.2em; font-size: clamp(30px, 4.6vw, 64px); }
+.lp-show-pin .lp-motion { z-index: 3; right: var(--lp-gut); bottom: 24px; }
 .lp-show-say p {
   position: absolute; inset: 0 auto auto 0;
   font-weight: 600; letter-spacing: -0.035em; line-height: 1.05;
@@ -235,8 +275,6 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
   transition: opacity 140ms, transform 140ms;
 }
 .lp-show-say p.is-on { opacity: 1; transform: none; transition: opacity 320ms 120ms, transform 420ms 120ms cubic-bezier(0.2, 0, 0, 1); }
-.lp-show-bar { display: none; position: absolute; z-index: 2; left: var(--lp-gut); right: var(--lp-gut); bottom: 5%; height: 2px; background: rgba(255, 255, 255, 0.12); }
-.lp-show-bar i { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.7); transform-origin: 0 50%; transform: scaleX(0); }
 
 .lp-show.is-still { height: auto; }
 .lp-show.is-still .lp-show-pin { position: relative; top: 0; height: 640px; }
@@ -291,6 +329,7 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
     -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
     mask-image: linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
   }
+  .lp-hero > .lp-motion { right: 16px; bottom: 16px; }
   .lp-big-shot, .lp-split { grid-template-columns: 1fr; gap: 28px; }
 }
 @media (max-width: 760px) {
@@ -299,8 +338,7 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
   .lp-links { display: none; }
   .lp-nav .lp-btn-sm { margin-left: auto; }
   .lp-hero { padding-top: 40px; }
-  .lp-wall { height: 360px; gap: 10px; }
-  .lp-wall-col:nth-child(4) { display: none; }
+  .lp-wall { height: 360px; --wall-gap: 10px; }
   .lp-show { height: 700vh; }
   .lp-show-stage { height: 70%; }
   .lp-show-say { bottom: 12%; }
@@ -315,6 +353,7 @@ body.lp-cinema .lp-links a:hover { color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   .lp-wall-strip { animation: none; }
   .lp-root * { transition: none !important; }
+  .lp-motion { display: none; }   /* nothing moves by itself, so there is nothing to pause */
 }
 
 /* Touch screens (0.71.2): a flick throws the page far, so the show gets about twice
