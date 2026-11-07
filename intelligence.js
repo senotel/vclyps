@@ -186,11 +186,13 @@
     if (story && story.hook && !edit.hook) edit.hook = story.hook;
     if (story && story.look && !edit.look) edit.look = story.look;
     if (story && story.music && !edit.music) edit.music = story.music;
-    const out = normalize(edit, req);
-    if (!out) throw new Error("director plan had no usable cuts");
+    const first = normalize(edit, req);
+    if (!first) throw new Error("director plan had no usable cuts");
+    const fixed = await repairPlan(first, edit, req, story, (note) => callChat(editBrief(req, story, true) + "\n" + footageText(req, 3500) + "\n" + note, 4096, path, model));
+    const out = fixed.out;
     if (!out.story && story) out.story = story.story || null;
-    out.retention = retentionOf(story, edit, out);
-    out.raw = { story: story, edit: edit };
+    out.retention = retentionOf(story, fixed.edit, out);
+    out.raw = { story: story, edit: fixed.edit, checks: out.checks, repaired: !!out.repaired };
     return out;
   }
 
@@ -1247,12 +1249,15 @@
     // music is decided in pass 1, where the footage was seen; see musicBrief()
     if (story && story.music && !edit.music) edit.music = story.music;
 
-    const out = normalize(edit, req);
-    if (!out) throw new Error("director plan had no usable cuts");
+    const first = normalize(edit, req);
+    if (!first) throw new Error("director plan had no usable cuts");
+    // the cut checker, and one repair round when the plan breaks its rules (0.77.0)
+    const fixed = await repairPlan(first, edit, req, story, (note) => callWithRetry([{ text: editBrief(req, story) + "\n" + note }].concat(footageParts(req, false)), 8192));
+    const out = fixed.out;
     if (!out.story && story) out.story = story.story || null;
     if (out.confidence == null && story && typeof story.confidence === "number") out.confidence = story.confidence;
-    out.retention = retentionOf(story, edit, out);
-    out.raw = { story: story, edit: edit }; // both passes → richer training data
+    out.retention = retentionOf(story, fixed.edit, out);
+    out.raw = { story: story, edit: fixed.edit, checks: out.checks, repaired: !!out.repaired }; // both passes → richer training data
     return out;
   }
 
@@ -1325,6 +1330,81 @@
     };
   }
 
+  /* ───────── Cut checker (0.77.0) ─────────
+     The research (NO UPLOAD/research/ai-editing-2026-11.md): most bad AI
+     edits are timing errors, so the model decides and CODE cuts. Every cut
+     on speech is moved to the edge of its line (when that is close), then
+     off any word it would split, with a little air around the speech. */
+  const CUT_PAD = 0.08, LINE_REACH = 2.5;
+  function wordsOf(m) {
+    return (m.words || []).map((w) => Array.isArray(w) ? { s: +w[1], e: +w[2] } : { s: +w.start, e: +w.end })
+      .filter((w) => isFinite(w.s) && isFinite(w.e) && w.e > w.s);
+  }
+  function snapCuts(m, a, b, lo, hi) {
+    const W = wordsOf(m), L = (m.transcript || []).filter((c) => isFinite(c.s) && isFinite(c.e));
+    if (!W.length && !L.length) return { in: a, out: b };
+    // a cut inside a spoken line moves to the line's edge when it is within reach
+    const lineIn = L.find((c) => a > c.s + 0.05 && a < c.e - 0.05);
+    if (lineIn && a - lineIn.s <= LINE_REACH) a = lineIn.s;
+    const lineOut = L.find((c) => b > c.s + 0.05 && b < c.e - 0.05);
+    if (lineOut && lineOut.e - b <= LINE_REACH) b = lineOut.e;
+    // never split a word; leave a little air before the first and after the last
+    const wIn = W.find((w) => a > w.s - CUT_PAD && a < w.e);
+    if (wIn) { const prev = W.filter((w) => w.e <= wIn.s).pop(); a = Math.max(wIn.s - CUT_PAD, prev ? (prev.e + wIn.s) / 2 : lo); }
+    const wOut = W.find((w) => b > w.s && b < w.e + CUT_PAD);
+    if (wOut) { const next = W.find((w) => w.s >= wOut.e); b = Math.min(wOut.e + CUT_PAD, next ? (wOut.e + next.s) / 2 : hi); }
+    a = clamp(a, lo, Math.max(lo, hi - 0.3));
+    b = clamp(b, a + 0.3, hi);
+    return { in: a, out: b };
+  }
+  function midWord(m, t) {
+    return wordsOf(m).some((w) => t > w.s + 0.02 && t < w.e - 0.02);
+  }
+
+  /* After pass 2: what the plan got wrong, in words the Director can act on.
+     Checked in code, not trusted to the model: cuts inside words, the length
+     against the structure, the beats' order and shares, shot lengths. */
+  function checkPlan(out, req, beats) {
+    const X = SX(), st = X && req.structure ? X.get(req.structure) : null;
+    const byId = {};
+    (req.media || []).forEach((m) => { byId[String(m.id)] = m; });
+    const v = [];
+    const durs = out.clips.map((c) => c.out - c.in);
+    const total = durs.reduce((t, d) => t + d, 0);
+    const split = out.clips.filter((c) => { const m = byId[String(c.mediaId)]; return m && (midWord(m, c.in) || midWord(m, c.out)); }).length;
+    if (split) v.push(split + " cut(s) still split a spoken word");
+    const want = req.target ? [req.target * 0.8, req.target * 1.2] : st ? [st.len[0] * 0.75, st.len[1] * 1.25] : null;
+    if (want && (total < want[0] || total > want[1])) v.push("the edit runs " + Math.round(total) + "s but should be " + Math.round(want[0]) + "-" + Math.round(want[1]) + "s");
+    if (st && beats && beats.length === out.clips.length) {
+      const roles = st.beats.map((b) => b.role);
+      let last = -1, off = 0;
+      beats.forEach((b) => { const i = roles.indexOf(String(b || "").toLowerCase()); if (i < 0) off++; else if (i < last) v.push("beat \"" + b + "\" comes after a later beat; keep the structure's order " + roles.join(" > ")); else last = i; });
+      if (off) v.push(off + " clip(s) name no beat of the structure (" + roles.join(", ") + ")");
+      st.beats.forEach((b) => {
+        const got = beats.reduce((t, x, i) => t + (String(x || "").toLowerCase() === b.role ? durs[i] : 0), 0) / (total || 1);
+        if (Math.abs(got - b.share) > 0.15) v.push(b.role + " takes " + Math.round(got * 100) + "% of the edit, the structure gives it " + Math.round(b.share * 100) + "%");
+        beats.forEach((x, i) => { if (String(x || "").toLowerCase() === b.role && (durs[i] > b.shot[1] * 1.6 || durs[i] < b.shot[0] * 0.5)) v.push("clip " + (i + 1) + " (" + b.role + ") is " + durs[i].toFixed(1) + "s; its shots run " + b.shot[0] + "-" + b.shot[1] + "s"); });
+      });
+    }
+    return v.filter((x, i) => v.indexOf(x) === i).slice(0, 12);
+  }
+  /* One repair round: the plan and its violations go back to pass 2 once;
+     the new plan is kept only when it breaks fewer rules. */
+  async function repairPlan(out, edit, req, story, ask) {
+    const v = checkPlan(out, req, out.beats);
+    out.checks = v;
+    if (!v.length || !ask) return { out: out, edit: edit };
+    let fixed = null;
+    try {
+      fixed = await ask("REPAIR: your edit below breaks these rules. Fix every one and return the COMPLETE JSON again in the same shape.\n- " + v.join("\n- ") + "\nYOUR EDIT: " + JSON.stringify({ editPlan: edit.editPlan, texts: edit.texts }).slice(0, 6000));
+    } catch (e) { return { out: out, edit: edit }; }
+    const out2 = fixed && normalize(Object.assign({}, edit, fixed), req);
+    if (!out2) return { out: out, edit: edit };
+    out2.checks = checkPlan(out2, req, out2.beats);
+    out2.repaired = true;
+    return out2.checks.length < v.length ? { out: out2, edit: Object.assign({}, edit, fixed) } : { out: out, edit: edit };
+  }
+
   function normalize(plan, req) {
     if (!plan) return null;
     const brandSafe = brandingGuard(req);
@@ -1337,7 +1417,7 @@
 
     const byId = {};
     req.media.forEach((m) => { byId[String(m.id)] = m; });
-    const clips = [], buttonFlags = [];
+    const clips = [], buttonFlags = [], beats = [];
     /* The Director's own editPlan index → the clip it became. Entries can be
        dropped just below, and then the Director's indices (which its sound
        effects refer to) stop matching positions in `clips`. */
@@ -1356,9 +1436,11 @@
       if (r && ((+sg.out || 0) <= lo || (+sg.in || 0) >= hi)) return;   // wholly outside: not a typo to fix
       const a = clamp(+sg.in || lo, lo, Math.max(lo, hi - 0.3));
       const b = clamp(+sg.out || a + 2, a + 0.3, hi);
-      const clip = { mediaId: m.id, in: a, out: b, reason: sg.reason ? String(sg.reason).slice(0, 200) : "" };
+      const cut = snapCuts(m, a, b, lo, hi);
+      const clip = { mediaId: m.id, in: cut.in, out: cut.out, reason: sg.reason ? String(sg.reason).slice(0, 200) : "" };
       clips.push(clip);
       buttonFlags.push(sg.beat === "button");
+      beats.push(sg.beat ? String(sg.beat).slice(0, 30) : "");
       clipFor[k] = clip;
     });
     if (!clips.length) return null;
@@ -1547,6 +1629,8 @@
     };
     // the Director's clip index → clip, for retentionOf(); not data, so not enumerable
     Object.defineProperty(result, "clipFor", { value: clipFor, enumerable: false });
+    Object.defineProperty(result, "beats", { value: beats, enumerable: false });
+    if (typeof window !== "undefined") window.__vcCuts = { snapCuts: snapCuts, checkPlan: checkPlan };
     return result;
   }
 
