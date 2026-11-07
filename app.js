@@ -44,6 +44,8 @@
     mode: "entertainment",   // "entertainment" (short videos) or "business" (product videos, 0.34.0)
     // Business mode's brief (the Business row): the Director's source of names and claims
     brief: { name: "", what: "", cta: "", tone: "polished" },
+    // Movie trailer mode's brief (0.73.0): title, logline, last line, genre; kept apart from Business's
+    tbrief: { name: "", what: "", cta: "", tone: "epic" },
     aspect: "9:16",          // short-form default; see exportSize()
     vertical: false,
     // Find clips (clips.js): the bar's mode, its options, and what it found
@@ -428,11 +430,13 @@
      four fields above the picture squeezed the timeline off the screen
      (0.34.1). It opens by itself while the product is still blank, and
      folds away when Edit is pressed. A wider screen always shows it. */
+  const briefOf = () => (S.mode === "trailer" ? S.tbrief : S.brief);
+  const hasBrief = () => S.mode === "business" || S.mode === "trailer";
   let briefOpen = null;   // null = decide from whether the brief is filled in
   const narrow = () => window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
   function showBrief() {
-    const biz = S.mode === "business";
-    const open = biz && (!narrow() || (briefOpen === null ? !S.brief.name : briefOpen));
+    const biz = hasBrief();
+    const open = biz && (!narrow() || (briefOpen === null ? !briefOf().name : briefOpen));
     $("bizRow").classList.toggle("hidden", !open);
     $("briefChip").classList.toggle("hidden", !biz || !narrow());
     $("briefChip").setAttribute("aria-pressed", open ? "true" : "false");
@@ -449,22 +453,42 @@
   // the edit's summary is one line on a phone; a tap shows the rest
   $("aiStatus").addEventListener("click", () => $("aiStatus").classList.toggle("open"));
 
+  /* The brief row's words per mode: Business asks about a product, Movie
+     trailer about a film (its title, logline, last line and genre). */
+  const BRIEF_UI = {
+    business: { labels: ["Product", "What it does", "Ends with", "Tone"], ph: ["Its name", "One line, in your words", "e.g. Try it free"],
+      tones: [["polished", "Polished"], ["bold", "Bold"], ["cinematic", "Cinematic"], ["clean", "Clean feature cards"]],
+      prompt: "Anything else? e.g. make it 20 seconds, lead with the price" },
+    trailer: { labels: ["Title", "Logline", "Last line", "Genre"], ph: ["The film's name", "One line: who, and what goes wrong", "e.g. Coming soon"],
+      tones: [["epic", "Epic"], ["thriller", "Thriller"], ["horror", "Horror"], ["comedy", "Comedy"], ["drama", "Drama"]],
+      prompt: "Anything else? e.g. make it 60 seconds, end on the scream" }
+  };
   function applyModeUI() {
-    const biz = S.mode === "business";
-    $("fmtLabel").textContent = biz ? "Business" : "Entertainment";
+    const biz = hasBrief();
+    const b = briefOf();
+    $("fmtLabel").textContent = S.mode === "business" ? "Business" : S.mode === "trailer" ? "Movie trailer" : "Entertainment";
+    if (biz) {
+      const ui = BRIEF_UI[S.mode];
+      $("bizRow").querySelectorAll(".find-field > span").forEach((sp, i) => { if (ui.labels[i]) sp.textContent = ui.labels[i]; });
+      ["bizName", "bizWhat", "bizCta"].forEach((id, i) => { $(id).placeholder = ui.ph[i]; });
+      const sel = $("bizTone");
+      sel.innerHTML = "";
+      ui.tones.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sel.appendChild(o); });
+      if (!ui.tones.some(([v]) => v === b.tone)) b.tone = ui.tones[0][0];
+    }
     showBrief();
     $("findChip").classList.toggle("hidden", biz);
     if (biz && S.find.on) $("findChip").click();
-    $("bizName").value = S.brief.name || "";
-    $("bizWhat").value = S.brief.what || "";
-    $("bizCta").value = S.brief.cta || "";
-    $("bizTone").value = S.brief.tone || "polished";
-    $("semiPrompt").placeholder = biz ? "Anything else? e.g. make it 20 seconds, lead with the price" : "Describe the edit";
+    $("bizName").value = b.name || "";
+    $("bizWhat").value = b.what || "";
+    $("bizCta").value = b.cta || "";
+    $("bizTone").value = b.tone || "polished";
+    $("semiPrompt").placeholder = biz ? BRIEF_UI[S.mode].prompt : "Describe the edit";
   }
   [["bizName", "name"], ["bizWhat", "what"], ["bizCta", "cta"], ["bizTone", "tone"]].forEach(([id, key]) => {
     const el = $(id);
-    el.addEventListener("input", () => { S.brief[key] = el.value; });
-    el.addEventListener("change", () => { S.brief[key] = el.value; writeSession(); });
+    el.addEventListener("input", () => { briefOf()[key] = el.value; });
+    el.addEventListener("change", () => { briefOf()[key] = el.value; writeSession(); });
   });
 
   // back steps one level: editor → modes → landing
@@ -2309,6 +2333,28 @@
   /* A title card drawn to a still and placed as its own clip. `generated` is
      the Director's end card in business mode: it is not a text on the
      timeline to remove, nothing gets selected, and nothing is announced. */
+  /* Movie trailer mode (0.73.0): a trailer ends title, then the BUTTON (one
+     last short moment). The card was added after the footage; the clips that
+     make up the last `secs` of footage move behind it, and whatever sat on
+     them (sounds, voices, texts) moves with them. */
+  function moveButtonAfterCard(card, secs) {
+    const ci = S.clips.indexOf(card);
+    if (ci < 2) return;
+    let acc = 0, from = ci;
+    while (from > 1 && acc < secs - 0.05) { from--; acc += dispDur(S.clips[from]); }
+    if (from < 1 || acc > secs + 1.5) return;
+    const button = S.clips.slice(from, ci);
+    const cardLen = dispDur(card);
+    const bStart = total() - cardLen - acc;
+    const shift = (x) => { if (x.start >= bStart - 0.01) x.start += cardLen; };
+    S.texts.forEach(shift); S.broll.forEach(shift); S.sfx.forEach(shift); S.audio.forEach(shift);
+    S.clips.splice(from, ci - from);
+    S.clips.push.apply(S.clips, button);
+    // in through black from the title, and a cut back out to black at the very end
+    button[0].tIn = "black"; button[0].tDur = 0.3;
+    if (S.captions.length) remapCaptions();
+  }
+
   async function cardClip(t, where, generated) {
     const size = exportSize();
     const k = 1080 / Math.min(size.w, size.h);           // drawn at 1080p, sharp at any export size
@@ -11535,7 +11581,7 @@
     if (S.find.on) { runFind(); return; }
     /* Audio files are not footage: the Director cuts pictures, and a sound
        file handed to it as a "source" would be planned as a black clip. */
-    if (S.mode === "business" && narrow()) { briefOpen = false; showBrief(); }
+    if (hasBrief() && narrow()) { briefOpen = false; showBrief(); }
     runEdit({ prompt: $("semiPrompt").value.trim(), media: S.media.filter((m) => m.type !== "audio") });
   });
 
@@ -11645,7 +11691,7 @@
         g = await SenotelBrain.plan({
           prompt: prompt, media: media, seed: S.seed++, format: S.format === "auto" ? null : S.format,
           range: range, target: opts.target || null,
-          mode: S.mode, brief: S.mode === "business" ? Object.assign({}, S.brief) : null,
+          mode: S.mode, brief: hasBrief() ? Object.assign({}, briefOf()) : null,
           /* A track the creator picked by hand is theirs: the Director is told
              it exists and plans around it rather than choosing another. */
           music: { available: navigator.onLine !== false, chosen: S.music && S.music.by !== "director" ? S.music.title : null }
@@ -11670,6 +11716,7 @@
             // (only the Director's titles: texts kept by hand stay as they were)
             S.texts = S.texts.filter((t) => t.by !== "director" || t.start < cardStart - 0.6);
             S.texts.forEach((t) => { if (t.by === "director") t.dur = Math.min(t.dur, cardStart - t.start); });
+            if (g.endCard.button) moveButtonAfterCard(card, g.endCard.button);
             commit();
             renderTimeline();
           }
@@ -12694,7 +12741,7 @@
     if (!a) { D.beats = "the music could not be read for beats"; return; }
     if (!a.beats.length) { D.beats = "no steady beat in this music"; return; }
     if (!S.music || S.music.url !== url) return;
-    const moved = cutsToBeats(0.15, S.mode === "business");
+    const moved = cutsToBeats(0.15, hasBrief());
     D.beats = a.bpm + " BPM · " + moved + (moved === 1 ? " cut" : " cuts") + " on the beat";
     if (moved) { commit(); renderTimeline(); }
   }
@@ -14201,7 +14248,7 @@
         // snapshot it can no longer read, instead of restoring it wrongly
         by: window.SenotelVersion ? window.SenotelVersion.stamp() : null,
         name: $("projectName").value,
-        format: S.format, mode: S.mode, brief: S.brief, vertical: S.vertical, aspect: S.aspect, nextId: nextId,
+        format: S.format, mode: S.mode, brief: S.brief, tbrief: S.tbrief, vertical: S.vertical, aspect: S.aspect, nextId: nextId,
         media: S.media.map((m) => ({ id: m.id, name: m.name, type: m.type, duration: m.duration, w: m.w, h: m.h,
           fromVideo: !!m.fromVideo, soundSaved: !!m.soundSaved,
           // the transcript, so captions can be restyled after a reload without listening again
@@ -14280,8 +14327,9 @@
     S.music = snap.music && snap.music.url ? snap.music : null;
     loadMusicElement();
     S.format = "auto";
-    S.mode = snap.mode === "business" ? "business" : "entertainment";
+    S.mode = snap.mode === "business" || snap.mode === "trailer" ? snap.mode : "entertainment";
     S.brief = Object.assign({ name: "", what: "", cta: "", tone: "polished" }, snap.brief && typeof snap.brief === "object" ? snap.brief : {});
+    S.tbrief = Object.assign({ name: "", what: "", cta: "", tone: "epic" }, snap.tbrief && typeof snap.tbrief === "object" ? snap.tbrief : {});
     applyModeUI();
     S.vertical = !!snap.vertical;
     S.aspect = Object.prototype.hasOwnProperty.call(ASPECTS, snap.aspect) ? snap.aspect : "9:16";

@@ -800,13 +800,13 @@
     return {
       prompt: opts.prompt || "",
       format: fmt,
-      // "business" plans a product video (intelligence.js, 0.34.0); anything else is entertainment
-      mode: opts.mode === "business" ? "business" : "entertainment",
-      brief: opts.mode === "business" && opts.brief ? {
+      // "business" plans a product video (intelligence.js, 0.34.0), "trailer" a movie trailer (0.73.0); anything else is entertainment
+      mode: opts.mode === "business" || opts.mode === "trailer" ? opts.mode : "entertainment",
+      brief: (opts.mode === "business" || opts.mode === "trailer") && opts.brief ? {
         name: String(opts.brief.name || "").slice(0, 60),
         what: String(opts.brief.what || "").slice(0, 200),
         cta: String(opts.brief.cta || "").slice(0, 60),
-        tone: String(opts.brief.tone || "polished")
+        tone: String(opts.brief.tone || (opts.mode === "trailer" ? "epic" : "polished"))
       } : null,
       target: opts.target || intent.explicitLen || null, // no target → the story decides the length
       sfx: soundLibrary(),

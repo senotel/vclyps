@@ -108,8 +108,8 @@
     id: "vision-1",
     label: "Vision-1.0",
     available: () => !!(window.SenotelVision && window.SenotelRetention && window.SenotelVision.enabled()),
-    // Vision-1.0 learned entertainment edits only; business mode goes to the cloud Directors
-    handles: (req) => req.mode !== "business",
+    // Vision-1.0 learned entertainment edits only; business and trailer modes go to the cloud Directors
+    handles: (req) => req.mode !== "business" && req.mode !== "trailer",
     plan: async (req) => window.SenotelVision.plan(req)
   };
 
@@ -401,6 +401,12 @@
      payoff needs and the payoff (findings RQ6). Completion falls with length
      and watch-time rankers correct for it, so padding buys nothing (E17, E59). */
   function lengthLine(req) {
+    if (req.mode === "trailer" && !req.target) {
+      return "TARGET LENGTH: 45-75 seconds of footage before the title card (a teaser 30-45 when the footage is short); every beat earns its place." +
+        " Format: " + (req.format || "auto") + ". USER DIRECTION (satisfy first): " +
+        (req.prompt ? '"' + req.prompt + '"' : "(none: make the most gripping trailer the footage allows).") +
+        rangeLine(req);
+    }
     if (req.mode === "business" && !req.target) {
       return "TARGET LENGTH: 15-25 seconds of footage before the end card (18-22 is the sweet spot); longer only when the creator speaks to camera and every extra beat is a new capability or proof." +
         " Format: " + (req.format || "auto") + ". USER DIRECTION (satisfy first): " +
@@ -572,9 +578,107 @@
     return L.join("\n");
   }
 
+  /* ───────── Movie trailer mode (0.73.0) ─────────
+     The creator's footage cut as a film trailer. The craft, taught to the
+     Director here (sources: NO UPLOAD/research/trailer-mode-2026-11.md):
+     three acts with cuts that speed up, black title slates between the beats,
+     dialogue as punctuation, a riser into silence before the drop, the title,
+     then a short "button" after it. The brief row gives the title, the
+     logline, the last line (release line) and the genre. */
+  const TRAILER_GENRES = {
+    epic: "GENRE epic/action: scale and momentum. Act 1 calm and wide, Act 3 a barrage. Slates big and few: 'THIS SUMMER', 'ONE CHOICE'. Sounds: braam on the first slate, hits on cuts in Act 3, riser into the drop. Music epic orchestral or hybrid.",
+    thriller: "GENRE thriller: unease that tightens. Long quiet holds in Act 1, a question nobody answers, then fast cuts. Slates short and cold: 'NO ONE', 'IS SAFE'. Sounds: low pulses, a ticking or heartbeat bed, hard hits, one sudden silence. Music dark tense.",
+    horror: "GENRE horror: dread, then shock. Act 1 ordinary and too quiet, Act 2 small wrong details, Act 3 flashes of under 0.5s. Slates sparse, lower case feel: 'something', 'is in the house'. Sounds: drones, a sting on the reveal, a long silence before the last scare (the button). Music dark ambient.",
+    comedy: "GENRE comedy: the joke is the beat. Cuts land on reactions; let a punchline breathe 0.5s before cutting. Slates playful: 'THIS FALL', 'ONE FAMILY', 'ZERO PLAN'. Sounds: record scratch at most once, a music stop before the best line. Music upbeat. The button is the funniest line.",
+    drama: "GENRE drama: feeling over spectacle. Slower cuts (2-4s) that only quicken at the emotional peak, voices carry the story. Slates quiet and few. Sounds: soft swells, one hit at the peak, no comic sounds. Music emotional piano or strings building."
+  };
+  function trailerGenre(req) {
+    const b = req.brief || {};
+    return TRAILER_GENRES[b.tone] ? b.tone : "epic";
+  }
+  function trailerBriefLine(req) {
+    const b = req.brief || {};
+    const p = [];
+    if (b.name) p.push('TITLE: "' + b.name + '" (the title card at the end; never invented if empty)');
+    if (b.what) p.push('LOGLINE: "' + b.what + '"');
+    if (b.cta) p.push('LAST LINE under the title: "' + b.cta + '"');
+    return p.length ? "THE CREATOR'S BRIEF. " + p.join(" · ") : "THE CREATOR'S BRIEF: (empty: find the story in the footage; the title card uses a title you take from the footage itself, 1-3 words, or none).";
+  }
+  const TRAILER_RULES = [
+    "MODE: MOVIE TRAILER. Cut the footage as a film trailer, NOT a short or a recap: it promises a story and withholds the ending. The viewer must feel the world, the conflict and the stakes, and want to see more.",
+    "THREE ACTS. ACT 1 (about 30%): the world and the main character, calm, shots 2-4s, a line of dialogue that sets the premise. TURN: the moment it goes wrong or changes (a hit, then a black slate). ACT 2 (about 40%): the conflict building, shots 1-2.5s, slates between beats, the music rises. ACT 3 (about 30%): the montage, shots 0.3-1s, cutting on the music's beats, up to the peak; then SILENCE (0.5-1.5s of black or a held quiet shot), the TITLE (endCard), and the BUTTON: one short last moment after the title (a line, a look, a laugh or a scare).",
+    "SLATES: 2-4 full-screen black title cards ('texts' with style \"card\"), each 1-4 WORDS, 1.2-2s, between beats. Together they read as one sentence across the trailer ('THIS WINTER' ... 'ONE FAMILY' ... 'WILL LEARN THE TRUTH'). They cover the footage under them, so place them where that footage is a cut, a breath or nothing important. Never on a line someone is speaking.",
+    "DIALOGUE AS PUNCTUATION: at most 3-5 spoken lines in the whole trailer, each short (under 8 words) and complete, never cut mid-sentence. The best line goes right before the montage or as the button. No line that explains the plot.",
+    "WITHHOLD: never show the ending or the strongest payoff in full; tease it in a flash under 0.5s in Act 3. Order beats for the trailer's story, not the footage's order.",
+    "GROUNDED: everything on screen comes from the footage, transcript or brief. Never invent cast names, studios, festival laurels, review quotes, star ratings or release dates. No 'from the director of' unless the brief says so."
+  ].join("\n");
+  const TRAILER_RULES_LEAN = "MODE: MOVIE TRAILER, not a short: promise a story, withhold the ending. ACT 1 ~30% (world, shots 2-4s, a premise line) → TURN (hit + black slate) → ACT 2 ~40% (conflict, shots 1-2.5s, slates between beats) → ACT 3 ~30% (montage, shots 0.3-1s on the beats) → SILENCE 0.5-1.5s → TITLE (endCard) → BUTTON (one last short moment). SLATES: 2-4 black cards (texts style \"card\"), 1-4 words, 1.2-2s, reading as one sentence, never over speech. 3-5 short complete spoken lines at most. Never invent cast, studios, laurels, reviews or dates.";
+
+  // PASS 1, trailer mode: design the trailer
+  function trailerStoryBrief(req, lean) {
+    const L = [];
+    L.push("You are the vClyps AI DIRECTOR: a film trailer editor. This is STEP 1 of 2: design the TRAILER. Do NOT choose final timestamps yet.");
+    L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN title and last line are the content and are wanted.");
+    L.push("You receive transcripts with timestamps, audio/motion stats, and keyframe images so you can SEE the footage. Study it first: who the main character is, what their world is, what threatens it, and the most striking images and lines.");
+    L.push(trailerBriefLine(req));
+    L.push(lean ? TRAILER_RULES_LEAN : TRAILER_RULES);
+    L.push(TRAILER_GENRES[trailerGenre(req)]);
+    L.push("THINK IN THIS ORDER. (1) The PREMISE in one sentence. (2) The TURN: what changes. (3) The slate sentence, split into 2-4 cards. (4) BEATS for each act, Act 3 the fastest. (5) The BUTTON: the moment after the title. Beats may come from anywhere in the footage, in any order.");
+    L.push(lengthLine(req));
+    const music = musicBrief(req, lean);
+    if (music) L.push(music + (lean ? "" : "\n· A trailer nearly always needs music: choose by the genre, level \"forward\", and it should build."));
+    L.push(lookLine(lean));
+    L.push("Respond with ONLY this compact JSON. List beats IN FINAL PLAYBACK ORDER; from/to are rough source-time regions (refined in step 2):");
+    const shape = {
+      story: "the premise in one sentence",
+      genre: "epic|thriller|horror|comedy|drama",
+      slates: ["THIS WINTER", "ONE FAMILY", "WILL LEARN THE TRUTH"],
+      beats: [{ beat: "act1|turn|act2|act3|button", says: "what this beat shows", mediaId: exampleId(req), from: 0.0, to: 4.0 }],
+      look: "a filter id from the LOOK list, or none"
+    };
+    if (wantsMusic(req)) shape.music = { use: true, query: "mood + genre, 2-3 words", level: "forward", why: "10 words or fewer" };
+    shape.confidence = 0.9;
+    L.push(JSON.stringify(shape));
+    return L.join("\n");
+  }
+
+  // PASS 2, trailer mode: cut it, slate it, title it
+  function trailerEditBrief(req, story, lean) {
+    const L = [];
+    L.push("You are the vClyps AI DIRECTOR, a film trailer editor. This is STEP 2 of 2: EXECUTE the locked trailer below into a precise edit using the transcript timestamps.");
+    L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN title and last line are the content and are wanted.");
+    L.push("LOCKED PLAN (keep the beats, their order and the slates): " + JSON.stringify(story));
+    L.push(trailerBriefLine(req));
+    L.push(lean ? TRAILER_RULES_LEAN : TRAILER_RULES);
+    L.push(TRAILER_GENRES[trailerGenre(req)]);
+    L.push("HARD RULES: never cut a spoken line mid-sentence · keep the locked beat order · shots get SHORTER act by act (Act 1 2-4s, Act 2 1-2.5s, Act 3 0.3-1s) · footage with no speech may be cut anywhere, on a visible change · the BUTTON clip(s) come LAST in editPlan, after the Act 3 clips; the title card is placed between them by the editor.");
+    L.push(lengthLine(req));
+    L.push("Turn each beat into precise kept clips. Every 'reason' names the beat it serves, 12 words or fewer. Mark the first button clip with beat \"button\".");
+    L.push("TEXTS: ONLY the slates from the plan, each { text, style: \"card\", start, dur 1.2-2 }, in CAPITALS unless the genre says otherwise, placed in the output timeline between beats and never over a spoken line. No captions, no lower thirds, no hook line.");
+    L.push("END CARD: endCard is the TITLE card: 'text' = the title from the brief (or one taken from the footage, 1-3 words), 'sub' = the last line from the brief (or none), 'dur' 2.5-4. Do NOT put it in texts.");
+    L.push("EFFECTS: a punch-in on the TURN and on the peak of Act 3; slow-mo on one striking image in Act 2 or 3 at most.");
+    L.push("BROLL: none; a trailer is made only of the creator's footage.");
+    const sound = soundBrief(req, lean);
+    if (sound) L.push(sound + "\nIN TRAILER MODE: 4-8 sounds: a boom or braam on the TURN, impacts on the slates and on Act 3 cuts, a riser that ends exactly where the SILENCE starts, one hit on the title. Nothing comic unless the genre is comedy.");
+    L.push("Respond with ONLY this compact JSON, short enough to finish completely:");
+    const shape = {
+      editPlan: [{ mediaId: exampleId(req), in: 0.0, out: 3.2, beat: "act1|turn|act2|act3|button", reason: "brief" }],
+      texts: [{ text: "THIS WINTER", style: "card", start: 6.0, dur: 1.6, in: "fade", out: "fade" }],
+      endCard: { text: "Title", sub: "last line", dur: 3 },
+      broll: [],
+      effects: [{ clip: 1, type: "punch-in" }]
+    };
+    if (sound) shape.sfx = [{ sound: sfxName(req, "boom"), clip: 2, at: "cut", why: "the turn" }];
+    shape.reasoning = ["≤3 brief decisions"];
+    shape.confidence = 0.95;
+    L.push(JSON.stringify(shape));
+    return L.join("\n");
+  }
+
   // PASS 1 — understand the footage and design the story (no exact cuts yet)
   function storyBrief(req, lean) {
     if (req.mode === "business") return bizStoryBrief(req, lean);
+    if (req.mode === "trailer") return trailerStoryBrief(req, lean);
     const L = [];
     L.push("You are the vClyps AI DIRECTOR: an Oscar-winning editor + viral short-form strategist. This is STEP 1 of 2 — design the STORY. Do NOT choose final timestamps yet.");
     L.push(BRANDING_RULE);
@@ -627,6 +731,7 @@
   // PASS 2 — execute the locked story into precise cuts + captions
   function editBrief(req, story, lean) {
     if (req.mode === "business") return bizEditBrief(req, story, lean);
+    if (req.mode === "trailer") return trailerEditBrief(req, story, lean);
     const L = [];
     L.push("You are the vClyps AI DIRECTOR. This is STEP 2 of 2 — EXECUTE the locked story below into a precise edit using the transcript timestamps.");
     L.push(BRANDING_RULE);
@@ -1183,7 +1288,7 @@
 
     const byId = {};
     req.media.forEach((m) => { byId[String(m.id)] = m; });
-    const clips = [];
+    const clips = [], buttonFlags = [];
     /* The Director's own editPlan index → the clip it became. Entries can be
        dropped just below, and then the Director's indices (which its sound
        effects refer to) stop matching positions in `clips`. */
@@ -1204,6 +1309,7 @@
       const b = clamp(+sg.out || a + 2, a + 0.3, hi);
       const clip = { mediaId: m.id, in: a, out: b, reason: sg.reason ? String(sg.reason).slice(0, 200) : "" };
       clips.push(clip);
+      buttonFlags.push(sg.beat === "button");
       clipFor[k] = clip;
     });
     if (!clips.length) return null;
@@ -1221,6 +1327,11 @@
          library, and a lower third for a feature label. Only ids it offered. */
       if (BIZ_IN.indexOf(t.in) >= 0) { n.animIn = t.in; n.animInLen = /^[lw]-/.test(t.in) ? 0.8 : 0.5; }
       if (BIZ_OUT.indexOf(t.out) >= 0) { n.animOut = t.out; n.animOutLen = 0.35; }
+      if (t.style === "card" && req.mode === "trailer") {
+        // a trailer slate: full-screen black card, white capitals (0.73.0)
+        n.style = "card"; n.bg = "#000000"; n.pos = "center";
+        n.text = n.text.slice(0, 40);
+      }
       if (t.style === "lower") {
         n.style = "lower";
         if (t.sub) n.sub = String(t.sub).slice(0, 80);
@@ -1239,7 +1350,7 @@
         else delete n.sub;
         n.template = t.template;
       }
-      if (req.mode === "business") {
+      if (req.mode === "business" || req.mode === "trailer") {
         // the READABLE floor: 0.5s + 0.3s a word, whatever the model wrote
         const words = (n.text + " " + (n.sub || "")).trim().split(/\s+/).length;
         n.dur = Math.max(n.dur, Math.min(6, 0.5 + 0.3 * words) + (n.animInLen || 0));
@@ -1361,6 +1472,15 @@
       list.push({ name: name, t: clamp(t, c.in, c.out), why: why });
     });
 
+    /* Trailer mode: the BUTTON (the last moment, after the title) is the
+       trailing run of clips the Director marked "button", at most 2 and 4s;
+       app.js moves the title card in front of it. */
+    const endCard = normEndCard(plan.endCard, req, brandSafe);
+    if (endCard && req.mode === "trailer") {
+      let secs = 0, n = 0;
+      for (let i = clips.length - 1; i > 0 && buttonFlags[i] && n < 2; i--, n++) secs += clips[i].out - clips[i].in;
+      if (secs > 0 && secs <= 4) endCard.button = +secs.toFixed(2);
+    }
     const result = {
       clips: clips,
       broll: broll,
@@ -1370,7 +1490,7 @@
       effects: effects,
       music: normMusic(plan.music, req, brandSafe),
       story: storySummary,
-      endCard: normEndCard(plan.endCard, req, brandSafe),
+      endCard: endCard,
       confidence: typeof plan.confidence === "number" ? clamp(plan.confidence, 0, 1) : null,
       reasons: Array.isArray(plan.reasoning) ? plan.reasoning.slice(0, 6).map(String) : [],
       raw: plan // full director output — becomes training data
@@ -1384,7 +1504,7 @@
      after the footage as its own clip by app.js. The brief wins over the
      model for both lines, because they are the creator's words. */
   function normEndCard(e, req, brandSafe) {
-    if (req.mode !== "business") return null;
+    if (req.mode !== "business" && req.mode !== "trailer") return null;
     const b = req.brief || {};
     e = e && typeof e === "object" ? e : {};
     const text = String(b.name || e.text || "").replace(/\s+/g, " ").trim().slice(0, 40);
