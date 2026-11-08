@@ -584,6 +584,8 @@
       tf: tf, tg: tg, tfh: tfh, cols: cols, rows: rows, zEnd: zEnd, wordW: wordW, ws: ws, oy: stage.offsetTop, fw: pinW, fh: pinH,
       // the loose pieces' float, smaller on a short stage (a phone on its side) so they never touch
       bob: clamp(H / 60, 3, 10) / 10 };
+    // full screen, the caption keeps the size it has on a 9:16 short of the pin's height
+    heroShort.style.setProperty("--capmax", (Math.min(pinW, pinH * 9 / 16) * 0.115).toFixed(1) + "px");
     fade(ruler, 0); lanes.forEach(function (el) { fade(el, 0); });
     lanes[0].style.cssText = box(tlX, y.text, tlW, th);
     lanes[1].style.cssText = box(tlX, y.video, tlW, vh);
@@ -728,10 +730,13 @@
     // the wall settles back as it fills, then keeps pulling away into the field
     var zoom = mix(1.3, 1, wallK) * mix(1, L.zEnd, tail);
     var drift = function (col) { return (col % 2 ? 1 : -1) * tail * thh * 0.9; };   // neighbouring columns slide apart
-    var pw = mix(L.pW, tw, wallK), phh = mix(L.pH, thh, wallK);
+    // 0.82.1 (owner: "full screen not framed"): the finished short fills the
+    // whole pin, no phone bezel, then shrinks into its tile of the wall
+    var pw = mix(L.fw, tw, wallK), phh = mix(L.fh, thh, wallK);
+    var pcx = mix(L.fw / 2, cx, wallK), pcy = mix(L.fh / 2 - L.oy, cy, wallK);
     var pS = mix(0.55, 1, ph1);
     var pz = wallK > 0 ? zoom : 1;
-    place(phone, cx - pw * pS * pz / 2, cy - phh * pS * pz / 2 + drift(0) * pz, pw, phh, 0, pS * pz, ph1);
+    place(phone, pcx - pw * pS * pz / 2, pcy - phh * pS * pz / 2 + drift(0) * pz, pw, phh, 0, pS * pz, ph1);
     phone.classList.toggle("is-tile", wallK > 0.5);
     // the finished short plays only while its phone is on screen, from its first shot (T19-10)
     var phoneOn = ph1 > 0.02;

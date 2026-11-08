@@ -294,13 +294,14 @@ body.dark .th-moon { display: block; }
 .lp-playhead { background: var(--lp-acc); }
 .lp-playhead::before { content: ""; position: absolute; left: -5px; top: -2px; border: 6px solid transparent; border-top: 8px solid var(--lp-acc); }
 .lp-phone-f {
-  padding: 7px; border-radius: 30px;
-  background: #1b1b1d;
-  box-shadow: inset 0 0 0 1px #2c2c30, 0 40px 90px rgba(0, 0, 0, 0.55);
-  transition: padding 200ms, border-radius 200ms;
+  /* 0.82.1: no phone frame; the short fills the screen, then becomes a tile */
+  padding: 0; border-radius: 0;
+  background: #0e0d0c;
+  transition: border-radius 200ms;
 }
-.lp-phone-f.is-tile { padding: 0; border-radius: 8px; box-shadow: none; }
-.lp-phone-s { width: 100%; height: 100%; border-radius: 24px; overflow: hidden; transition: border-radius 200ms; }
+.lp-phone-f.is-tile { border-radius: 8px; }
+.lp-phone-s { width: 100%; height: 100%; border-radius: 0; overflow: hidden; transition: border-radius 200ms; }
+.lp-phone-s .lp-short-cap { font-size: min(11.5cqw, var(--capmax, 11.5cqw)); }
 .lp-phone-f.is-tile .lp-phone-s { border-radius: 8px; }
 .lp-phone-s .lp-short { width: 100%; height: 100%; border-radius: 0; }
 .lp-phone-s .lp-short-cap { top: 62%; }
