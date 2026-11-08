@@ -75,10 +75,14 @@ body[data-screen="home"] .topbar { display: none; }
   border-bottom: 1px solid var(--lp-hair);
   color: var(--lp-on);
 }
-.lp-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
-/* the logo is drawn black: inverted it reads on the dark nav */
-.lp-brand img { display: block; filter: invert(1); }
-.lp-brand b { color: var(--lp-acc); font-weight: 600; }
+/* 0.82.0 theme switch: a square icon button, the sun shows in light, the moon in dark */
+.lp-theme {
+  display: grid; place-items: center; width: 36px; height: 36px; margin-left: -12px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--lp-on1); cursor: pointer;
+}
+.lp-theme:hover { background: var(--lp-s2); color: var(--lp-on); }
+.th-moon, body.dark .th-sun { display: none; }
+body.dark .th-moon { display: block; }
 .lp-links { display: flex; gap: 28px; margin-left: auto; }
 .lp-links a {
   font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
@@ -238,7 +242,8 @@ body[data-screen="home"] .topbar { display: none; }
 .lp-live { display: block; font-size: 16px; font-size: 13cqw; }
 
 /* ── 2 · the show ── */
-.lp-show { position: relative; height: 760vh; background: var(--lp-night); color: #fff; }
+/* the show is the product itself, so it stays on its dark stage in both themes */
+.lp-show { position: relative; height: 760vh; background: #0e0d0c; color: #fff; }
 .lp-show-pin {
   position: sticky; top: 60px;
   height: calc(100vh - 60px); height: calc(100dvh - 60px);
@@ -498,3 +503,22 @@ body[data-screen="home"] .topbar { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #screen-modes .mode-card, #screen-modes .mode-card:hover { transform: none; transition: none; }
 }
+
+/* ── 0.82.0: the light theme (the default; body.dark keeps the night page).
+   White page, warm grey hairlines, ink text; crimson stays the one accent.
+   The show and the shorts keep their dark stage: they are the product. ── */
+body:not(.dark)[data-screen="home"] { background: #fff; }
+body:not(.dark) #screen-home { background: #fff; color: #111210; scrollbar-color: #cfcbc2 #fff; }
+body:not(.dark) .lp-root {
+  --lp-night: #ffffff;
+  --lp-s1: #f6f5f2;
+  --lp-s2: #eeece7;
+  --lp-hair: #e4e1da;
+  --lp-on: #111210;
+  --lp-on1: #55534b;
+  --lp-on2: #77746b;
+  --lp-paper: #f6f5f2;
+  color-scheme: light;
+}
+body:not(.dark) .lp-nav { background: rgba(255, 255, 255, 0.88); }
+body:not(.dark) .lp-btn-ghost { box-shadow: inset 0 0 0 1px #cfcbc2; }

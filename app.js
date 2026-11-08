@@ -14108,21 +14108,27 @@
 
   /* ═══════════ SETTINGS: theme, director key, dataset ═══════════ */
 
+  // 0.82.0: one theme for the whole site, light by default (owner: "make the
+  // website white again"). The sun/moon buttons in the site nav and the editor
+  // bar flip it; Settings keeps its Light/Dark pair. A new storage key, so the
+  // old saved "dark" default does not keep the site dark.
+  const THEME_KEY = "vclyps-theme-v2";
   function applyTheme(t) {
     document.body.classList.toggle("dark", t === "dark");
     document.querySelectorAll("#themeSeg button").forEach((b) => b.classList.toggle("active", b.dataset.t === t));
+    document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.setAttribute("aria-label", t === "dark" ? "Switch to light theme" : "Switch to dark theme"));
+    const meta = document.querySelector("meta[name=theme-color]");
+    if (meta) meta.content = t === "dark" ? "#0e0d0c" : "#ffffff";
   }
-  // The editor defaults to DARK: it is a workspace you stare at beside video
-  // footage, and a bright chrome washes out the picture you are judging. The
-  // landing is unaffected — landing.css forces its own black stage regardless.
-  // A saved preference always wins over this default.
-  applyTheme(localStorage.getItem("vclyps-theme") || "dark");
-  document.querySelectorAll("#themeSeg button").forEach((b) => {
-    b.addEventListener("click", () => {
-      localStorage.setItem("vclyps-theme", b.dataset.t);
-      applyTheme(b.dataset.t);
-    });
-  });
+  function setTheme(t) {
+    try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+    applyTheme(t);
+  }
+  let savedTheme = null;
+  try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) {}
+  applyTheme(savedTheme === "dark" ? "dark" : "light");
+  document.querySelectorAll("#themeSeg button").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.t)));
+  document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => setTheme(document.body.classList.contains("dark") ? "light" : "dark")));
 
   /* ── Brand (Settings → Your brand) ─────────────────────────────────────
      The logo is shrunk to 512 px on its longest side and kept as a PNG data
