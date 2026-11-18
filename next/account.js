@@ -73,7 +73,7 @@
 
   /* ── sign in / sign up: one sheet ── */
   function openSignIn(reason) {
-    const why = reason === "edit" ? "Your footage and template are ready. Sign in to start the AI edit; your first 60 Tokens are on us." : "Keep your Tokens and projects on every device.";
+    const why = reason === "edit" ? "Your footage is ready. Sign in to start the AI edit; your first 60 Tokens are on us." : "Keep your Tokens and projects on every device.";
     return open(`
       <h2 id="accTitle">Continue to vClyps</h2>
       <p class="acc-lead">${esc(why)}</p>
