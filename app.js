@@ -409,6 +409,20 @@
     });
   };
   window.vcEnterEditor = enterEditor;
+  /* 0.83.0 hooks for the AI-first flow in /next/ (next/flow.js): it drives
+     the same project, editor and Director. Additive; nothing here changes
+     the current screens. */
+  window.vcFlow = {
+    addFiles: (files) => addFiles(files, "editor"),
+    media: () => S.media.map((m) => ({ id: m.id, type: m.type, name: m.name, duration: m.duration || 0, thumb: m.thumb || null })),
+    setMode: (mode) => { S.mode = mode || "entertainment"; applyModeUI(); },
+    runEdit: (o) => runEdit(o || {}),
+    mountPreview: (el) => mountPreview(el),
+    state: () => ({ clips: S.clips.length, seconds: total(), mode: S.mode }),
+    play: () => play(), pause: () => pause(),
+    openEditor: () => enterEditor(),
+    exportNow: () => { enterEditor(); const b = $("exportBtn"); if (b) b.click(); }
+  };
 
   document.querySelectorAll(".mode-card[data-mode]").forEach((card) => {
     card.addEventListener("click", () => {
@@ -11674,6 +11688,7 @@
       line.classList.remove("hidden", "open");
       line.innerHTML = SPIN + '<span class="aw-text">' + escHtml(String(s).replace(/…$/, "")) + "</span>" +
         (secs > 2 ? '<span class="aw-time">' + secs + "s</span>" : "");
+      if (opts.onProgress) opts.onProgress(String(s).replace(/…$/, ""), secs);
     };
     progress("Getting started…");
 
@@ -11761,7 +11776,7 @@
       const message = "Couldn't finish the edit. " + ((e && e.message) || "Please try again.");
       line.textContent = message;
       line.classList.remove("hidden", "working");
-      toast(message, 6000);
+      if (opts.onFail) opts.onFail(message); else toast(message, 6000);
     } finally {
       /* Always, even if the above threw. Leaving generating true locks the
          Edit button on "Working…" for the rest of the session. */

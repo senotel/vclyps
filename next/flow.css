@@ -1,0 +1,212 @@
+/* next/flow.css: the AI-first flow (0.83.0). App tokens only (styles.css
+   :root and body.dark), crimson as the one accent, no halos, no pills. */
+
+body[data-flow] .topbar { display: none; }
+body[data-flow] { overflow: hidden; }
+.flow-screen { display: none; position: fixed; inset: 0; z-index: 40; background: var(--bg0); color: var(--text);
+  flex-direction: column; overflow: hidden; font-family: var(--font); }
+.flow-screen.active { display: flex; }
+.flow-head { flex: 0 0 auto; display: flex; align-items: center; gap: var(--sp-2); height: 56px; padding: 0 max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line); }
+.flow-head-title { font-size: var(--fs-15); font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-head-gap { flex: 1 1 auto; }
+.flow-brand { font-weight: 600; font-size: var(--fs-15); letter-spacing: -0.01em; }
+.flow-brand b { color: var(--acc); font-weight: 600; }
+.flow-icon, .flow-link, .flow-tokens, .flow-fine { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; justify-content: center;
+  padding: 0 10px; border: 0; border-radius: var(--r-1); background: transparent; color: var(--text); font: inherit; font-size: var(--fs-13); cursor: pointer;
+  transition: background var(--t-state) var(--ease); }
+.flow-icon:hover, .flow-link:hover, .flow-tokens:hover, .flow-fine:hover { background: var(--bg2); }
+.flow-icon:active, .flow-link:active, .flow-tokens:active, .flow-fine:active { transform: translateY(1px); }
+.flow-tokens { border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.flow-tokens svg { color: var(--acc); }
+.flow-fine { border: 1px solid var(--line); font-weight: 600; }
+#flowRoot :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* ── start ── */
+.flow-start { flex: 1 1 auto; overflow: auto; width: 100%; max-width: 720px; margin: 0 auto; padding: 48px 16px 32px; display: flex; flex-direction: column; gap: var(--sp-4); }
+.flow-title { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 var(--sp-2); }
+.flow-new { display: flex; align-items: center; gap: var(--sp-4); width: 100%; min-height: 132px; padding: 20px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg1); color: var(--text); font: inherit;
+  transition: transform var(--t-state) var(--ease), border-color var(--t-state) var(--ease); }
+.flow-new:hover { transform: translateY(-2px); border-color: var(--t2); }
+.flow-new:active { transform: translateY(0); }
+.flow-new-plus { flex: 0 0 auto; display: grid; place-items: center; width: 84px; height: 84px; border-radius: var(--r-2); background: var(--acc); color: #fff; }
+.flow-new-text { display: flex; flex-direction: column; gap: 6px; }
+.flow-new-text b { font-size: var(--fs-22); letter-spacing: -0.02em; }
+.flow-new-text span { color: var(--t1); font-size: var(--fs-15); line-height: 1.4; }
+.flow-start-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
+.flow-small { display: flex; align-items: center; gap: var(--sp-3); min-height: 64px; padding: 12px 14px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-2); background: transparent; color: var(--text); font: inherit;
+  transition: background var(--t-state) var(--ease); }
+.flow-small:hover { background: var(--bg1); }
+.flow-small svg { flex: 0 0 auto; color: var(--t1); }
+.flow-small > span { display: flex; flex-direction: column; gap: 2px; }
+.flow-small b { font-size: var(--fs-15); }
+.flow-small span span { color: var(--t2); font-size: var(--fs-13); }
+
+/* ── library ── */
+.flow-lib { flex: 1 1 auto; overflow: auto; width: 100%; max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; display: flex; flex-direction: column; gap: var(--sp-4); }
+.flow-auto { display: flex; align-items: center; gap: var(--sp-4); width: 100%; padding: 18px 20px; text-align: left; cursor: pointer;
+  border: 1px solid var(--acc); border-radius: var(--r-3); background: var(--acc-soft, var(--bg1)); color: var(--text); font: inherit;
+  transition: transform var(--t-state) var(--ease); }
+.flow-auto:hover { transform: translateY(-2px); }
+.flow-auto-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--r-2); background: var(--acc); color: #fff; flex: 0 0 auto; }
+.flow-auto-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
+.flow-auto-text b { font-size: var(--fs-17); }
+.flow-auto-text span { color: var(--t1); font-size: var(--fs-13); line-height: 1.4; }
+.flow-auto-go { flex: 0 0 auto; padding: 10px 16px; border-radius: var(--r-1); background: var(--acc); color: #fff; font-weight: 600; font-size: var(--fs-13); }
+.flow-search { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg1); color: var(--t2); }
+.flow-search input { flex: 1 1 auto; height: 100%; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-15); outline: none; }
+.flow-cats { display: flex; gap: var(--sp-4); overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+.flow-cat { flex: 0 0 auto; min-height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--t1); font: inherit; font-size: var(--fs-15); cursor: pointer; }
+.flow-cat:hover { color: var(--text); }
+.flow-cat.active { color: var(--text); border-bottom-color: var(--acc); font-weight: 600; }
+.flow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: var(--sp-4) var(--sp-3); }
+.flow-card { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.flow-card-pic { position: relative; display: block; aspect-ratio: 9 / 16; border-radius: var(--r-2); overflow: hidden; background: var(--bg2); }
+.flow-card-pic img, .flow-card-pic video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 300ms var(--ease); }
+.flow-card:hover .flow-card-pic img, .flow-card:hover .flow-card-pic video { transform: scale(1.03); }
+.flow-card-name { font-size: var(--fs-13); font-weight: 600; line-height: 1.3; }
+.flow-card-meta { font-size: var(--fs-12); color: var(--t2); }
+.flow-empty { color: var(--t1); padding: 32px 0; }
+
+/* ── agent workspace ── */
+#flowAgent.is-drop .flow-thread { outline: 2px dashed var(--acc); outline-offset: -12px; }
+.flow-thread { flex: 1 1 auto; overflow: auto; width: 100%; max-width: 760px; margin: 0 auto; padding: 24px 16px 16px; display: flex; flex-direction: column; gap: var(--sp-4); }
+.flow-msg { font-size: var(--fs-15); line-height: 1.55; }
+.flow-msg p { margin: 0 0 8px; }
+.flow-msg p:last-child { margin-bottom: 0; }
+.flow-msg-you { align-self: flex-end; max-width: 85%; padding: 12px 14px; border-radius: var(--r-3); background: var(--bg2); }
+.flow-meta { color: var(--t2); font-size: var(--fs-12); }
+.flow-beats { display: flex; flex-wrap: wrap; gap: 6px; }
+.flow-beats span { padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--r-1); font-size: var(--fs-12); color: var(--t1); text-transform: lowercase; }
+.flow-drop { display: flex; align-items: center; gap: var(--sp-4); width: 100%; min-height: 112px; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-3);
+  background: var(--bg1); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--t-state) var(--ease); }
+.flow-drop:hover { border-color: var(--acc); }
+.flow-drop svg { flex: 0 0 auto; width: 56px; height: 56px; padding: 14px; border-radius: var(--r-2); background: var(--acc); color: #fff; }
+.flow-drop > span { display: flex; flex-direction: column; gap: 4px; }
+.flow-drop b { font-size: var(--fs-17); }
+.flow-drop span span { color: var(--t1); font-size: var(--fs-13); }
+.flow-steps { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-left: 2px solid var(--line); }
+.flow-step { display: flex; align-items: center; gap: 10px; color: var(--t2); font-size: var(--fs-13); }
+.flow-step.now { color: var(--text); }
+.flow-done { display: inline-grid; place-items: center; width: 16px; height: 16px; color: var(--ok, var(--t1)); }
+.flow-result { border: 1px solid var(--line); border-radius: var(--r-3); overflow: hidden; background: var(--bg1); margin-bottom: 8px; }
+.flow-player { position: relative; width: 100%; aspect-ratio: 9 / 16; max-height: 62vh; margin: 0 auto; background: #000; }
+.flow-player > * { width: 100% !important; height: 100% !important; }
+.flow-result-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; font-size: var(--fs-13); color: var(--t1); }
+.flow-result-bar button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+
+.flow-composer { flex: 0 0 auto; width: 100%; max-width: 760px; margin: 0 auto 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-3);
+  background: var(--bg1); display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 791px) { .flow-composer { margin: 0; border-radius: var(--r-3) var(--r-3) 0 0; border-bottom: 0; padding-bottom: max(10px, env(safe-area-inset-bottom)); } }
+.flow-composer textarea { width: 100%; min-height: 28px; max-height: 160px; resize: none; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-15); line-height: 1.45; outline: none; }
+.flow-clips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.flow-clip { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 48px; height: 64px; border-radius: var(--r-1); overflow: hidden; background: var(--bg2); color: var(--t2); }
+.flow-clip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.flow-clip > span { position: absolute; left: 0; right: 0; bottom: 0; padding: 1px 3px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
+.flow-bar { display: flex; align-items: center; gap: 8px; }
+.flow-add { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 10px 0 6px; border: 1px solid var(--line); border-radius: var(--r-1); background: transparent; color: var(--text); font: inherit; font-size: var(--fs-13); cursor: pointer; }
+.flow-add svg { width: 20px; height: 20px; }
+.flow-add:hover { background: var(--bg2); }
+.flow-est { font-size: var(--fs-12); color: var(--t2); font-variant-numeric: tabular-nums; text-align: right; }
+.flow-est.short { color: var(--warn, var(--acc)); }
+.flow-effort-wrap { position: relative; }
+.flow-effort { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 8px 0 10px; border: 0; border-radius: var(--r-1); background: transparent; color: var(--text); font: inherit; font-size: var(--fs-13); font-weight: 600; cursor: pointer; }
+.flow-effort:hover { background: var(--bg2); }
+.flow-effort svg:first-child { color: var(--acc); }
+.flow-send { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: var(--r-2); background: var(--acc); color: #fff; cursor: pointer; transition: filter var(--t-state) var(--ease); }
+.flow-send:hover { filter: brightness(1.1); }
+.flow-send:active { filter: brightness(0.92); transform: translateY(1px); }
+.flow-send:disabled { opacity: 0.45; cursor: default; }
+.flow-menu { position: absolute; right: 0; bottom: calc(100% + 8px); width: min(360px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow: auto; z-index: 5;
+  padding: 6px; border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg1); box-shadow: var(--shadow); }
+.flow-opt { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px; border: 0; border-radius: var(--r-2); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.flow-opt:hover, .flow-opt:focus-visible { background: var(--bg2); }
+.flow-opt-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-15); }
+.flow-rec { padding: 1px 6px; border: 1px solid var(--acc); border-radius: var(--r-1); color: var(--acc); font-size: var(--fs-11); font-weight: 600; }
+.flow-opt-tok { margin-left: auto; color: var(--t2); font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
+.flow-opt-check { color: var(--acc); display: inline-grid; }
+.flow-opt-about { color: var(--t1); font-size: var(--fs-12); line-height: 1.4; }
+.flow-fast { display: flex; align-items: center; gap: 12px; margin-top: 4px; padding: 12px 10px 8px; border-top: 1px solid var(--line); cursor: pointer; }
+.flow-fast > span:first-child { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; }
+.flow-fast b { font-size: var(--fs-15); }
+.flow-fast span span { color: var(--t1); font-size: var(--fs-12); line-height: 1.4; }
+.flow-fast input { position: absolute; opacity: 0; pointer-events: none; }
+.flow-switch { flex: 0 0 auto; position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--bg3); transition: background var(--t-state) var(--ease); }
+.flow-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--t-state) var(--ease); }
+.flow-fast input:checked + .flow-switch { background: var(--acc); }
+.flow-fast input:checked + .flow-switch::after { transform: translateX(16px); }
+.flow-fast input:focus-visible + .flow-switch { outline: 2px solid var(--acc); outline-offset: 2px; }
+.hidden { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) { #flowRoot * { transition: none !important; } }
+
+/* ── account sheets (next/account.js) ── */
+.acc-veil { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 10, 9, 0.5); }
+.acc-veil.open { display: flex; }
+.acc-sheet { position: relative; width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow: auto; padding: 28px 24px 24px; border: 1px solid var(--line); border-radius: var(--r-3);
+  background: var(--bg0); color: var(--text); font-family: var(--font); box-shadow: var(--shadow); }
+.acc-sheet:has(.acc-plans) { width: min(1040px, 100%); }
+@media (max-width: 600px) { .acc-veil { align-items: flex-end; padding: 0; } .acc-sheet { border-radius: var(--r-3) var(--r-3) 0 0; max-height: 92dvh; padding-bottom: max(24px, env(safe-area-inset-bottom)); } }
+.acc-x { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0; border-radius: var(--r-1); background: transparent; color: var(--t1); font-size: 26px; line-height: 1; cursor: pointer; }
+.acc-x:hover { background: var(--bg2); }
+.acc-sheet h2 { margin: 0 40px 8px 0; font-size: var(--fs-22); letter-spacing: -0.02em; }
+.acc-sheet h3 { margin: 0 0 6px; font-size: var(--fs-17); }
+.acc-lead { margin: 0 0 18px; color: var(--t1); font-size: var(--fs-15); line-height: 1.5; }
+.acc-note { margin: 0 0 14px; padding: 10px 12px; border-left: 2px solid var(--acc); background: var(--bg1); font-size: var(--fs-13); line-height: 1.5; }
+.acc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; margin: 0 0 10px; padding: 0 16px; border: 1px solid var(--line);
+  border-radius: var(--r-2); background: var(--bg1); color: var(--text); font: inherit; font-size: var(--fs-15); font-weight: 600; cursor: pointer; transition: background var(--t-state) var(--ease); }
+.acc-btn:hover { background: var(--bg2); }
+.acc-btn:active { transform: translateY(1px); }
+.acc-btn:disabled { opacity: 0.5; cursor: default; }
+.acc-primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+.acc-primary:hover { background: var(--acc); filter: brightness(1.08); }
+.acc-or { display: flex; align-items: center; gap: 12px; margin: 6px 0 14px; color: var(--t2); font-size: var(--fs-12); }
+.acc-or::before, .acc-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.acc-email label, .acc-calc label { display: block; margin: 0 0 6px; font-size: var(--fs-13); font-weight: 600; }
+.acc-email input, .acc-calc input[type=number] { width: 100%; height: 48px; margin: 0 0 10px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg1); color: var(--text); font: inherit; font-size: var(--fs-15); }
+.acc-email input[aria-invalid=true] { border-color: var(--danger, var(--acc)); }
+#accCode { letter-spacing: 0.4em; font-variant-numeric: tabular-nums; font-size: var(--fs-22); text-align: center; }
+.acc-err { margin: -4px 0 10px; color: var(--danger, var(--acc)); font-size: var(--fs-13); }
+.acc-fine { margin: 8px 0 0; color: var(--t2); font-size: var(--fs-12); line-height: 1.5; }
+.acc-fine a { color: inherit; }
+.acc-preview { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.acc-preview p { margin: 0 0 10px; color: var(--t1); font-size: var(--fs-13); line-height: 1.5; }
+.acc-toggle { display: inline-flex; margin: 0 0 16px; border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; }
+.acc-toggle button { min-height: 40px; padding: 0 14px; border: 0; background: transparent; color: var(--t1); font: inherit; font-size: var(--fs-13); cursor: pointer; }
+.acc-toggle button.active { background: var(--bg2); color: var(--text); font-weight: 600; }
+.acc-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.acc-plan { position: relative; display: flex; flex-direction: column; padding: 18px 16px 8px; border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg1); }
+.acc-plan.rec { border-color: var(--acc); }
+.acc-rec { position: absolute; top: -10px; left: 14px; padding: 2px 8px; border-radius: var(--r-1); background: var(--acc); color: #fff; font-size: var(--fs-11); font-weight: 600; }
+.acc-for { margin: 0 0 10px; color: var(--t2); font-size: var(--fs-13); }
+.acc-price { margin: 0 0 10px; font-size: var(--fs-28); font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.acc-price span { font-size: var(--fs-13); font-weight: 400; color: var(--t2); }
+.acc-plan ul { flex: 1 1 auto; margin: 0 0 14px; padding: 0; list-style: none; }
+.acc-plan li { padding: 4px 0 4px 18px; position: relative; font-size: var(--fs-13); color: var(--t1); }
+.acc-plan li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 8px; height: 2px; background: var(--acc); }
+.acc-flex { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-3); }
+.acc-flex > div { flex: 1 1 300px; }
+.acc-flex p { margin: 0; color: var(--t1); font-size: var(--fs-13); line-height: 1.5; }
+.acc-flex .acc-btn { width: auto; margin: 0; }
+.acc-calc-wrap { padding-top: 16px; border-top: 1px solid var(--line); }
+.acc-calc-row { display: flex; align-items: center; gap: 12px; }
+.acc-calc-row input[type=range] { flex: 1 1 auto; accent-color: var(--acc); height: 44px; }
+.acc-calc-row input[type=number] { width: 120px; margin: 0; }
+.acc-calc-out { margin: 8px 0 12px; font-size: var(--fs-15); }
+.acc-calc-out b { font-size: var(--fs-22); font-variant-numeric: tabular-nums; }
+.acc-calc-out span { color: var(--t1); font-size: var(--fs-13); }
+.acc-balance { margin: 4px 0 16px; font-size: var(--fs-15); color: var(--t1); }
+.acc-balance b { font-size: var(--fs-28); color: var(--text); font-variant-numeric: tabular-nums; }
+.acc-row { display: flex; gap: 10px; margin-bottom: 18px; }
+.acc-row .acc-btn { margin: 0; }
+.acc-ledger { margin: 0; padding: 0; list-style: none; }
+.acc-ledger li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-13); }
+.acc-ledger b { font-variant-numeric: tabular-nums; }
+
+/* light theme: white, like the site (owner: "make the website white again") */
+body:not(.dark) .flow-screen, body:not(.dark) .acc-veil { --bg0: #ffffff; --bg1: #f6f5f2; --bg2: #eeece7; --bg3: #e2dfd8; --line: #e4e1da; }
+.flow-lib > *, .flow-start > * { flex-shrink: 0; }
+.flow-why { margin-top: 6px; font-size: var(--fs-12); color: var(--t2); }
+.flow-why summary { cursor: pointer; min-height: 32px; display: inline-flex; align-items: center; }
