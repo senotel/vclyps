@@ -342,7 +342,19 @@
     };
     const brief = [F.template ? `Use the template structure "${F.template.name}" (${F.template.beats.join(" > ")}).` : "", prompt].filter(Boolean).join(" ");
     let failed = null;
-    await window.vcFlow.runEdit({ prompt: brief, onProgress: step, onFail: (m) => { failed = m; }, level: F.level, fast: F.fast });
+    // Google's free Gemini often answers "high demand" (HTTP 503/429) for a
+    // minute: wait and try again twice, saying so, before giving up
+    for (let attempt = 0; attempt < 3; attempt++) {
+      failed = null;
+      await window.vcFlow.runEdit({ prompt: brief, onProgress: step, onFail: (m) => { failed = m; }, level: F.level, fast: F.fast });
+      if (!failed || !/\b(503|429)\b|high demand|overloaded|rate limit|quota/i.test(failed) || attempt === 2) break;
+      const wait = attempt ? 30 : 12;
+      step(`Google's AI is busy right now. Trying again in ${wait} s`);
+      const row = steps.querySelector(".now span:last-child");
+      for (let s = wait - 1; s > 0; s--) { await new Promise((r) => setTimeout(r, 1000)); if (row) row.textContent = `Google's AI is busy right now. Trying again in ${s} s`; }
+      await new Promise((r) => setTimeout(r, 1000));
+      step("Trying again");
+    }
     const now = steps.querySelector(".now");
     if (now) { now.classList.remove("now"); now.querySelector(".ldr-line-spinner").outerHTML = `<span class="flow-done">${failed ? "" : I.check}</span>`; }
     F.busy = false;
