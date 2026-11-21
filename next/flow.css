@@ -56,7 +56,7 @@ body[data-flow] { overflow: hidden; }
 /* ── start: the home page's hero, with real shorts on the right ── */
 .flow-start { flex: 1 1 auto; overflow: auto; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 56px; align-items: center;
   width: 100%; max-width: 1344px; margin: 0 auto; padding: 48px 32px; }
-.flow-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
+.flow-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 48px; }
 .flow-start-wall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: center; }
 .flow-start-wall img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; background: var(--f-s2); }
 .flow-start-wall img:nth-child(2) { transform: translateY(-28px); }
@@ -68,7 +68,7 @@ body[data-flow] { overflow: hidden; }
 .flow-auto { display: flex; align-items: center; gap: 24px; padding: 24px 0; border-top: 1px solid var(--f-hair); border-bottom: 1px solid var(--f-hair); }
 .flow-auto > div { flex: 1 1 auto; }
 .flow-auto .flow-eyebrow { margin-bottom: 8px; color: var(--f-acc); }
-.flow-auto-text { margin: 0; font-size: 17px; line-height: 1.45; color: var(--f-ink); max-width: 36em; }
+.flow-auto-text { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; color: var(--f-ink); }
 .flow-search { display: flex; align-items: center; gap: 10px; height: 52px; margin-top: 32px; border-bottom: 1px solid var(--f-hair2); color: var(--f-t2); }
 .flow-search input { flex: 1 1 auto; height: 100%; border: 0; background: transparent; color: var(--f-ink); font: inherit; font-size: 17px; outline: none; }
 .flow-search:focus-within { border-bottom-color: var(--f-ink); }
@@ -241,3 +241,7 @@ body.dark .flow-fast input:checked + .flow-switch::after { background: var(--f-b
 .acc-done path { stroke: var(--f-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: acc-check 500ms 150ms var(--f-ease) forwards; }
 @keyframes acc-check { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .acc-done path { animation: none; stroke-dashoffset: 0; } }
+
+/* the search box never shows a focus box (owner, 2026-11-22): its underline turns ink instead */
+#flowRoot .flow-search input, #flowRoot .flow-search input:focus, #flowRoot .flow-search input:focus-visible { outline: none !important; box-shadow: none !important; border: 0 !important; }
+#flowRoot .flow-search input::-webkit-search-decoration, #flowRoot .flow-search input::-webkit-search-cancel-button { -webkit-appearance: none; }

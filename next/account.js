@@ -20,10 +20,10 @@
 
   // One place for names and prices (owner decides; see ai-first-plan.md section 5).
   const PLANS = [
-    { id: "free", name: "Free", month: 0, tokens: 60, for: "Try the AI editor", lines: ["60 Tokens to start, once", "Manual editing, unlimited", "1080p export, no watermark"] },
-    { id: "creator", name: "Creator", month: 9.99, tokens: 1000, for: "Posting every week", lines: ["1,000 Tokens a month", "About 18 Standard edits", "Every effort level"] },
-    { id: "pro", name: "Pro", month: 24.99, tokens: 2800, rec: true, for: "Posting most days", lines: ["2,800 Tokens a month", "About 50 Standard edits", "Fast switch, priority queue"] },
-    { id: "studio", name: "Studio", month: 59.99, tokens: 7500, for: "Teams and agencies", lines: ["7,500 Tokens a month", "About 130 Standard edits", "Brand kit, team seats"] }
+    { id: "free", name: "Free", month: 0, tokens: 60, for: "Try the AI editor", lines: ["60 Tokens once", "Free manual editing"] },
+    { id: "creator", name: "Creator", month: 9.99, tokens: 1000, for: "Posting every week", lines: ["1,000 Tokens a month", "About 18 edits"] },
+    { id: "pro", name: "Pro", month: 24.99, tokens: 2800, rec: true, for: "Posting most days", lines: ["2,800 Tokens a month", "About 50 edits"] },
+    { id: "studio", name: "Studio", month: 59.99, tokens: 7500, for: "Teams and agencies", lines: ["7,500 Tokens a month", "About 130 edits"] }
   ];
   // pay per edit: no bundle, a card on file, each edit billed at its Token price monthly
   const FLEX = { id: "flex", name: "Flex", perToken: 0.012, lines: ["No monthly bundle", "Pay only for the edits you make", "Billed once a month, cancel any time"] };
@@ -98,10 +98,9 @@
     return open(`
       <p class="acc-eyebrow">Plans</p>
       <h2 id="accTitle" class="acc-h1">Pay for what you make.</h2>
-      <p class="acc-lead">Manual editing is always free. Tokens pay for AI edits: a Standard edit is about ${STANDARD}, a Low one about ${LOW}. Tokens never expire.</p>
       <div class="acc-toggle" role="group" aria-label="Billing"><button type="button" class="active" data-bill="m" aria-pressed="true">Monthly</button><button type="button" data-bill="y" aria-pressed="false">Yearly, 2 months free</button></div>
       <div class="acc-plans"></div>
-      <div class="acc-row-line"><div><p class="acc-eyebrow">Pay per edit</p><h3>${FLEX.name}</h3><p>${FLEX.lines.join(". ")}. ${money(FLEX.perToken * STANDARD)} for a Standard edit, about ${money(FLEX.perToken * LOW)} for a Low one.</p></div><button type="button" class="acc-btn acc-ghost" data-plan="flex">Choose ${FLEX.name}</button></div>
+      <div class="acc-row-line"><div><p class="acc-eyebrow">Pay per edit</p><h3>${FLEX.name}</h3><p>About ${money(FLEX.perToken * STANDARD)} an edit</p></div><button type="button" class="acc-btn acc-ghost" data-plan="flex">Choose ${FLEX.name}</button></div>
       <div class="acc-row-line acc-calc-block"><div><p class="acc-eyebrow">Top up</p><h3>Any amount</h3>${calcHtml()}</div></div>`,
       (box) => {
         paint(box);
@@ -131,8 +130,7 @@
       <p class="acc-eyebrow">Checkout</p>
       <h2 id="accTitle" class="acc-h1">Review and pay</h2>
       <dl class="acc-order"><div><dt>Item</dt><dd>${esc(what)}</dd></div><div><dt>You get</dt><dd>${esc(gets)}</dd></div>
-        <div><dt>${flex ? "Today" : "Total"}</dt><dd><b>${money(amount)}</b>${isPlan && !flex ? (o.yearly ? " a year" : " a month") : ""}</dd></div><div><dt>Tax</dt><dd>Added at checkout for your country</dd></div></dl>
-      <p class="acc-lead">Payment happens on the payment provider's secure page: card, Apple Pay or Google Pay. OutClip never sees your card details.</p>
+        <div><dt>${flex ? "Today" : "Total"}</dt><dd><b>${money(amount)}</b>${isPlan && !flex ? (o.yearly ? " a year" : " a month") : ""}</dd></div></dl>
       <button type="button" class="acc-btn acc-wide" data-pay>Continue to secure checkout</button>
       ${LIVE ? "" : `<p class="acc-preview-note">Preview: the live site opens the provider's checkout here. This one charges nothing and adds ${isPlan ? "the plan" : "the Tokens"} to your preview balance.</p>`}`,
       (box) => box.querySelector("[data-pay]").addEventListener("click", () => {
@@ -163,7 +161,7 @@
     const r = box.querySelector("#accTok"), n = box.querySelector("#accTokN");
     const set = (v) => { v = Math.max(+r.min, Math.round(+v / 100) * 100 || +r.min); r.value = Math.min(v, +r.max); n.value = v;
       box.querySelector("#accPrice").textContent = money(Math.max(MIN_TOPUP, v * TOKEN_PRICE));
-      box.querySelector("#accEdits").textContent = `about ${Math.floor(v / STANDARD)} Standard edits or ${Math.floor(v / LOW)} Low edits`; };
+      box.querySelector("#accEdits").textContent = `about ${Math.floor(v / STANDARD)} edits`; };
     r.addEventListener("input", () => set(r.value));
     n.addEventListener("change", () => set(n.value));
     set(start);
@@ -185,11 +183,10 @@
       let settled = false;
       const fin = (v) => { if (!settled) { settled = true; res(v); } };
       open(`
-      <p class="acc-eyebrow">Before this edit</p>
-      <h2 id="accTitle" class="acc-h2">Top up so it won't stop halfway</h2>
-      <p class="acc-lead">This edit needs about ${low}-${need} Tokens. You have ${acc.tokens.toLocaleString()}.</p>
+      <h2 id="accTitle" class="acc-h2">Top up first</h2>
+      <p class="acc-lead">Needs ${low}-${need} Tokens. You have ${acc.tokens.toLocaleString()}.</p>
       ${calcHtml(Math.max(100, Math.ceil((need - acc.tokens) / 100) * 100))}
-      ${lighter ? `<button type="button" class="acc-btn acc-ghost acc-wide" data-lighter>Use ${esc(lighter.name)} instead, about ${lighter.low}-${lighter.need} Tokens</button>` : `<p class="acc-fine">Or choose a lighter effort level: Low edits use about ${LOW} Tokens.</p>`}`,
+      ${lighter ? `<button type="button" class="acc-btn acc-ghost acc-wide" data-lighter>Use ${esc(lighter.name)} instead (${lighter.low}-${lighter.need})</button>` : `<p class="acc-fine">Or choose a lighter effort level: Low edits use about ${LOW} Tokens.</p>`}`,
         (box) => {
           calcWire(box, start, (v) => fin(!!v && acc.tokens >= need));
           const l = box.querySelector("[data-lighter]");

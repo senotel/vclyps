@@ -111,8 +111,7 @@
 
   /* ── 1. email first ── */
   function emailStep() {
-    const lead = S.reason === "edit" ? "Your footage is ready. Save your work and get 60 free Tokens to start." : "Sign in or create an account. It takes a minute.";
-    step(`<p class="auth-eyebrow">Account</p><h1 id="authTitle">${S.reason === "edit" ? "One step before your edit" : "Welcome to OutClip"}</h1><p class="auth-lead">${lead}</p>
+    step(`<p class="auth-eyebrow">Account</p><h1 id="authTitle">${S.reason === "edit" ? "One step before your edit" : "Welcome to OutClip"}</h1>
       <form class="auth-form" novalidate><label for="authEmail">Email</label>
         <input id="authEmail" type="email" inputmode="email" autocomplete="username email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" value="${esc(S.email || "")}" required autofocus>
         <p class="auth-err" role="alert" hidden></p>
@@ -156,11 +155,11 @@
 
   /* ── 2b. new: create a password (checked as you type) ── */
   function createStep(forReset) {
-    step(`<p class="auth-eyebrow">${forReset ? "Reset password" : "New account"}</p><h1 id="authTitle">${forReset ? "Choose a new password" : "Create a password"}</h1><p class="auth-lead">${forReset ? "Your email is confirmed. Pick a new password and you're back in." : "For " + esc(S.email) + ". Use it to sign in on any device."}</p>
+    step(`<p class="auth-eyebrow">${forReset ? "Reset password" : "New account"}</p><h1 id="authTitle">${forReset ? "Choose a new password" : "Create a password"}</h1><p class="auth-lead">${forReset ? "Then you're back in." : esc(S.email)}</p>
       <form class="auth-form" novalidate><label for="authNew">Password</label>
         <div class="auth-pw"><input id="authNew" type="password" autocomplete="new-password" minlength="10" required autofocus aria-describedby="authRules"><button type="button" class="auth-eye" aria-label="Show password" aria-pressed="false">${I.eye}</button></div>
         <div class="auth-meter" aria-hidden="true"><span></span></div>
-        <ul class="auth-rules" id="authRules"><li data-r="len">At least 10 characters</li><li data-r="mix">Letters and a number or symbol</li><li data-r="own">Not your email or a common password</li></ul>
+        <ul class="auth-rules" id="authRules"><li data-r="len">10+ characters</li><li data-r="mix">A number or symbol</li><li data-r="own">Not easy to guess</li></ul>
         <p class="auth-err" role="alert" hidden></p>
         <button type="submit" class="auth-primary" data-label="Continue" disabled>Continue</button></form>`,
       { progress: forReset ? null : 0.32, back: forReset ? null : emailStep, wire(el) {
@@ -192,7 +191,7 @@
   function codeStep(purpose) {
     const forReset = purpose === "reset";
     const el = step(`<p class="auth-eyebrow">${forReset ? "Reset password" : "Verify your email"}</p><h1 id="authTitle">${forReset ? "Reset your password" : "Check your email"}</h1>
-      <p class="auth-lead">We sent a 6-digit code to <b>${esc(S.email)}</b>. Copy it from the notification and paste it here; no need to leave OutClip.</p>
+      <p class="auth-lead">Sent to <b>${esc(S.email)}</b></p>
       <form class="auth-form" novalidate>
         <div class="otp"><input id="authCode" class="otp-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="12" aria-label="6-digit code" required autofocus>
           <div class="otp-boxes" aria-hidden="true">${"<span></span>".repeat(6)}</div></div>
@@ -251,15 +250,15 @@
 
   /* ── 4. onboarding: one question a screen (Duolingo) ── */
   const Q = [
-    { id: "make", title: "What do you make?", lead: "So the first templates you see fit your videos.", pick: "one", options: [["talk", "Talking videos"], ["vlog", "Vlogs and day-in-my-life"], ["business", "Products and business"], ["gaming", "Gaming"], ["sports", "Sports and fitness"], ["podcast", "Podcasts and interviews"], ["trailer", "Films and trailers"], ["other", "Something else"]] },
-    { id: "post", title: "Where do you post?", lead: "Pick all that apply. OutClip sizes and paces each edit for it.", pick: "many", options: [["tiktok", "TikTok"], ["reels", "Instagram Reels"], ["shorts", "YouTube Shorts"], ["youtube", "YouTube"], ["linkedin", "LinkedIn"], ["other", "Somewhere else"]] },
-    { id: "work", title: "How do you like to work?", lead: "You can change this any time.", pick: "one", options: [["ai", "Let the AI edit it for me"], ["both", "AI first, then I fine-tune"], ["hand", "I mostly edit by hand"]] },
-    { id: "often", title: "How often do you post?", lead: "This sets a goal you can keep.", pick: "one", options: [["daily", "Every day"], ["week3", "A few times a week"], ["weekly", "About once a week"], ["now", "Now and then"]] }
+    { id: "make", title: "What do you make?", lead: "", pick: "one", options: [["talk", "Talking videos"], ["vlog", "Vlogs and day-in-my-life"], ["business", "Products and business"], ["gaming", "Gaming"], ["sports", "Sports and fitness"], ["podcast", "Podcasts and interviews"], ["trailer", "Films and trailers"], ["other", "Something else"]] },
+    { id: "post", title: "Where do you post?", lead: "", pick: "many", options: [["tiktok", "TikTok"], ["reels", "Instagram Reels"], ["shorts", "YouTube Shorts"], ["youtube", "YouTube"], ["linkedin", "LinkedIn"], ["other", "Somewhere else"]] },
+    { id: "work", title: "How do you like to work?", lead: "", pick: "one", options: [["ai", "Let the AI edit it for me"], ["both", "AI first, then I fine-tune"], ["hand", "I mostly edit by hand"]] },
+    { id: "often", title: "How often do you post?", lead: "", pick: "one", options: [["daily", "Every day"], ["week3", "A few times a week"], ["weekly", "About once a week"], ["now", "Now and then"]] }
   ];
   function onboard(i) {
     if (i >= Q.length) return ready();
     const q = Q[i], ans = S.answers || (S.answers = {});
-    step(`<p class="auth-eyebrow">Question ${i + 1} of ${Q.length}</p><h1 id="authTitle">${esc(q.title)}</h1><p class="auth-lead">${esc(q.lead)}</p>
+    step(`<p class="auth-eyebrow">Question ${i + 1} of ${Q.length}</p><h1 id="authTitle">${esc(q.title)}</h1>${q.lead ? `<p class="auth-lead">${esc(q.lead)}</p>` : "<div class=\"auth-gap\"></div>"}
       <div class="auth-choices" role="${q.pick === "one" ? "radiogroup" : "group"}" aria-labelledby="authTitle">${q.options.map(([v, l]) => `<button type="button" class="auth-choice" role="${q.pick === "one" ? "radio" : "checkbox"}" aria-checked="false" data-v="${v}">${esc(l)}</button>`).join("")}</div>
       <button type="button" class="auth-primary" data-label="Continue" disabled>Continue</button>
       <button type="button" class="auth-link auth-skip">Skip</button>`,

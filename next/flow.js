@@ -20,12 +20,12 @@
      the estimates of NO UPLOAD/ai-first-plan.md section 4 for about a
      minute of footage; longer footage scales them. */
   const LEVELS = [
-    { id: "low", name: "Low", about: "One careful pass and one review. Quick, simple edits.", tokens: [3, 6] },
-    { id: "light", name: "Light", about: "Two reviews. Cuts pauses and fillers, cuts on the beat, uses templates.", tokens: [6, 12] },
-    { id: "standard", name: "Standard", about: "Three reviews and the full kit: framing, sounds, zooms, colour.", tokens: [40, 70], rec: true },
-    { id: "thorough", name: "Thorough", about: "Four reviews. Tries two structures and keeps the better one.", tokens: [100, 180] },
-    { id: "deep", name: "Deep", about: "Five reviews, three candidates, and a second editor that critiques every cut.", tokens: [250, 450] },
-    { id: "max", name: "Max", about: "Six reviews and everything it has. For the video that has to be right.", tokens: [600, 1200] }
+    { id: "low", name: "Low", about: "Quick and simple", tokens: [3, 6] },
+    { id: "light", name: "Light", about: "Cleaner cuts", tokens: [6, 12] },
+    { id: "standard", name: "Standard", about: "Best for most videos", tokens: [40, 70], rec: true },
+    { id: "thorough", name: "Thorough", about: "Tries two versions", tokens: [100, 180] },
+    { id: "deep", name: "Deep", about: "Extra checks", tokens: [250, 450] },
+    { id: "max", name: "Max", about: "Everything it has", tokens: [600, 1200] }
   ];
   const FAST_X = 1.6;
   const WALL = ["bike", "cook", "cupcake", "dance", "fest", "guitar", "hike", "hoop", "latte", "laugh", "paint", "picnic", "puppy", "skate", "surf"];
@@ -94,12 +94,11 @@
           <div class="flow-start-copy">
             <p class="flow-eyebrow">New project</p>
             <h1 class="flow-title" id="flowStartTitle">What are we making?</h1>
-            <p class="flow-lede">Pick a template or let Auto clip choose. The AI makes the first cut and checks its own work; you steer it or fine-tune by hand.</p>
             <div class="flow-actions">
               <button class="flow-btn" type="button" id="flowNew">New edit</button>
               <button class="flow-btn flow-btn-ghost" type="button" id="flowManual">Manual edit</button>
             </div>
-            <p class="flow-small-print">Manual editing is free and needs no account. <button class="flow-textlink hidden" type="button" id="flowResume">Continue your last project</button></p>
+            <p class="flow-small-print"><button class="flow-textlink hidden" type="button" id="flowResume">Continue your last project</button></p>
           </div>
           <div class="flow-start-wall" aria-hidden="true">
             <img src="site/wall/cook.webp" alt="" loading="lazy"><img src="site/wall/skate.webp" alt="" loading="lazy"><img src="site/wall/laugh.webp" alt="" loading="lazy">
@@ -117,10 +116,10 @@
           <p class="flow-eyebrow">Templates</p>
           <h1 class="flow-h1" id="flowLibTitle">Pick a template</h1>
           <div class="flow-auto">
-            <div><p class="flow-eyebrow">Auto clip</p><p class="flow-auto-text">Not sure which one? The AI reads your footage and picks a template, or edits freely when none fits.</p></div>
-            <button class="flow-btn" type="button" id="flowAuto">Start Auto clip</button>
+            <div><p class="flow-auto-text">Auto clip</p></div>
+            <button class="flow-btn" type="button" id="flowAuto">Start</button>
           </div>
-          <label class="flow-search">${I.search}<input id="flowSearch" type="search" placeholder="Search: recipe, trailer, podcast, gym" autocomplete="off" aria-label="Search templates"></label>
+          <label class="flow-search">${I.search}<input id="flowSearch" type="search" placeholder="Search templates" autocomplete="off" aria-label="Search templates"></label>
           <div class="flow-cats" id="flowCats" role="tablist" aria-label="Template categories"></div>
           <div class="flow-grid" id="flowGrid"></div>
         </div>
@@ -138,7 +137,7 @@
         <div class="flow-thread" id="flowThread" aria-live="polite"></div>
         <form class="flow-composer" id="flowComposer" autocomplete="off">
           <div class="flow-clips" id="flowClips"></div>
-          <textarea id="flowPrompt" rows="1" aria-label="What should it make?" placeholder="What should it make? A 30 second recipe short, upbeat, end on the taste test"></textarea>
+          <textarea id="flowPrompt" rows="1" aria-label="What should it make?" placeholder="Describe your video"></textarea>
           <div class="flow-bar">
             <button class="flow-add" type="button" id="flowAdd" aria-label="Add videos">${I.plus}<span>Videos</span></button>
             <span class="flow-head-gap"></span>
@@ -195,7 +194,6 @@
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
     ["start", "library", "agent"].forEach((n) => $("flow" + n[0].toUpperCase() + n.slice(1)).classList.toggle("active", n === name));
     if (name === "start") $("flowResume").classList.toggle("hidden", !window.vcHasSession);
-    if (name === "library") setTimeout(() => $("flowSearch").focus({ preventScroll: true }), 50);
     if (name === "agent") { renderClips(); estimate(); }
     window.scrollTo(0, 0);
   }
@@ -216,7 +214,6 @@
       <button type="button" class="flow-card" data-id="${esc(t.id)}">
         <span class="flow-card-pic"><img src="site/wall/${t.pic}.webp" alt="" loading="lazy" decoding="async"></span>
         <span class="flow-card-name">${esc(t.name)}</span>
-        <span class="flow-card-meta">${esc(t.catName)}${t.len ? " · " + esc(t.len) : ""} · ${t.beats.length} beats</span>
       </button>`).join("") : `<p class="flow-empty">No template matches "${esc(F.q)}". Try Auto clip: it picks one from your footage.</p>`;
     grid.querySelectorAll(".flow-card").forEach((b) => {
       const t = list.find((x) => x.id === b.dataset.id);
@@ -234,8 +231,8 @@
     if (t) window.vcFlow.setMode(t.mode);
     const th = $("flowThread");
     th.innerHTML = "";
-    say(t ? `<p><b>${esc(t.name)}</b> ${t.when ? esc(t.when) + "." : ""}</p><p class="flow-beats">${t.beats.map((b) => `<span>${esc(b)}</span>`).join("")}</p><p>Add the videos for it below, say what it is for, and press Edit.</p>`
-      : `<p><b>Auto clip.</b> Add your videos and say what you want. I read the footage, pick the template that fits it (or cut it freely when none does), edit it, and check my own work before you see it.</p>`, "intro");
+    say(t ? `<p><b>${esc(t.name)}</b></p>`
+      : `<p><b>Auto clip</b></p>`, "intro");
     show("agent");
     if (!window.vcFlow.media().length) dropBox();
   }
@@ -248,7 +245,7 @@
     return m;
   }
   function dropBox() {
-    const m = say(`<button type="button" class="flow-drop">${I.plus}<span><b>Add videos</b><span>Drop them here, or choose from your device</span></span></button>`, "drop");
+    const m = say(`<button type="button" class="flow-drop">${I.plus}<span><b>Add videos</b></span></button>`, "drop");
     m.querySelector(".flow-drop").addEventListener("click", () => $("flowFiles").click());
   }
   function addFootage(files) {
@@ -274,9 +271,8 @@
     $("flowMenu").innerHTML = LEVELS.map((l) => `
       <button type="button" role="option" class="flow-opt${l.id === F.level ? " active" : ""}" aria-selected="${l.id === F.level}" data-level="${l.id}">
         <span class="flow-opt-top"><b>${esc(l.name)}</b>${l.rec ? '<span class="flow-rec">Recommended</span>' : ""}<span class="flow-opt-tok">${l.tokens[0]}-${l.tokens[1]} Tokens</span>${l.id === F.level ? `<span class="flow-opt-check">${I.check}</span>` : ""}</span>
-        <span class="flow-opt-about">${esc(l.about)}</span>
       </button>`).join("") + `
-      <label class="flow-fast"><span><b>Fast</b><span>Finishes sooner with fewer reviews and more computing power. About ${FAST_X}x the Tokens.</span></span>
+      <label class="flow-fast"><span><b>Fast</b></span>
         <input type="checkbox" id="flowFast" ${F.fast ? "checked" : ""}><span class="flow-switch" aria-hidden="true"></span></label>`;
     $("flowMenu").querySelectorAll("[data-level]").forEach((b) => b.addEventListener("click", () => { F.level = b.dataset.level; store.set("level", F.level); renderEffort(); estimate(); closeMenu(); $("flowEffort").focus(); }));
     $("flowFast").addEventListener("change", (e) => { F.fast = e.target.checked; store.set("fast", F.fast); renderEffort(); estimate(); });
@@ -296,7 +292,8 @@
     const acc = window.vcAccount && vcAccount.state();
     const bal = acc && acc.signedIn ? acc.tokens : null;
     const el = $("flowEst");
-    el.textContent = `about ${lo}-${hi} Tokens` + (bal != null ? ` · you have ${bal}` : "");
+    el.textContent = `${lo}-${hi} Tokens`;
+    el.title = bal != null ? `You have ${bal}` : "";
     el.classList.toggle("short", bal != null && bal < hi);
   }
   function paintTokens() {
@@ -362,7 +359,7 @@
     const st = window.vcFlow.state();
     if (failed || !st.clips) {
       // a plain sentence; the technical reason folds away for support
-      say(`<p>No edit this time: I couldn't finish it to the standard it needs. Nothing was charged. Try again, or Fine-tune it by hand.</p>${failed ? `<details class="flow-why"><summary>What happened</summary><p>${esc(failed)}</p></details>` : ""}`, "agent");
+      say(`<p>No edit this time. Nothing was charged.</p>${failed ? `<details class="flow-why"><summary>What happened</summary><p>${esc(failed)}</p></details>` : ""}`, "agent");
       return;
     }
     const spent = window.vcAccount ? vcAccount.charge(Math.round((lo + hi) / 2), { level: F.level, fast: F.fast }) : null;
@@ -371,8 +368,7 @@
   function result(st, spent) {
     const r = say(`<div class="flow-result"><div class="flow-player" id="flowPlayer${Date.now()}"></div>
       <div class="flow-result-bar"><span>${fmt(st.seconds)} · ${st.clips} clips${spent ? ` · ${spent} Tokens` : ""}</span><span class="flow-head-gap"></span>
-      <button type="button" class="secondary-btn" data-fine>${I.timeline} Fine-tune</button><button type="button" class="primary-btn" data-export>Export</button></div></div>
-      <p>Tell me what to change: "shorter intro", "calmer music", "end on the laugh". Or Fine-tune it by hand.</p>`, "agent");
+      <button type="button" class="secondary-btn" data-fine>${I.timeline} Fine-tune</button><button type="button" class="primary-btn" data-export>Export</button></div></div>`, "agent");
     const player = r.querySelector(".flow-player");
     try { window.vcFlow.mountPreview(player); } catch (e) {}
     r.querySelector("[data-fine]").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
