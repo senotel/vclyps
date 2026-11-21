@@ -75,7 +75,9 @@
   const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
 
   /* ── state ── */
-  const F = { screen: null, template: null, level: store.get("level", "standard"), fast: store.get("fast", false), busy: false, cat: "all", q: "" };
+  // the onboarding answers (next/auth.js) set the starting level and template category
+  const OB = (() => { try { return (JSON.parse(localStorage.getItem("vc-onboard")) || {}).setup || {}; } catch (e) { return {}; } })();
+  const F = { screen: null, template: null, level: store.get("level", OB.level || "standard"), fast: store.get("fast", false), busy: false, cat: OB.cat || "all", q: "" };
 
   /* ── screens ── */
   function build() {

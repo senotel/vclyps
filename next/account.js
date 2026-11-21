@@ -72,7 +72,9 @@
   function close(v) { if (!sheet) return; sheet.classList.remove("open"); const r = resolveSheet; resolveSheet = null; if (r) r(v); }
 
   /* ── sign in / sign up: one sheet ── */
+  // 0.84.0: the full sign-in screen (next/auth.js); the sheet below stays as a fallback
   function openSignIn(reason) {
+    if (window.vcAuth) return vcAuth.open(reason);
     const why = reason === "edit" ? "Your footage is ready. Sign in to start the AI edit; your first 60 Tokens are on us." : "Keep your Tokens and projects on every device.";
     return open(`
       <h2 id="accTitle">Continue to vClyps</h2>
@@ -126,6 +128,15 @@
     if (acc && acc.preview) { acc.signedIn = true; changed(); return; }   // back in: the same balance
     const t = window.vcTrust ? await vcTrust.check() : { grant: 60 };
     acc = { preview: true, signedIn: true, tokens: t.grant, plan: "free", ledger: [{ at: Date.now(), d: t.grant, why: t.grant ? "Welcome Tokens" : "Welcome Tokens already used on this device" }] };
+    changed();
+  }
+
+  // signed in through next/auth.js: the preview keeps one balance per email and
+  // gives the welcome Tokens once (vcTrust); live, the server does both
+  async function adopt(email, opts) {
+    if (acc && acc.preview && acc.email === email) { acc.signedIn = true; changed(); return; }
+    const t = window.vcTrust ? await vcTrust.check() : { grant: 60 };
+    acc = { preview: true, signedIn: true, email, tokens: t.grant, plan: "free", onboarding: opts && opts.onboarding, ledger: [{ at: Date.now(), d: t.grant, why: t.grant ? "Welcome Tokens" : "Welcome Tokens already used on this device" }] };
     changed();
   }
 
@@ -235,6 +246,6 @@
   window.vcAccount = {
     state: () => ({ signedIn: !!(acc && acc.signedIn), tokens: acc ? acc.tokens : 0, plan: acc && acc.plan, preview: !LIVE }),
     onChange: (f) => subs.push(f),
-    ready, charge, continueSheet, openPlans, openAccount, openSignIn, PLANS, FLEX
+    ready, charge, continueSheet, openPlans, openAccount, openSignIn, adopt, PLANS, FLEX
   };
 })();
