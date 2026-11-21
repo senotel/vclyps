@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps — where the app is running
-   vClyps runs as a website, as an installed web app (Home Screen, or the
+   OutClip — where the app is running
+   OutClip runs as a website, as an installed web app (Home Screen, or the
    Play Store's Trusted Web Activity, which is Chrome itself), and inside
    other apps' views: a native app shell built around these same files,
    or the in-app browsers of TikTok, Instagram and Facebook when someone
@@ -76,7 +76,7 @@
     catch (e) { return false; }
   }
 
-  /* Saves a file wherever vClyps is. Resolves "saved", "shared" or
+  /* Saves a file wherever OutClip is. Resolves "saved", "shared" or
      "cancelled"; rejects only when this view can do none of them, with a
      message that says what to do instead. Call it from the tap: the share
      sheet needs one. */
@@ -94,7 +94,7 @@
         if (e && e.name === "NotAllowedError") throw new Error("Tap Save again to choose where it goes.");
       }
     }
-    throw new Error("This app's view can't save files. Open vClyps in Chrome or Safari to save it.");
+    throw new Error("This app's view can't save files. Open OutClip in Chrome or Safari to save it.");
   }
 
   /* A short tap of the vibration motor, the "tick" CapCut gives when

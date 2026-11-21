@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps — audio out
+   OutClip — audio out
    Saves the sound of something in Your audio as a file of its own, for
    the Download button there. Exposes window.SenotelAudioOut.
 

@@ -1,10 +1,10 @@
 /* ================================================================
-   vClyps knowledge corpus — what keeps people watching, with its evidence
+   OutClip knowledge corpus — what keeps people watching, with its evidence
    Distilled principles of short-form editing, each tied to the evidence
    behind it (research/retention/evidence.md; IDs like E43 point there)
    and graded: A measured real viewing of video, B an adjacent medium or
    mechanism, C platform data, D practitioner. Stored into the Vision-1.0
-   training dataset once per corpus version, so a model trained on vClyps'
+   training dataset once per corpus version, so a model trained on OutClip'
    data learns the craft and how sure we are of each part of it.
 
    Version 4 (0.26.0) rewrote this from the retention research. Removed
@@ -64,7 +64,7 @@ window.SENOTEL_KNOWLEDGE = {
       ["Viewers re-segment events when the action changes, not the camera", "A", "E33"],
       ["Successful films vary shot length in waves (1/f), not a metronome", "A", "E31"],
       ["A punch-in is a looming cue that captures attention; constant zooming stops being a signal", "B", "E34 E10"],
-      ["No universal cut rate is proven; vClyps' default of a visual change every 4-6s on talking heads is a hypothesis", "hypothesis", "RQ7"]
+      ["No universal cut rate is proven; OutClip's default of a visual change every 4-6s on talking heads is a hypothesis", "hypothesis", "RQ7"]
     ],
 
     story: [

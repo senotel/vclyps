@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps: transitions and video effects
+   OutClip: transitions and video effects
    The drawing for both, on a canvas, so the preview and the export (which
    both draw through app.js renderPicture) show exactly the same thing.
 

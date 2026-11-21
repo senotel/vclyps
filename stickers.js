@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps: stickers
+   OutClip: stickers
    Two kinds, both placed, sized, turned and animated like a text (they ARE
    texts in the project, with t.sticker set):
      emoji   drawn from Noto Color Emoji (free, SIL Open Font License),

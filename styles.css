@@ -1,5 +1,5 @@
 /* ================================================================
-   vClyps by Senotel - stylesheet
+   OutClip by Senotel - stylesheet
    Black / white / crimson. DARK is the default (set in app.js — an editor
    sits beside video, and bright chrome washes out the picture); light is
    opt-in via Settings. :root holds light, body.dark overrides it.
@@ -1337,7 +1337,7 @@ body.previewFs .fs-exit:active { filter: brightness(0.92); }
 
 /* ===================== OVERLAY + AUDIO TRACKS =====================
 
-   CapCut's structure, vClyps' palette. Each track carries its own colour so a
+   CapCut's structure, OutClip's palette. Each track carries its own colour so a
    glance down the timeline tells you what kind of thing is where without
    reading a single label: crimson is the footage you cut, amber sits over it,
    violet is sound. Height differences do the same job — the main track is the

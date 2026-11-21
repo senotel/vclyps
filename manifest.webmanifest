@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "vClyps by Senotel",
-  "short_name": "vClyps",
+  "name": "OutClip by Senotel",
+  "short_name": "OutClip",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -56,7 +56,7 @@
   function notice(code, email) {
     let n = document.querySelector(".auth-notice");
     if (!n) { n = document.createElement("div"); n.className = "auth-notice"; n.setAttribute("role", "status"); document.body.appendChild(n); }
-    n.innerHTML = `<span class="auth-notice-tag">Preview</span><span class="auth-notice-text"><b>vClyps code: ${code}</b><span>The email to ${esc(email)} would say this.</span></span><button type="button" class="auth-notice-copy">Copy</button>`;
+    n.innerHTML = `<span class="auth-notice-tag">Preview</span><span class="auth-notice-text"><b>OutClip code: ${code}</b><span>The email to ${esc(email)} would say this.</span></span><button type="button" class="auth-notice-copy">Copy</button>`;
     n.querySelector(".auth-notice-copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); n.querySelector(".auth-notice-copy").textContent = "Copied"; } catch (e) {} setTimeout(() => n.classList.remove("show"), 900); });
     requestAnimationFrame(() => n.classList.add("show"));
     clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove("show"), 12000);
@@ -78,7 +78,7 @@
     root.setAttribute("aria-modal", "true");
     root.setAttribute("aria-labelledby", "authTitle");
     root.innerHTML = `<header class="auth-head"><button type="button" class="auth-icon" data-back aria-label="Back">${I.back}</button>
-      <span class="auth-brand"><b>v</b>Clyps<span>by Senotel</span></span><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
+      <span class="auth-brand"><b>Out</b>Clip<span>by Senotel</span></span><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
       <div class="auth-bar" aria-hidden="true"><span></span></div><main class="auth-body"></main>`;
     document.body.appendChild(root);
     body = root.querySelector(".auth-body");
@@ -112,12 +112,12 @@
   /* ── 1. email first ── */
   function emailStep() {
     const lead = S.reason === "edit" ? "Your footage is ready. Save your work and get 60 free Tokens to start." : "Sign in or create an account. It takes a minute.";
-    step(`<h1 id="authTitle">${S.reason === "edit" ? "One step before your edit" : "Welcome to vClyps"}</h1><p class="auth-lead">${lead}</p>
+    step(`<p class="auth-eyebrow">Account</p><h1 id="authTitle">${S.reason === "edit" ? "One step before your edit" : "Welcome to OutClip"}</h1><p class="auth-lead">${lead}</p>
       <form class="auth-form" novalidate><label for="authEmail">Email</label>
         <input id="authEmail" type="email" inputmode="email" autocomplete="username email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" value="${esc(S.email || "")}" required autofocus>
         <p class="auth-err" role="alert" hidden></p>
         <button type="submit" class="auth-primary" data-label="Continue">Continue</button></form>
-      ${inApp ? `<p class="auth-note">Apple and Google sign-in don't work inside this app's browser. Use your email, or open vClyps in Safari or Chrome.</p>` : `<div class="auth-or"><span>or</span></div>
+      ${inApp ? `<p class="auth-note">Apple and Google sign-in don't work inside this app's browser. Use your email, or open OutClip in Safari or Chrome.</p>` : `<div class="auth-or"><span>or</span></div>
       <button type="button" class="auth-alt" data-provider="apple">${I.apple}Continue with Apple</button>
       <button type="button" class="auth-alt" data-provider="google">${I.google}Continue with Google</button>`}
       <p class="auth-fine">By continuing you agree to the <a href="terms.html" target="_blank" rel="noopener">terms</a> and the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>`,
@@ -138,7 +138,7 @@
 
   /* ── 2a. returning: password, or a code instead ── */
   function passwordStep() {
-    step(`<h1 id="authTitle">Welcome back</h1><p class="auth-lead"><span class="auth-chip">${esc(S.email)}</span> <button type="button" class="auth-link" data-change>Change</button></p>
+    step(`<p class="auth-eyebrow">Sign in</p><h1 id="authTitle">Welcome back</h1><p class="auth-lead"><span class="auth-chip">${esc(S.email)}</span> <button type="button" class="auth-link" data-change>Change</button></p>
       <form class="auth-form" novalidate><label for="authPw">Password</label>
         <div class="auth-pw"><input id="authPw" type="password" autocomplete="current-password" required autofocus><button type="button" class="auth-eye" aria-label="Show password" aria-pressed="false">${I.eye}</button></div>
         <p class="auth-err" role="alert" hidden></p>
@@ -156,7 +156,7 @@
 
   /* ── 2b. new: create a password (checked as you type) ── */
   function createStep(forReset) {
-    step(`<h1 id="authTitle">${forReset ? "Choose a new password" : "Create a password"}</h1><p class="auth-lead">${forReset ? "Your email is confirmed. Pick a new password and you're back in." : "For " + esc(S.email) + ". Use it to sign in on any device."}</p>
+    step(`<p class="auth-eyebrow">${forReset ? "Reset password" : "New account"}</p><h1 id="authTitle">${forReset ? "Choose a new password" : "Create a password"}</h1><p class="auth-lead">${forReset ? "Your email is confirmed. Pick a new password and you're back in." : "For " + esc(S.email) + ". Use it to sign in on any device."}</p>
       <form class="auth-form" novalidate><label for="authNew">Password</label>
         <div class="auth-pw"><input id="authNew" type="password" autocomplete="new-password" minlength="10" required autofocus aria-describedby="authRules"><button type="button" class="auth-eye" aria-label="Show password" aria-pressed="false">${I.eye}</button></div>
         <div class="auth-meter" aria-hidden="true"><span></span></div>
@@ -191,8 +191,8 @@
   /* ── 3. the code: copy it from the notification, paste, done ── */
   function codeStep(purpose) {
     const forReset = purpose === "reset";
-    const el = step(`<h1 id="authTitle">${forReset ? "Reset your password" : "Check your email"}</h1>
-      <p class="auth-lead">We sent a 6-digit code to <b>${esc(S.email)}</b>. Copy it from the notification and paste it here; no need to leave vClyps.</p>
+    const el = step(`<p class="auth-eyebrow">${forReset ? "Reset password" : "Verify your email"}</p><h1 id="authTitle">${forReset ? "Reset your password" : "Check your email"}</h1>
+      <p class="auth-lead">We sent a 6-digit code to <b>${esc(S.email)}</b>. Copy it from the notification and paste it here; no need to leave OutClip.</p>
       <form class="auth-form" novalidate>
         <div class="otp"><input id="authCode" class="otp-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="12" aria-label="6-digit code" required autofocus>
           <div class="otp-boxes" aria-hidden="true">${"<span></span>".repeat(6)}</div></div>
@@ -211,7 +211,7 @@
           if (d.length < 6) inp._sent = false;
         };
         inp.addEventListener("input", () => { err(el, ""); el.querySelector(".otp").classList.remove("bad"); paint(); });
-        // a paste of the whole line ("Your vClyps code is 482 913") still lands as the six digits
+        // a paste of the whole line ("Your OutClip code is 482 913") still lands as the six digits
         inp.addEventListener("paste", (e) => {
           const t = (e.clipboardData || window.clipboardData).getData("text") || "";
           const m = t.match(/\b(\d{3})[\s-]?(\d{3})\b/) || t.match(/\d{6}/);
@@ -252,14 +252,14 @@
   /* ── 4. onboarding: one question a screen (Duolingo) ── */
   const Q = [
     { id: "make", title: "What do you make?", lead: "So the first templates you see fit your videos.", pick: "one", options: [["talk", "Talking videos"], ["vlog", "Vlogs and day-in-my-life"], ["business", "Products and business"], ["gaming", "Gaming"], ["sports", "Sports and fitness"], ["podcast", "Podcasts and interviews"], ["trailer", "Films and trailers"], ["other", "Something else"]] },
-    { id: "post", title: "Where do you post?", lead: "Pick all that apply. vClyps sizes and paces each edit for it.", pick: "many", options: [["tiktok", "TikTok"], ["reels", "Instagram Reels"], ["shorts", "YouTube Shorts"], ["youtube", "YouTube"], ["linkedin", "LinkedIn"], ["other", "Somewhere else"]] },
+    { id: "post", title: "Where do you post?", lead: "Pick all that apply. OutClip sizes and paces each edit for it.", pick: "many", options: [["tiktok", "TikTok"], ["reels", "Instagram Reels"], ["shorts", "YouTube Shorts"], ["youtube", "YouTube"], ["linkedin", "LinkedIn"], ["other", "Somewhere else"]] },
     { id: "work", title: "How do you like to work?", lead: "You can change this any time.", pick: "one", options: [["ai", "Let the AI edit it for me"], ["both", "AI first, then I fine-tune"], ["hand", "I mostly edit by hand"]] },
     { id: "often", title: "How often do you post?", lead: "This sets a goal you can keep.", pick: "one", options: [["daily", "Every day"], ["week3", "A few times a week"], ["weekly", "About once a week"], ["now", "Now and then"]] }
   ];
   function onboard(i) {
     if (i >= Q.length) return ready();
     const q = Q[i], ans = S.answers || (S.answers = {});
-    step(`<h1 id="authTitle">${esc(q.title)}</h1><p class="auth-lead">${esc(q.lead)}</p>
+    step(`<p class="auth-eyebrow">Question ${i + 1} of ${Q.length}</p><h1 id="authTitle">${esc(q.title)}</h1><p class="auth-lead">${esc(q.lead)}</p>
       <div class="auth-choices" role="${q.pick === "one" ? "radiogroup" : "group"}" aria-labelledby="authTitle">${q.options.map(([v, l]) => `<button type="button" class="auth-choice" role="${q.pick === "one" ? "radio" : "checkbox"}" aria-checked="false" data-v="${v}">${esc(l)}</button>`).join("")}</div>
       <button type="button" class="auth-primary" data-label="Continue" disabled>Continue</button>
       <button type="button" class="auth-link auth-skip">Skip</button>`,

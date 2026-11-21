@@ -173,9 +173,9 @@
     if (!window.isSecureContext) status("Device notifications need HTTPS or localhost.");
     else if (!("Notification" in window)) status(window.SenotelPlatform && SenotelPlatform.where() === "app"
       ? "Device notifications aren't available in this view."
-      : "Device notifications are unavailable here. On iPhone or iPad, add vClyps to your Home Screen and open it there.");
+      : "Device notifications are unavailable here. On iPhone or iPad, add OutClip to your Home Screen and open it there.");
     else if (Notification.permission === "denied") status("Notifications are blocked. Allow them in your browser's site settings, then turn this on.");
-    else status(on ? "Device notifications are on for edits and exports." : "Turn on to receive completion alerts outside vClyps.");
+    else status(on ? "Device notifications are on for edits and exports." : "Turn on to receive completion alerts outside OutClip.");
   }
   document.getElementById("notifySeg").addEventListener("click", async (e) => {
     const b = e.target.closest("button");
@@ -192,7 +192,7 @@
     if (permission === "granted") void registration();
   });
   document.getElementById("testNotification").addEventListener("click", async () => {
-    const sent = await system("vClyps notifications are on", "Your device will let you know when your edit or export is ready.", "vclyps-test");
+    const sent = await system("OutClip notifications are on", "Your device will let you know when your edit or export is ready.", "vclyps-test");
     status(sent ? "Test sent. Check your device notifications; Focus or Do Not Disturb can silence banners." : "Turn notifications on first. If already on, check your browser and device notification settings.");
   });
   if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", (e) => {

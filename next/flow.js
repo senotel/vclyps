@@ -85,40 +85,42 @@
     root.id = "flowRoot";
     root.innerHTML = `
       <section class="flow-screen" id="flowStart" aria-labelledby="flowStartTitle">
-        <header class="flow-head">
-          <span class="flow-brand"><b>v</b>Clyps</span>
-          <span class="flow-head-gap"></span>
+        <header class="flow-head"><span class="flow-brand"><b>Out</b>Clip</span><span class="flow-head-gap"></span>
+          <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
-          <button class="flow-tokens" type="button" data-plans aria-label="Tokens and plans"></button>
-          <button class="flow-link" type="button" data-account></button>
-        </header>
+          <button class="flow-nav" type="button" data-plans></button>
+          <button class="flow-nav" type="button" data-account></button></header>
         <div class="flow-start">
-          <h1 class="flow-title" id="flowStartTitle">What are we making?</h1>
-          <button class="flow-new" type="button" id="flowNew">
-            <span class="flow-new-plus">${I.plus}</span>
-            <span class="flow-new-text"><b>New edit</b><span>Pick a template, or let Auto clip choose. The AI edits; you steer.</span></span>
-          </button>
-          <div class="flow-start-row">
-            <button class="flow-small" type="button" id="flowManual">${I.timeline}<span><b>Manual edit</b><span>Free, no account. The full timeline.</span></span></button>
-            <button class="flow-small hidden" type="button" id="flowResume">${I.film}<span><b>Continue</b><span>Your last project, as you left it.</span></span></button>
+          <div class="flow-start-copy">
+            <p class="flow-eyebrow">New project</p>
+            <h1 class="flow-title" id="flowStartTitle">What are we making?</h1>
+            <p class="flow-lede">Pick a template or let Auto clip choose. The AI makes the first cut and checks its own work; you steer it or fine-tune by hand.</p>
+            <div class="flow-actions">
+              <button class="flow-btn" type="button" id="flowNew">New edit</button>
+              <button class="flow-btn flow-btn-ghost" type="button" id="flowManual">Manual edit</button>
+            </div>
+            <p class="flow-small-print">Manual editing is free and needs no account. <button class="flow-textlink hidden" type="button" id="flowResume">Continue your last project</button></p>
+          </div>
+          <div class="flow-start-wall" aria-hidden="true">
+            <img src="site/wall/cook.webp" alt="" loading="lazy"><img src="site/wall/skate.webp" alt="" loading="lazy"><img src="site/wall/laugh.webp" alt="" loading="lazy">
           </div>
         </div>
       </section>
 
       <section class="flow-screen" id="flowLibrary" aria-labelledby="flowLibTitle">
-        <header class="flow-head">
-          <button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button>
-          <h1 class="flow-head-title" id="flowLibTitle">Templates</h1>
-          <span class="flow-head-gap"></span>
-          <button class="flow-tokens" type="button" data-plans aria-label="Tokens and plans"></button>
-        </header>
+        <header class="flow-head"><button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button><span class="flow-brand"><b>Out</b>Clip</span><span class="flow-head-gap"></span>
+          <button class="flow-preview" type="button" data-status>Preview</button>
+          <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
+          <button class="flow-nav" type="button" data-plans></button>
+          <button class="flow-nav" type="button" data-account></button></header>
         <div class="flow-lib">
-          <button class="flow-auto" type="button" id="flowAuto">
-            <span class="flow-auto-ico">${I.auto}</span>
-            <span class="flow-auto-text"><b>Auto clip</b><span>Don't know which template? The AI reads your footage and picks one, or edits freely.</span></span>
-            <span class="flow-auto-go">Start</span>
-          </button>
-          <label class="flow-search">${I.search}<input id="flowSearch" type="search" placeholder="Search templates: recipe, trailer, podcast, gym" autocomplete="off"></label>
+          <p class="flow-eyebrow">Templates</p>
+          <h1 class="flow-h1" id="flowLibTitle">Pick a template</h1>
+          <div class="flow-auto">
+            <div><p class="flow-eyebrow">Auto clip</p><p class="flow-auto-text">Not sure which one? The AI reads your footage and picks a template, or edits freely when none fits.</p></div>
+            <button class="flow-btn" type="button" id="flowAuto">Start Auto clip</button>
+          </div>
+          <label class="flow-search">${I.search}<input id="flowSearch" type="search" placeholder="Search: recipe, trailer, podcast, gym" autocomplete="off" aria-label="Search templates"></label>
           <div class="flow-cats" id="flowCats" role="tablist" aria-label="Template categories"></div>
           <div class="flow-grid" id="flowGrid"></div>
         </div>
@@ -129,13 +131,14 @@
           <button class="flow-icon" type="button" data-to="library" aria-label="Back to templates">${I.back}</button>
           <h1 class="flow-head-title" id="flowAgentTitle">Auto clip</h1>
           <span class="flow-head-gap"></span>
-          <button class="flow-tokens" type="button" data-plans aria-label="Tokens and plans"></button>
-          <button class="flow-fine" type="button" id="flowFine" title="Open the timeline and edit by hand">${I.timeline}<span>Fine-tune</span></button>
+          <button class="flow-preview" type="button" data-status>Preview</button>
+          <button class="flow-nav" type="button" data-plans></button>
+          <button class="flow-btn flow-btn-ghost flow-btn-sm" type="button" id="flowFine" title="Open the timeline and edit by hand">Fine-tune</button>
         </header>
         <div class="flow-thread" id="flowThread" aria-live="polite"></div>
         <form class="flow-composer" id="flowComposer" autocomplete="off">
           <div class="flow-clips" id="flowClips"></div>
-          <textarea id="flowPrompt" rows="1" placeholder="What should it make? e.g. a 30 second recipe short, upbeat, end on the taste test"></textarea>
+          <textarea id="flowPrompt" rows="1" aria-label="What should it make?" placeholder="What should it make? A 30 second recipe short, upbeat, end on the taste test"></textarea>
           <div class="flow-bar">
             <button class="flow-add" type="button" id="flowAdd" aria-label="Add videos">${I.plus}<span>Videos</span></button>
             <span class="flow-head-gap"></span>
@@ -162,6 +165,7 @@
     document.querySelectorAll("#flowRoot [data-plans]").forEach((b) => b.addEventListener("click", () => window.vcAccount && vcAccount.openPlans()));
     document.querySelectorAll("#flowRoot [data-account]").forEach((b) => b.addEventListener("click", () => window.vcAccount && vcAccount.openAccount()));
     // the same switch as the site and editor (app.js applyTheme), from the hidden top bar
+    document.querySelectorAll("#flowRoot [data-status]").forEach((b) => b.addEventListener("click", () => window.vcAccount && vcAccount.openStatus()));
     document.querySelectorAll("#flowRoot [data-theme-flow]").forEach((b) => b.addEventListener("click", () => { const t = document.querySelector("[data-theme-toggle]"); if (t) t.click(); }));
     $("flowFine").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
     $("flowSearch").addEventListener("input", (e) => { F.q = e.target.value.trim().toLowerCase(); renderGrid(); });
@@ -297,7 +301,7 @@
   }
   function paintTokens() {
     const acc = window.vcAccount && vcAccount.state();
-    document.querySelectorAll("#flowRoot .flow-tokens").forEach((b) => { b.innerHTML = acc && acc.signedIn ? `${I.bolt}<span>${acc.tokens.toLocaleString()} Tokens</span>` : `<span>Plans</span>`; });
+    document.querySelectorAll("#flowRoot [data-plans]").forEach((b) => { b.textContent = acc && acc.signedIn ? acc.tokens.toLocaleString() + " Tokens" : "Plans"; });
     document.querySelectorAll("#flowRoot [data-account]").forEach((b) => { b.textContent = acc && acc.signedIn ? "Account" : "Sign in"; });
     if (F.screen === "agent") estimate();
   }

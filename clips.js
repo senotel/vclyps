@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps — clip finder
+   OutClip — clip finder
    Turns one long recording into a ranked list of short clips.
 
    On the device (free, the footage never uploads):

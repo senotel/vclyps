@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps: fonts
+   OutClip: fonts
    Two separate libraries, as in CapCut: 132 fonts for captions and 166
    for text. No family is in both, so a text never looks like the captions
    under it, and no two fonts in a library are the same design in a

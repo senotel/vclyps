@@ -3,115 +3,117 @@
    the progress bar is ink on a warm grey track, one flat colour.
    44px+ targets, 16px+ inputs (no iOS zoom), light and dark from the app tokens. */
 
-.auth { position: fixed; inset: 0; z-index: 120; display: none; flex-direction: column; background: var(--bg0); color: var(--text); font-family: var(--font); }
+.auth { position: fixed; inset: 0; z-index: 120; display: none; flex-direction: column; background: var(--f-bg); color: var(--f-ink); font-family: inherit; }
 .auth.open { display: flex; }
 body.auth-open { overflow: hidden; }
-body:not(.dark) .auth { --bg0: #ffffff; --bg1: #f6f5f2; --bg2: #eeece7; --bg3: #e2dfd8; --line: #e4e1da; }
 
 .auth-head { flex: 0 0 auto; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; height: 56px; padding: 0 max(12px, env(safe-area-inset-left)); padding-top: env(safe-area-inset-top); }
-.auth-icon { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: var(--r-1); background: transparent; color: var(--t1); cursor: pointer; }
-.auth-icon:hover { background: var(--bg2); color: var(--text); }
-.auth-brand { justify-self: center; display: inline-block; white-space: nowrap; font-size: var(--fs-17); font-weight: 600; letter-spacing: -0.01em; }
-.auth-brand b { color: var(--acc); font-weight: 600; }
-.auth-brand span { margin-left: 6px; font-size: var(--fs-11); font-weight: 500; color: var(--t2); letter-spacing: 0.02em; }
+.auth-icon { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 4px; background: transparent; color: var(--f-t1); cursor: pointer; }
+.auth-icon:hover { background: var(--f-s2); color: var(--f-ink); }
+.auth-brand { justify-self: center; display: inline-block; white-space: nowrap; font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+.auth-brand b { color: var(--f-acc); font-weight: 500; }
+.auth-brand span { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--f-t2); letter-spacing: 0.02em; }
 
 /* the progress bar: starts with credit (the account is step one), eases forward */
-.auth-bar { flex: 0 0 auto; height: 4px; margin: 0 auto; width: min(400px, calc(100% - 32px)); border-radius: 2px; background: var(--bg3); overflow: hidden; visibility: hidden; }
+.auth-bar { flex: 0 0 auto; height: 4px; margin: 0 auto; width: min(400px, calc(100% - 32px)); border-radius: 2px; background: var(--f-hair); overflow: hidden; visibility: hidden; }
 .auth-bar.on { visibility: visible; }
-.auth-bar span { display: block; height: 100%; background: var(--text); transform-origin: left center; transform: scaleX(0.2); transition: transform 600ms cubic-bezier(0.2, 0, 0, 1); }
+.auth-bar span { display: block; height: 100%; background: var(--f-ink); transform-origin: left center; transform: scaleX(0.2); transition: transform 600ms cubic-bezier(0.2, 0, 0, 1); }
 
 .auth-body { position: relative; flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
 .auth-step { width: min(400px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0 max(32px, env(safe-area-inset-bottom)); animation: auth-in 260ms cubic-bezier(0.2, 0, 0, 1) both; }
 .auth-step.out { position: absolute; left: 0; right: 0; top: 0; animation: auth-out 200ms ease both; pointer-events: none; }
 @keyframes auth-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 @keyframes auth-out { to { opacity: 0; transform: translateX(-24px); } }
-.auth-step h1 { margin: 0 0 10px; font-size: clamp(26px, 6vw, 32px); line-height: 1.1; letter-spacing: -0.025em; font-weight: 600; }
-.auth-lead { margin: 0 0 28px; color: var(--t1); font-size: var(--fs-15); line-height: 1.5; }
-.auth-lead b { color: var(--text); font-weight: 600; }
+.auth-step h1 { margin: 0 0 12px; font-size: clamp(30px, 6vw, 40px); line-height: 1; letter-spacing: -0.04em; font-weight: 500; }
+.auth-eyebrow { margin: 0 0 16px; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--f-t2); }
+.auth-lead { margin: 0 0 28px; color: var(--f-t1); font-size: 15px; line-height: 1.5; }
+.auth-lead b { color: var(--f-ink); font-weight: 500; }
 
 .auth-form { display: flex; flex-direction: column; }
-.auth-form label { margin: 0 0 8px; font-size: var(--fs-13); font-weight: 600; }
+.auth-form label { margin: 0 0 8px; font-size: 13px; font-weight: 500; }
 .auth-form input[type=email], .auth-form input[type=password], .auth-form input[type=text]:not(.otp-input) {
-  width: 100%; height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg0); color: var(--text); font: inherit; font-size: 17px;
-  transition: border-color var(--t-state) var(--ease); }
-.auth-form input:focus { outline: none; border-color: var(--text); }
-.auth-form input[aria-invalid=true] { border-color: var(--danger, var(--acc)); }
+  width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--f-hair2); border-radius: 4px; background: var(--f-bg); color: var(--f-ink); font: inherit; font-size: 17px;
+  transition: border-color 120ms var(--f-ease); }
+.auth-form input:focus { outline: none; border-color: var(--f-ink); }
+.auth-form input[aria-invalid=true] { border-color: var(--danger, var(--f-acc)); }
 .auth-pw { position: relative; }
 .auth-pw input { padding-right: 52px !important; }
-.auth-eye { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: var(--r-1); background: transparent; color: var(--t2); cursor: pointer; }
-.auth-eye[aria-pressed=true] { color: var(--text); }
-.auth-err { margin: 10px 0 0; color: var(--danger, var(--acc)); font-size: var(--fs-13); line-height: 1.4; }
+.auth-eye { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--f-t2); cursor: pointer; }
+.auth-eye[aria-pressed=true] { color: var(--f-ink); }
+.auth-err { margin: 10px 0 0; color: var(--danger, var(--f-acc)); font-size: 13px; line-height: 1.4; }
 
 /* the one thing that stands out */
-.auth-primary { width: 100%; min-height: 52px; margin-top: 20px; border: 0; border-radius: var(--r-2); background: var(--acc); color: #fff; font: inherit; font-size: 17px; font-weight: 600; cursor: pointer;
-  transition: filter var(--t-state) var(--ease), opacity var(--t-state) var(--ease); }
-.auth-primary:hover { filter: brightness(1.07); }
+.auth-primary { width: 100%; min-height: 48px; margin-top: 20px; border: 0; border-radius: 4px; background: var(--f-acc); color: #fff; font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
+  transition: filter 120ms var(--f-ease), opacity 120ms var(--f-ease); }
+.auth-primary:hover { background: var(--f-acc-down); }
 .auth-primary:active { filter: brightness(0.93); transform: translateY(1px); }
-.auth-primary:disabled { background: var(--bg2); color: var(--t2); cursor: default; filter: none; transform: none; }
-.auth-or { display: flex; align-items: center; gap: 12px; margin: 24px 0 16px; color: var(--t2); font-size: var(--fs-12); }
-.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.auth-alt { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: var(--r-2);
-  background: var(--bg0); color: var(--text); font: inherit; font-size: var(--fs-15); font-weight: 600; cursor: pointer; transition: background var(--t-state) var(--ease); }
-.auth-alt:hover { background: var(--bg1); }
-.auth-note { margin: 20px 0 0; padding: 12px 14px; border-radius: var(--r-2); background: var(--bg1); color: var(--t1); font-size: var(--fs-13); line-height: 1.5; }
-.auth-fine { margin: 20px 0 0; color: var(--t2); font-size: var(--fs-12); line-height: 1.5; }
+.auth-primary:disabled { background: var(--f-s2); color: var(--f-t2); cursor: default; filter: none; transform: none; }
+.auth-or { display: flex; align-items: center; gap: 12px; margin: 24px 0 16px; color: var(--f-t2); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--f-hair2); }
+.auth-alt { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; margin-bottom: 10px; border: 0; box-shadow: inset 0 0 0 1px var(--f-hair2); border-radius: 4px;
+  background: transparent; color: var(--f-ink); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 120ms var(--f-ease); }
+.auth-alt:hover { background: var(--f-s1); }
+.auth-note { margin: 20px 0 0; padding: 12px 14px; border-radius: 4px; background: var(--f-s1); color: var(--f-t1); font-size: 13px; line-height: 1.5; }
+.auth-fine { margin: 20px 0 0; color: var(--f-t2); font-size: 12px; line-height: 1.5; }
 .auth-fine a { color: inherit; }
 .auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 16px; }
-.auth-link { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--t1); font: inherit; font-size: var(--fs-13); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; cursor: pointer; }
-.auth-link:hover { color: var(--text); text-decoration-color: currentColor; }
-.auth-link:disabled { color: var(--t2); text-decoration: none; cursor: default; }
-.auth-chip { display: inline-block; padding: 4px 10px; border-radius: var(--r-1); background: var(--bg1); color: var(--text); font-size: var(--fs-13); font-weight: 600; }
-#flowRoot ~ .auth :focus-visible, .auth :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.auth-link { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--f-t1); font: inherit; font-size: 13px; text-decoration: underline; text-decoration-color: var(--f-hair2); text-underline-offset: 4px; cursor: pointer; }
+.auth-link:hover { color: var(--f-ink); text-decoration-color: currentColor; }
+.auth-link:disabled { color: var(--f-t2); text-decoration: none; cursor: default; }
+.auth-chip { display: inline-block; padding: 4px 10px; border-radius: 4px; background: var(--f-s1); color: var(--f-ink); font-size: 13px; font-weight: 500; }
+#flowRoot ~ .auth :focus-visible, .auth :focus-visible { outline: 2px solid var(--f-ink); outline-offset: 2px; }
 
 /* the password meter: ink, quiet */
-.auth-meter { height: 3px; margin: 10px 0 0; border-radius: 2px; background: var(--bg3); overflow: hidden; }
-.auth-meter span { display: block; height: 100%; background: var(--text); transform-origin: left; transform: scaleX(0); transition: transform 300ms var(--ease); }
-.auth-rules { margin: 12px 0 0; padding: 0; list-style: none; font-size: var(--fs-13); color: var(--t2); }
+.auth-meter { height: 3px; margin: 10px 0 0; border-radius: 2px; background: var(--f-hair); overflow: hidden; }
+.auth-meter span { display: block; height: 100%; background: var(--f-ink); transform-origin: left; transform: scaleX(0); transition: transform 300ms var(--f-ease); }
+.auth-rules { margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--f-t2); }
 .auth-rules li { position: relative; padding: 3px 0 3px 22px; }
-.auth-rules li::before { content: ""; position: absolute; left: 2px; top: 9px; width: 10px; height: 2px; background: var(--line); }
-.auth-rules li.ok { color: var(--text); }
-.auth-rules li.ok::before { left: 3px; top: 6px; width: 5px; height: 9px; border: solid var(--text); border-width: 0 2px 2px 0; background: none; transform: rotate(40deg); }
+.auth-rules li::before { content: ""; position: absolute; left: 2px; top: 9px; width: 10px; height: 2px; background: var(--f-hair2); }
+.auth-rules li.ok { color: var(--f-ink); }
+.auth-rules li.ok::before { left: 3px; top: 6px; width: 5px; height: 9px; border: solid var(--f-ink); border-width: 0 2px 2px 0; background: none; transform: rotate(40deg); }
 
 /* six boxes over one real input: a paste fills them all */
 .otp { position: relative; }
 .otp-input { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; border: 0; background: transparent; color: transparent; caret-color: transparent; font-size: 16px; letter-spacing: 2em; outline: none; }
 .otp-input::selection { background: transparent; }
 .otp-boxes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-.otp-boxes span { display: grid; place-items: center; height: 60px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg0); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums;
-  transition: border-color var(--t-state) var(--ease); }
-.otp-boxes span.full { border-color: var(--t2); }
-.otp-boxes span.on { border: 2px solid var(--text); }
-.otp-boxes span.on:empty::after { content: ""; width: 2px; height: 26px; background: var(--text); animation: otp-caret 1s steps(2) infinite; }
+.otp-boxes span { display: grid; place-items: center; height: 60px; border: 1px solid var(--f-hair2); border-radius: 4px; background: var(--f-bg); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums;
+  transition: border-color 120ms var(--f-ease); }
+.otp-boxes span.full { border-color: var(--f-t2); }
+.otp-boxes span.on { border: 2px solid var(--f-ink); }
+.otp-boxes span.on:empty::after { content: ""; width: 2px; height: 26px; background: var(--f-ink); animation: otp-caret 1s steps(2) infinite; }
 @keyframes otp-caret { 50% { opacity: 0; } }
-.otp.bad .otp-boxes span { border-color: var(--danger, var(--acc)); }
+.otp.bad .otp-boxes span { border-color: var(--danger, var(--f-acc)); }
 .otp.bad .otp-boxes { animation: otp-shake 280ms ease; }
 @keyframes otp-shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-.auth-paste { align-self: flex-start; min-height: 44px; margin-top: 12px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-1); background: var(--bg0); color: var(--text); font: inherit; font-size: var(--fs-13); font-weight: 600; cursor: pointer; }
-.auth-paste:hover { background: var(--bg1); }
+.auth-paste { align-self: flex-start; min-height: 44px; margin-top: 12px; padding: 0 14px; border: 1px solid var(--f-hair2); border-radius: 4px; background: var(--f-bg); color: var(--f-ink); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.auth-paste:hover { background: var(--f-s1); }
 
 /* onboarding choices: big, one tap */
 .auth-choices { display: grid; grid-template-columns: 1fr; gap: 10px; }
 @media (min-width: 560px) { .auth-choices { grid-template-columns: 1fr 1fr; } }
-.auth-choice { min-height: 56px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg0); color: var(--text); font: inherit; font-size: var(--fs-15); text-align: left; cursor: pointer;
-  transition: border-color var(--t-state) var(--ease), background var(--t-state) var(--ease); }
-.auth-choice:hover { background: var(--bg1); }
-.auth-choice[aria-checked=true] { border: 2px solid var(--text); padding: 11px 15px; background: var(--bg1); font-weight: 600; }
+.auth-choice { min-height: 56px; padding: 12px 16px; border: 1px solid var(--f-hair2); border-radius: 4px; background: var(--f-bg); color: var(--f-ink); font: inherit; font-size: 15px; text-align: left; cursor: pointer;
+  transition: border-color 120ms var(--f-ease), background 120ms var(--f-ease); }
+.auth-choice:hover { background: var(--f-s1); }
+.auth-choice[aria-checked=true] { border: 1px solid var(--f-ink); box-shadow: inset 0 0 0 1px var(--f-ink); background: var(--f-s1); }
 .auth-skip { display: block; margin: 8px auto 0; }
 
 /* "you're set": a check that draws itself once */
 .auth-done { display: grid; place-items: center; margin: 8px 0 20px; }
-.auth-done circle { stroke: var(--line); stroke-width: 2; }
-.auth-done path { stroke: var(--text); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: auth-check 500ms 150ms cubic-bezier(0.2, 0, 0, 1) forwards; }
+.auth-done circle { stroke: var(--f-hair2); stroke-width: 2; }
+.auth-done path { stroke: var(--f-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: auth-check 500ms 150ms cubic-bezier(0.2, 0, 0, 1) forwards; }
 @keyframes auth-check { to { stroke-dashoffset: 0; } }
 
 /* the preview's code notice, shaped like a phone notification */
 .auth-notice { position: fixed; z-index: 130; left: 50%; top: max(10px, env(safe-area-inset-top)); width: min(420px, calc(100% - 20px)); display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px;
-  border: 1px solid var(--line); border-radius: var(--r-3); background: var(--bg1); color: var(--text); box-shadow: var(--shadow); font-family: var(--font);
+  border: 1px solid var(--f-hair2); border-radius: 8px; background: var(--f-s1); color: var(--f-ink); box-shadow: none; font-family: inherit;
   transform: translate(-50%, -140%); visibility: hidden; transition: transform 380ms cubic-bezier(0.2, 0, 0, 1), visibility 0s 380ms; }
 .auth-notice.show { transform: translate(-50%, 0); visibility: visible; transition: transform 380ms cubic-bezier(0.2, 0, 0, 1); }
-.auth-notice-tag { padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--r-1); font-size: var(--fs-11); font-weight: 600; color: var(--t2); }
-.auth-notice-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-13); }
-.auth-notice-text span { color: var(--t2); font-size: var(--fs-12); }
-.auth-notice-copy { min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--r-1); background: var(--text); color: var(--bg0); font: inherit; font-size: var(--fs-13); font-weight: 600; cursor: pointer; }
+.auth-notice-tag { padding: 2px 6px; border: 1px solid var(--f-hair2); border-radius: 4px; font-size: 11px; font-weight: 500; color: var(--f-t2); }
+.auth-notice-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.auth-notice-text span { color: var(--f-t2); font-size: 12px; }
+.auth-notice-copy { min-height: 40px; padding: 0 12px; border: 0; border-radius: 4px; background: var(--f-ink); color: var(--f-bg); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) { .auth *, .auth-notice { animation: none !important; transition: none !important; } .auth-done path { stroke-dashoffset: 0; } }
+
+.auth input:focus-visible { outline: none; }

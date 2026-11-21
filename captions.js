@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   vClyps — word-timed animated captions
+   OutClip — word-timed animated captions
    The editing app by Senotel.
 
    Short-form captions: a few words on screen at a time, moving with the

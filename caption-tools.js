@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps — caption tools
+   OutClip — caption tools
    Everything captions need besides drawing, all on the device:
 
      · LANGUAGES   the 100 languages Whisper writes, for "Spoken in" and
@@ -10,7 +10,7 @@
      · censor      swear words in 13 languages plus your own, hidden as
                    f*** in the captions and, if asked, bleeped
      · vocabulary  your names and terms, spelled your way: "VCLYPS" and
-                   "Changmai" become "vClyps" and "Chiang Mai"
+                   "Changmai" become "OutClip" and "Chiang Mai"
      · keywords    the word worth colouring in each caption
      · translate   Chrome's built-in translator on the device where it
                    exists, otherwise the AI Director

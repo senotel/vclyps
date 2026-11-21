@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps — caption styles
+   OutClip — caption styles
    106 animated caption styles in 11 groups. Each is a short recipe
    that captions.js draws, the same in the preview and the export.
 

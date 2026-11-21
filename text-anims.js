@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   vClyps: text animations
+   OutClip: text animations
    CapCut's three kinds, for headings: In (how a text arrives), Out (how it
    leaves) and Loop (what it does while it stays). 67 ins, 54 outs and 41
    loops, a third of them letter by letter or word by word.

@@ -1,4 +1,4 @@
-/* vClyps landing, the experience (0.68.0, reworked in T21)
+/* OutClip landing, the experience (0.68.0, reworked in T21)
    Two things, both drawn with plain elements and transforms, no libraries:
 
    1. The hero's wall of shorts (#lpWall): columns of finished vertical videos

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   vClyps — retention.js
+   OutClip — retention.js
    The editing app by Senotel.
 
    What keeps people watching, turned into code that the Director's briefs,

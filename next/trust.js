@@ -37,7 +37,7 @@
       screen.width + "x" + screen.height + "x" + screen.colorDepth, devicePixelRatio, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.maxTouchPoints];
     try {
       const c = document.createElement("canvas"); c.width = 240; c.height = 60; const x = c.getContext("2d");
-      x.textBaseline = "top"; x.font = "16px 'Arial'"; x.fillStyle = "#dc143c"; x.fillRect(4, 4, 80, 20); x.fillStyle = "#111"; x.fillText("vClyps 0.83 é中", 6, 30);
+      x.textBaseline = "top"; x.font = "16px 'Arial'"; x.fillStyle = "#dc143c"; x.fillRect(4, 4, 80, 20); x.fillStyle = "#111"; x.fillText("OutClip 0.83 é中", 6, 30);
       parts.push(c.toDataURL());
     } catch (e) {}
     try {
