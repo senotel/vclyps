@@ -215,7 +215,8 @@
     if (name === "agent") { renderClips(); estimate(); }
     window.scrollTo(0, 0);
   }
-  function leave() { F.screen = null; delete document.body.dataset.flow; document.querySelectorAll(".flow-screen").forEach((s) => s.classList.remove("active")); }
+  function leave() {
+    if (window.vcFlow && window.vcFlow.returnPreview) window.vcFlow.returnPreview(); F.screen = null; delete document.body.dataset.flow; document.querySelectorAll(".flow-screen").forEach((s) => s.classList.remove("active")); }
   window.vcFlowShow = show;
   window.vcFlowAdd = (files) => addFootage(files);   // tests and the landing drop
 
@@ -249,6 +250,7 @@
     $("flowAgentTitle").textContent = t ? t.name : "Auto clip";
     if (t) window.vcFlow.setMode(t.mode);
     const th = $("flowThread");
+    window.vcFlow.returnPreview();
     th.innerHTML = "";
     say(t ? `<p><b>${esc(t.name)}</b></p>`
       : `<p><b>Auto clip</b></p>`, "intro");
@@ -281,6 +283,7 @@
     F.chat = c;
     F.template = c.tpl ? templates().find((t) => t.id === c.tpl) || null : null;
     $("flowAgentTitle").textContent = F.template ? F.template.name : "Auto clip";
+    window.vcFlow.returnPreview();
     $("flowThread").innerHTML = "";
     say(`<p><b>${esc(F.template ? F.template.name : "Auto clip")}</b></p>`, "intro");
     c.items.forEach((it) => { const m = say(it.k === "steps" ? `<p class="flow-meta">${esc(it.t)}</p>` : `<p>${esc(it.t)}</p>`, it.k === "you" ? "you" : "agent"); if (it.k === "you") resendable(m, it.t); });

@@ -31,7 +31,8 @@
   const STANDARD = 55, LOW = 5;               // Tokens for a typical edit, for "about N edits"
 
   const CFG = Object.assign({ auth: null, pay: null }, window.OUTCLIP_ACCOUNTS || window.VCLYPS_ACCOUNTS || {});
-  const LIVE = !!(CFG.auth && CFG.pay);
+  const LIVE = !!(CFG.auth && CFG.pay);          // payments switched on
+  const DATA = CFG.data || null;                // real accounts (next/supabase.js)
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (n) => "$" + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0);
   const KEY = "vc-account-preview";
@@ -74,6 +75,13 @@
   }
   // the preview keeps one balance per email and gives the welcome Tokens once (vcTrust)
   async function adopt(email, opts) {
+    if (DATA) {   // real account: the server decides the welcome Tokens and keeps the balance
+      if (opts && opts.isNew) { const sig = window.vcTrust ? await vcTrust.signals() : {}; await DATA.claimWelcome(sig); }
+      const me = await DATA.me();
+      acc = Object.assign({ signedIn: !!me, preview: false, ledger: [] }, me || {});
+      changed();
+      return;
+    }
     if (acc && acc.preview && acc.email === email) { acc.signedIn = true; changed(); return; }
     const t = window.vcTrust ? await vcTrust.check() : { grant: 60 };
     acc = { preview: !LIVE, signedIn: true, email, tokens: t.grant, plan: "free", ledger: [{ at: Date.now(), d: t.grant, why: t.grant ? "Welcome Tokens" : "Welcome Tokens already used on this device" }] };
@@ -203,8 +211,11 @@
   function charge(n, meta) {
     if (!acc) return null;
     n = Math.min(n, acc.tokens);
-    acc.tokens -= n; acc.ledger.push({ at: Date.now(), d: -n, why: (meta && meta.level ? meta.level[0].toUpperCase() + meta.level.slice(1) + (meta.fast ? " + Fast" : "") + " edit" : "Edit") });
+    const why = meta && meta.level ? meta.level[0].toUpperCase() + meta.level.slice(1) + (meta.fast ? " + Fast" : "") + " edit" : "Edit";
+    // instant on screen; the server confirms the real balance a moment later
+    acc.tokens -= n; (acc.ledger = acc.ledger || []).push({ at: Date.now(), d: -n, why });
     changed();
+    if (DATA) DATA.spend(n, why).then((left) => { if (left != null && acc) { acc.tokens = left; changed(); } });
     return n;
   }
 
@@ -218,7 +229,7 @@
       <p class="acc-eyebrow acc-mt">History</p><ul class="acc-ledger">${acc.ledger.slice(-20).reverse().map((l) => `<li><span>${esc(l.why)}</span><b>${l.d > 0 ? "+" : ""}${l.d}</b></li>`).join("")}</ul>`,
       (box) => {
         box.querySelector("[data-plans]").addEventListener("click", () => { close(false); openPlans(); });
-        box.querySelector("[data-out]").addEventListener("click", () => { acc = Object.assign({}, acc, { signedIn: false }); changed(); close(false); });
+        box.querySelector("[data-out]").addEventListener("click", () => { acc = Object.assign({}, acc, { signedIn: false }); changed(); close(false); if (CFG.auth && CFG.auth.signOut) CFG.auth.signOut(); });
       }, true);
   }
 
@@ -240,8 +251,14 @@
       <ul class="acc-status">${STATUS.map(([s, t, d]) => `<li><span class="acc-state" data-s="${s.replace(" ", "").toLowerCase()}">${s}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join("")}</ul>`, null, true);
   }
 
+  if (DATA) {
+    const refresh = () => DATA.me().then((me) => { if (me) { acc = Object.assign({ signedIn: true, preview: false }, me); changed(); } });
+    refresh();
+    DATA.onSignedIn(refresh);
+  }
+
   window.vcAccount = {
-    state: () => ({ signedIn: !!(acc && acc.signedIn), tokens: acc ? acc.tokens : 0, plan: acc && acc.plan, preview: !LIVE }),
+    state: () => ({ signedIn: !!(acc && acc.signedIn), tokens: acc ? acc.tokens : 0, plan: acc && acc.plan, preview: !DATA }),
     onChange: (f) => subs.push(f),
     ready, charge, continueSheet, openPlans, openAccount, openSignIn, openStatus, adopt, PLANS, FLEX
   };

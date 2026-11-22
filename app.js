@@ -419,6 +419,8 @@
     setMode: (mode) => { S.mode = mode || "entertainment"; applyModeUI(); },
     runEdit: (o) => runEdit(o || {}),
     mountPreview: (el) => mountPreview(el),
+    // the player goes home to the editor before a card that borrowed it is cleared
+    returnPreview: () => { const st = $("editorStage"); if (st) mountPreview(st); },
     state: () => ({ clips: S.clips.length, seconds: total(), mode: S.mode }),
     play: () => play(), pause: () => pause(),
     openEditor: () => enterEditor(),

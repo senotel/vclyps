@@ -23,7 +23,7 @@
    ═══════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
-  const CFG = Object.assign({ auth: null }, window.VCLYPS_ACCOUNTS || {});
+  const CFG = Object.assign({ auth: null }, window.OUTCLIP_ACCOUNTS || window.VCLYPS_ACCOUNTS || {});
   const inApp = /Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Bytedance|Snapchat|LinkedInApp|Line\//i.test(navigator.userAgent || "");
   const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
