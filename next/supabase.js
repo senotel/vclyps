@@ -54,8 +54,8 @@
     async sendCode(email, purpose) {
       const c = await sb();
       const r = purpose === "reset"
-        ? await c.auth.resetPasswordForEmail(email)
-        : await c.auth.signInWithOtp({ email, options: { shouldCreateUser: purpose === "signup" } });
+        ? await c.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname })
+        : await c.auth.signInWithOtp({ email, options: { shouldCreateUser: purpose === "signup", emailRedirectTo: location.origin + location.pathname } });   // until the code template is on, the email carries a link back to this page
       return r.error ? { ok: false, message: plain(r.error, "We couldn't send a code. Check the address and try again.") } : { ok: true };
     },
     async verify(email, token, purpose) {
