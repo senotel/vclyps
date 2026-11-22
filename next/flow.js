@@ -358,6 +358,8 @@
       d.className = "flow-step now";
       d.innerHTML = SPIN + "<span>" + esc(s) + "</span>";
       steps.appendChild(d);
+      // a step that drags (Google's AI can take minutes when busy) says so instead of looking frozen
+      setTimeout(() => { if (d.classList.contains("now")) d.lastElementChild.textContent = s + ". Taking longer than usual"; }, 40000);
       work.scrollIntoView({ block: "end" });
     };
     const brief = [F.template ? `Use the template structure "${F.template.name}" (${F.template.beats.join(" > ")}).` : "", prompt].filter(Boolean).join(" ");
