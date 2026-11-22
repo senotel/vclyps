@@ -3,14 +3,14 @@
    signposts, hairlines instead of boxes, 4px corners, crimson only on the one
    main action, no shadows. White in light, the warm night in dark. */
 
-#flowRoot, .acc-veil, .auth {
+#flowRoot, .acc-veil, .auth, .auth-notice {
   --f-bg: #ffffff; --f-s1: #f6f5f2; --f-s2: #eeece7; --f-hair: #e4e1da; --f-hair2: #cfcbc2;
   --f-ink: #111210; --f-t1: #55534b; --f-t2: #77746b; --f-acc: #dc143c; --f-acc-down: #b8102f;
   --f-ease: cubic-bezier(0.2, 0, 0, 1);
   font-family: "Switzer", -apple-system, "Segoe UI", Roboto, sans-serif;
   letter-spacing: -0.006em; -webkit-font-smoothing: antialiased;
 }
-body.dark #flowRoot, body.dark .acc-veil, body.dark .auth {
+body.dark #flowRoot, body.dark .acc-veil, body.dark .auth, body.dark .auth-notice {
   --f-bg: #0e0d0c; --f-s1: #171614; --f-s2: #201e1b; --f-hair: #2b2925; --f-hair2: #4a4640;
   --f-ink: #f2efe8; --f-t1: #aaa59b; --f-t2: #7d786f;
 }
@@ -262,3 +262,8 @@ body.dark .flow-fast input:checked + .flow-switch::after { background: var(--f-b
 #flowRoot textarea, #flowRoot input, #flowRoot textarea:focus, #flowRoot input:focus, #flowRoot textarea:focus-visible, #flowRoot input:focus-visible,
 .auth input:focus, .auth input:focus-visible, .acc-veil input:focus, .acc-veil input:focus-visible { outline: none !important; box-shadow: none !important; }
 #flowRoot .flow-nav.low { color: var(--f-acc); }
+
+/* phones and narrow windows: the effort menu is a sheet above the composer, never off the edge */
+@media (max-width: 600px) {
+  .flow-menu { position: fixed; left: 8px; right: 8px; width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-height: min(70vh, 520px); }
+}

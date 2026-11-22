@@ -56,7 +56,7 @@
   function notice(code, email) {
     let n = document.querySelector(".auth-notice");
     if (!n) { n = document.createElement("div"); n.className = "auth-notice"; n.setAttribute("role", "status"); document.body.appendChild(n); }
-    n.innerHTML = `<span class="auth-notice-tag">Preview</span><span class="auth-notice-text"><b>OutClip code: ${code}</b><span>The email to ${esc(email)} would say this.</span></span><button type="button" class="auth-notice-copy">Copy</button>`;
+    n.innerHTML = `<span class="auth-notice-tag">Preview</span><span class="auth-notice-text"><b>OutClip code: ${code}</b></span><button type="button" class="auth-notice-copy">Copy</button>`;
     n.querySelector(".auth-notice-copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); n.querySelector(".auth-notice-copy").textContent = "Copied"; } catch (e) {} setTimeout(() => n.classList.remove("show"), 900); });
     requestAnimationFrame(() => n.classList.add("show"));
     clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove("show"), 12000);

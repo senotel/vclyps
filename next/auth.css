@@ -20,7 +20,7 @@ body.auth-open { overflow: hidden; }
 .auth-bar span { display: block; height: 100%; background: var(--f-ink); transform-origin: left center; transform: scaleX(0.2); transition: transform 600ms cubic-bezier(0.2, 0, 0, 1); }
 
 .auth-body { position: relative; flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
-.auth-step { width: min(400px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0 max(32px, env(safe-area-inset-bottom)); animation: auth-in 260ms cubic-bezier(0.2, 0, 0, 1) both; }
+.auth-step { width: min(400px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0 max(32px, env(safe-area-inset-bottom)); animation: auth-in 260ms cubic-bezier(0.2, 0, 0, 1); }
 .auth-step.out { position: absolute; left: 0; right: 0; top: 0; animation: auth-out 200ms ease both; pointer-events: none; }
 @keyframes auth-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 @keyframes auth-out { to { opacity: 0; transform: translateX(-24px); } }
@@ -105,7 +105,7 @@ body.auth-open { overflow: hidden; }
 @keyframes auth-check { to { stroke-dashoffset: 0; } }
 
 /* the preview's code notice, shaped like a phone notification */
-.auth-notice { position: fixed; z-index: 130; left: 50%; top: max(10px, env(safe-area-inset-top)); width: min(420px, calc(100% - 20px)); display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px;
+.auth-notice { position: fixed; z-index: 130; left: 50%; top: max(68px, calc(env(safe-area-inset-top) + 64px)); width: min(420px, calc(100% - 32px)); display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 12px;
   border: 1px solid var(--f-hair2); border-radius: 8px; background: var(--f-s1); color: var(--f-ink); box-shadow: none; font-family: inherit;
   transform: translate(-50%, -140%); visibility: hidden; transition: transform 380ms cubic-bezier(0.2, 0, 0, 1), visibility 0s 380ms; }
 .auth-notice.show { transform: translate(-50%, 0); visibility: visible; transition: transform 380ms cubic-bezier(0.2, 0, 0, 1); }
