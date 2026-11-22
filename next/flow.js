@@ -301,7 +301,8 @@
   }
   function paintTokens() {
     const acc = window.vcAccount && vcAccount.state();
-    document.querySelectorAll("#flowRoot [data-plans]").forEach((b) => { b.textContent = acc && acc.signedIn ? acc.tokens.toLocaleString() + " Tokens" : "Plans"; });
+    // low balance (research: warn before it runs out): under one Standard edit the label turns red; at 0 it says Top up
+    document.querySelectorAll("#flowRoot [data-plans]").forEach((b) => { const on = acc && acc.signedIn; b.textContent = on ? (acc.tokens > 0 ? acc.tokens.toLocaleString() + " Tokens" : "Top up") : "Plans"; b.classList.toggle("low", !!on && acc.tokens < 55); });
     document.querySelectorAll("#flowRoot [data-account]").forEach((b) => { b.textContent = acc && acc.signedIn ? "Account" : "Sign in"; });
     if (F.screen === "agent") estimate();
   }

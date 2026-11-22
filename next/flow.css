@@ -261,3 +261,4 @@ body.dark .flow-fast input:checked + .flow-switch::after { background: var(--f-b
    Buttons and links keep their keyboard focus ring for accessibility. */
 #flowRoot textarea, #flowRoot input, #flowRoot textarea:focus, #flowRoot input:focus, #flowRoot textarea:focus-visible, #flowRoot input:focus-visible,
 .auth input:focus, .auth input:focus-visible, .acc-veil input:focus, .acc-veil input:focus-visible { outline: none !important; box-shadow: none !important; }
+#flowRoot .flow-nav.low { color: var(--f-acc); }
