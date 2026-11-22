@@ -141,9 +141,11 @@
       <dl class="acc-order"><div><dt>Item</dt><dd>${esc(what)}</dd></div><div><dt>You get</dt><dd>${esc(gets)}</dd></div>
         <div><dt>${flex ? "Today" : "Total"}</dt><dd><b>${money(amount)}</b>${isPlan && !flex ? (o.yearly ? " a year" : " a month") : ""}</dd></div></dl>
       <button type="button" class="acc-btn acc-wide" data-pay>Continue to secure checkout</button>
-      ${LIVE ? "" : `<p class="acc-preview-note">Preview: the live site opens the provider's checkout here. This one charges nothing and adds ${isPlan ? "the plan" : "the Tokens"} to your preview balance.</p>`}`,
+      ${LIVE ? "" : DATA ? `<p class="acc-preview-note">Payments open soon. Nothing is charged.</p>` : `<p class="acc-preview-note">Preview: the live site opens the provider's checkout here. This one charges nothing and adds ${isPlan ? "the plan" : "the Tokens"} to your preview balance.</p>`}`,
       (box) => box.querySelector("[data-pay]").addEventListener("click", () => {
         if (LIVE) return CFG.pay.checkout(o);
+        // real accounts, payments not connected yet: no pretend Tokens on a real balance
+        if (DATA) { const b = box.querySelector("[data-pay]"); b.disabled = true; b.textContent = "Payments open soon"; return; }
         if (isPlan) { acc.plan = o.plan.id; if (!flex) { acc.tokens += o.plan.tokens; acc.ledger.push({ at: Date.now(), d: o.plan.tokens, why: o.plan.name + " plan (preview, nothing charged)" }); } }
         else { acc.tokens += o.tokens; acc.ledger.push({ at: Date.now(), d: o.tokens, why: "Top-up (preview, nothing charged)" }); }
         changed();
@@ -239,9 +241,9 @@
     ["Works", "The AI edit", "Today's AI editor, on the live site (not on a local copy). The new editor with real effort levels comes when the Claude key is on (December)."],
     ["Works", "Manual editor and export", "The full timeline and 1080p export, free."],
     ["Estimate", "Effort levels and Token estimates", "The menu, estimates and the top-up check work; the numbers become exact once real edits are measured."],
-    ["Preview", "Sign up, sign in, reset password", "Every screen works on this device. The code shows as an in-app notice instead of an email until a sign-in service is connected."],
-    ["Preview", "Plans, top-ups and checkout", "Every step works and adds to a preview balance; nothing is charged until a payment provider is connected."],
-    ["Preview", "Tokens balance", "Kept on this device only. Live, it is kept on the server."],
+    DATA ? ["Works", "Sign up, sign in, reset password", "Real accounts on OutClip's server. Codes arrive by email."] : ["Preview", "Sign up, sign in, reset password", "Every screen works on this device. The code shows as an in-app notice instead of an email."],
+    ["Preview", "Plans, top-ups and checkout", "Every step works and adds to a preview balance; nothing is charged until payments are connected."],
+    DATA ? ["Works", "Tokens balance", "Kept on the server with your account."] : ["Preview", "Tokens balance", "Kept on this device only."],
     ["Partial", "Free-plan protection", "The device check runs now; the server rules (email, network, bot check) are written and wait to be deployed."],
     ["Not yet", "Apple and Google sign-in", "Needs the sign-in service and Apple and Google developer accounts (owner)."]
   ];

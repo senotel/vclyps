@@ -5,7 +5,7 @@
    the data). Secret keys never go here: Polar's token and Supabase's
    service_role key live only in Supabase's secrets (supabase/SETUP.md). */
 window.OUTCLIP_CONFIG = {
-  supabaseUrl: "",       // https://<project-ref>.supabase.co
-  supabaseKey: "",       // the anon / publishable key
+  supabaseUrl: "https://thfwydpugnvwwzmrhszz.supabase.co",   // OutClip project, senotel's Org (Singapore)
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZnd5ZHB1Z252d3d6bXJoc3p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzMDk5MzQsImV4cCI6MjExMDg4NTkzNH0.gD69OcjCj-JDSVqU4Y3x9OziTuby0hHl9ucZM8GnKZY",   // the anon key (public by design)
   payments: false        // true once Polar is connected (the bank account is linked)
 };
