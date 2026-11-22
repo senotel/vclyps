@@ -3530,3 +3530,6 @@ body:not(.previewFs) #screen-editor .transport { height: var(--playrow-h); paddi
 .brand-word { font-weight: 600; letter-spacing: -0.035em; text-transform: none; }
 .logo-word { display: inline-flex; align-items: center; letter-spacing: 0; }
 .logo:hover .bm-cut { transform: translateX(1.5px); }
+
+/* 0.91.1 About shows the Ethlenos mark inline: no invert filter, ink follows the theme */
+svg.about-logo { color: var(--text); filter: none !important; opacity: 1; }
