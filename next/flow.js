@@ -87,7 +87,8 @@
     root.id = "flowRoot";
     root.innerHTML = `
       <section class="flow-screen" id="flowStart" aria-labelledby="flowStartTitle">
-        <header class="flow-head"><span class="flow-brand"><b>Out</b>Clip</span><span class="flow-head-gap"></span>
+        <header class="flow-head"><button class="flow-brand" type="button" data-home aria-label="OutClip home"><b>Out</b>Clip</button><span class="flow-head-gap"></span>
+          <button class="flow-nav" type="button" data-history>History</button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
           <button class="flow-nav" type="button" data-plans></button>
@@ -101,15 +102,17 @@
               <button class="flow-btn flow-btn-ghost" type="button" id="flowManual">Manual edit</button>
             </div>
             <p class="flow-small-print"><button class="flow-textlink hidden" type="button" id="flowResume">Continue your last project</button></p>
+            <div class="flow-recent" id="flowRecent"></div>
           </div>
-          <div class="flow-start-wall" aria-hidden="true">
+          <button class="flow-start-wall" type="button" data-to="library" aria-label="Browse templates">
             <img src="site/wall/cook.webp" alt="" loading="lazy"><img src="site/wall/skate.webp" alt="" loading="lazy"><img src="site/wall/laugh.webp" alt="" loading="lazy">
-          </div>
+          </button>
         </div>
       </section>
 
       <section class="flow-screen" id="flowLibrary" aria-labelledby="flowLibTitle">
-        <header class="flow-head"><button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button><span class="flow-brand"><b>Out</b>Clip</span><span class="flow-head-gap"></span>
+        <header class="flow-head"><button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button><button class="flow-brand" type="button" data-home aria-label="OutClip home"><b>Out</b>Clip</button><span class="flow-head-gap"></span>
+          <button class="flow-nav" type="button" data-history>History</button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
           <button class="flow-nav" type="button" data-plans></button>
@@ -132,6 +135,7 @@
           <button class="flow-icon" type="button" data-to="library" aria-label="Back to templates">${I.back}</button>
           <h1 class="flow-head-title" id="flowAgentTitle">Auto clip</h1>
           <span class="flow-head-gap"></span>
+          <button class="flow-nav" type="button" data-history>History</button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-nav" type="button" data-plans></button>
           <button class="flow-btn flow-btn-ghost flow-btn-sm" type="button" id="flowFine" title="Open the timeline and edit by hand">Fine-tune</button>
@@ -153,12 +157,24 @@
           <input type="file" id="flowFiles" accept="video/*,image/*,audio/*" multiple hidden>
         </form>
       </section>`;
+    const hist = document.createElement("aside");
+    hist.className = "flow-hist";
+    hist.id = "flowHist";
+    hist.hidden = true;
+    hist.setAttribute("aria-label", "History");
+    hist.innerHTML = `<div class="flow-hist-head"><b>History</b><span class="flow-head-gap"></span><button type="button" class="flow-btn flow-btn-sm" data-newchat>New chat</button><button type="button" class="flow-icon" data-histclose aria-label="Close history">${I.x}</button></div><ul class="flow-hist-list" id="flowHistList"></ul>`;
+    root.appendChild(hist);
     document.body.appendChild(root);
     wire();
   }
 
   function wire() {
     $("flowNew").addEventListener("click", () => show("library"));
+    document.querySelectorAll("#flowRoot [data-home]").forEach((b) => b.addEventListener("click", () => { closeHistory(); leave(); window.vcFlow.home(); }));
+    document.querySelectorAll("#flowRoot [data-history]").forEach((b) => b.addEventListener("click", openHistory));
+    $("flowHist").querySelector("[data-histclose]").addEventListener("click", closeHistory);
+    $("flowHist").querySelector("[data-newchat]").addEventListener("click", () => { closeHistory(); show("library"); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("flowHist").hidden) closeHistory(); });
     $("flowManual").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
     $("flowResume").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
     $("flowAuto").addEventListener("click", () => openAgent(null));
@@ -195,7 +211,7 @@
     document.body.dataset.flow = name;
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
     ["start", "library", "agent"].forEach((n) => $("flow" + n[0].toUpperCase() + n.slice(1)).classList.toggle("active", n === name));
-    if (name === "start") $("flowResume").classList.toggle("hidden", !window.vcHasSession);
+    if (name === "start") { $("flowResume").classList.toggle("hidden", !window.vcHasSession); renderRecent(); }
     if (name === "agent") { renderClips(); estimate(); }
     window.scrollTo(0, 0);
   }
@@ -229,6 +245,7 @@
   /* ── the agent workspace ── */
   function openAgent(t) {
     F.template = t;
+    F.chat = { id: Date.now(), title: t ? t.name : "Auto clip", tpl: t ? t.id : null, at: Date.now(), items: [] };
     $("flowAgentTitle").textContent = t ? t.name : "Auto clip";
     if (t) window.vcFlow.setMode(t.mode);
     const th = $("flowThread");
@@ -237,6 +254,50 @@
       : `<p><b>Auto clip</b></p>`, "intro");
     show("agent");
     if (!window.vcFlow.media().length) dropBox();
+  }
+  /* ── chat history (owner, 2026-11-22): every chat is kept on this device and can be reopened ── */
+  const chats = () => store.get("chats", []);
+  function record(k, t) {
+    if (!F.chat || !t) return;
+    F.chat.items.push({ k, t: String(t).slice(0, 500) });
+    if (k === "you" && F.chat.title === (F.template ? F.template.name : "Auto clip")) F.chat.title = String(t).slice(0, 60);
+    F.chat.at = Date.now();
+    const list = chats().filter((c) => c.id !== F.chat.id);
+    list.unshift(F.chat);
+    store.set("chats", list.slice(0, 30));
+  }
+  const when = (t) => { const d = new Date(t), now = new Date(); return d.toDateString() === now.toDateString() ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString([], { month: "short", day: "numeric" }); };
+  function openHistory() {
+    const list = chats();
+    $("flowHistList").innerHTML = list.length ? list.map((c) => `<li><button type="button" class="flow-hist-item" data-chat="${c.id}"><span>${esc(c.title)}</span><span class="flow-hist-when">${when(c.at)}</span></button></li>`).join("") : `<li class="flow-hist-empty">No chats yet</li>`;
+    $("flowHistList").querySelectorAll("[data-chat]").forEach((b) => b.addEventListener("click", () => { const c = chats().find((x) => String(x.id) === b.dataset.chat); if (c) openChat(c); }));
+    $("flowHist").hidden = false;
+    const first = $("flowHist").querySelector(".flow-hist-item, [data-newchat]"); if (first) first.focus();
+  }
+  function closeHistory() { const h = $("flowHist"); if (h) h.hidden = true; }
+  // a past chat reopens as its transcript; new messages continue it
+  function openChat(c) {
+    closeHistory();
+    F.chat = c;
+    F.template = c.tpl ? templates().find((t) => t.id === c.tpl) || null : null;
+    $("flowAgentTitle").textContent = F.template ? F.template.name : "Auto clip";
+    $("flowThread").innerHTML = "";
+    say(`<p><b>${esc(F.template ? F.template.name : "Auto clip")}</b></p>`, "intro");
+    c.items.forEach((it) => { const m = say(it.k === "steps" ? `<p class="flow-meta">${esc(it.t)}</p>` : `<p>${esc(it.t)}</p>`, it.k === "you" ? "you" : "agent"); if (it.k === "you") resendable(m, it.t); });
+    show("agent");
+    if (!window.vcFlow.media().length) dropBox();
+  }
+  // tap your own message to put it back in the box, change it, and send again
+  function resendable(m, text) {
+    m.setAttribute("role", "button"); m.tabIndex = 0; m.title = "Edit and send again";
+    const go = () => { const ta = $("flowPrompt"); ta.value = text; ta.dispatchEvent(new Event("input")); ta.focus(); };
+    m.addEventListener("click", go); m.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  }
+  function renderRecent() {
+    const list = chats().slice(0, 3), el = $("flowRecent");
+    if (!el) return;
+    el.innerHTML = list.length ? `<p class="flow-eyebrow">Recent</p>` + list.map((c) => `<button type="button" class="flow-recent-item" data-chat="${c.id}"><span>${esc(c.title)}</span><span class="flow-hist-when">${when(c.at)}</span></button>`).join("") : "";
+    el.querySelectorAll("[data-chat]").forEach((b) => b.addEventListener("click", () => { const c = chats().find((x) => String(x.id) === b.dataset.chat); if (c) openChat(c); }));
   }
   function say(html, kind) {
     const m = document.createElement("div");
@@ -313,8 +374,13 @@
   function stop() {
     if (!F.ctrl || F.ctrl.signal.aborted) return;
     F.ctrl.abort();
-    const now = document.querySelector(".flow-step.now span:last-child");
-    if (now) now.textContent = "Stopping";
+    F.runId++;   // the stopped run no longer owns the screen
+    const now = document.querySelector(".flow-step.now");
+    if (now) { now.classList.remove("now"); const sp = now.querySelector(".ldr-line-spinner"); if (sp) sp.outerHTML = "<span class=\"flow-done\"></span>"; }
+    setBusy(false);
+    record("agent", "Stopped. Nothing was changed or charged.");
+    say(`<p>Stopped. Nothing was changed or charged.</p>`, "agent");
+    $("flowPrompt").focus();
   }
   function setBusy(on) {
     F.busy = on;
@@ -327,7 +393,6 @@
   }
   async function edit(again) {
     if (F.busy) return;
-    if (F.running) await F.running;   // a stopped edit still winding down
     const media = window.vcFlow.media();
     if (!media.length) { dropBox(); return; }
     const prompt = again != null ? again : $("flowPrompt").value.trim();
@@ -343,15 +408,19 @@
     [lo, hi] = need();   // the level may have changed at the gate
     F.ctrl = new AbortController();
     const signal = F.ctrl.signal;
+    const run = (F.runId = (F.runId || 0) + 1);
+    const mine = () => run === F.runId;
     setBusy(true);
     F.lastPrompt = prompt;
     $("flowPrompt").value = ""; $("flowPrompt").style.height = "";
-    say(`<p>${prompt ? esc(prompt) : (F.template ? "Make it with this template." : "Make the best video this footage allows.")}</p><p class="flow-meta">${media.length} file${media.length > 1 ? "s" : ""} · ${esc(lv.name)}${F.fast ? " · Fast" : ""}</p>`, "you");
+    const said = prompt || (F.template ? "Make it with this template." : "Make the best video this footage allows.");
+    record("you", said);
+    resendable(say(`<p>${esc(said)}</p><p class="flow-meta">${media.length} file${media.length > 1 ? "s" : ""} · ${esc(lv.name)}${F.fast ? " · Fast" : ""}</p>`, "you"), said);
     const work = say(`<div class="flow-steps"><div class="flow-step now">${SPIN}<span>Getting started</span></div></div>`, "work");
     const steps = work.querySelector(".flow-steps");
     let last = "Getting started";
     const step = (s) => {
-      if (!s || s === last) return;
+      if (!s || s === last || signal.aborted) return;
       last = s;
       const now = steps.querySelector(".now");
       if (now) { now.classList.remove("now"); now.querySelector(".ldr-line-spinner").outerHTML = `<span class="flow-done">${I.check}</span>`; }
@@ -367,7 +436,8 @@
     let failed = null;
     // Google's free Gemini often answers "high demand" (HTTP 503/429) for a
     // minute: wait and try again twice, saying so, before giving up
-    for (let attempt = 0; attempt < 3; attempt++) {
+    if (F.running) await F.running;   // a stopped edit still winding down
+    for (let attempt = 0; attempt < 3 && !signal.aborted; attempt++) {
       failed = null;
       F.running = window.vcFlow.runEdit({ prompt: brief, onProgress: step, onFail: (m) => { failed = m; }, level: F.level, fast: F.fast, signal });
       await F.running; F.running = null;
@@ -380,13 +450,15 @@
       await new Promise((r) => setTimeout(r, 1000));
       step("Trying again");
     }
+    if (signal.aborted || !mine()) return;
     const now = steps.querySelector(".now");
     if (now) { now.classList.remove("now"); now.querySelector(".ldr-line-spinner").outerHTML = `<span class="flow-done">${failed ? "" : I.check}</span>`; }
     setBusy(false);
     const st = window.vcFlow.state();
-    if (signal.aborted) { say(`<p>Stopped. Nothing was changed or charged.</p>`, "agent"); return; }
+    record("steps", [...steps.querySelectorAll(".flow-step")].map((x) => x.textContent.trim()).join(" · "));
     if (failed || !st.clips) {
       // a plain sentence; the technical reason folds away for support
+      record("agent", "No edit this time. Nothing was charged.");
       say(`<p>No edit this time. Nothing was charged.</p>${failed ? `<details class="flow-why"><summary>What happened</summary><p>${esc(failed)}</p></details>` : ""}`, "agent");
       return;
     }
@@ -394,6 +466,7 @@
     result(st, spent);
   }
   function result(st, spent) {
+    record("agent", `Edit ready: ${fmt(st.seconds)}, ${st.clips} clip${st.clips === 1 ? "" : "s"}${spent ? ", " + spent + " Tokens" : ""}`);
     const r = say(`<div class="flow-result"><div class="flow-player" id="flowPlayer${Date.now()}"></div>
       <div class="flow-result-bar"><span>${fmt(st.seconds)} · ${st.clips} clips${spent ? ` · ${spent} Tokens` : ""}</span></div><div class="flow-next"><button type="button" class="flow-btn" data-export>Download</button><button type="button" class="flow-btn flow-btn-ghost" data-fine>Edit by hand</button><button type="button" class="flow-btn flow-btn-ghost" data-again>New version</button></div></div>`, "agent");
     const player = r.querySelector(".flow-player");

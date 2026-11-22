@@ -78,12 +78,13 @@
     root.setAttribute("aria-modal", "true");
     root.setAttribute("aria-labelledby", "authTitle");
     root.innerHTML = `<header class="auth-head"><button type="button" class="auth-icon" data-back aria-label="Back">${I.back}</button>
-      <span class="auth-brand"><b>Out</b>Clip<span>by Senotel</span></span><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
+      <button type="button" class="auth-brand" data-brandclose aria-label="Close"><b>Out</b>Clip<span>by Senotel</span></button><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
       <div class="auth-bar" aria-hidden="true"><span></span></div><main class="auth-body"></main>`;
     document.body.appendChild(root);
     body = root.querySelector(".auth-body");
     bar = root.querySelector(".auth-bar span");
     root.querySelector("[data-close]").addEventListener("click", () => finish(false));
+    root.querySelector("[data-brandclose]").addEventListener("click", () => finish(false));
     root.querySelector("[data-back]").addEventListener("click", () => (S.back ? S.back() : finish(false)));
     root.addEventListener("keydown", (e) => { if (e.key === "Escape") finish(false); });
   }

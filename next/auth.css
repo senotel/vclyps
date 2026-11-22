@@ -118,3 +118,6 @@ body.auth-open { overflow: hidden; }
 
 .auth input:focus-visible { outline: none; }
 .auth-gap { height: 20px; }
+
+button.auth-brand { padding: 0; min-height: 44px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+button.auth-brand:hover { opacity: 0.75; }

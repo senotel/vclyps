@@ -422,6 +422,7 @@
     state: () => ({ clips: S.clips.length, seconds: total(), mode: S.mode }),
     play: () => play(), pause: () => pause(),
     openEditor: () => enterEditor(),
+    home: () => showScreen("home"),
     exportNow: () => { enterEditor(); const b = $("exportBtn"); if (b) b.click(); }
   };
 

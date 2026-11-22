@@ -55,8 +55,9 @@
     }
     veil.classList.toggle("acc-page", !!page);
     const box = veil.firstChild;
-    box.innerHTML = (page ? `<header class="acc-head"><span class="flow-brand"><b>Out</b>Clip</span><span class="flow-head-gap"></span>${LIVE ? "" : '<span class="acc-tag">Preview</span>'}<button type="button" class="acc-x" aria-label="Close">${X}</button></header><div class="acc-page-body">` : `<button type="button" class="acc-x" aria-label="Close">${X}</button>`) + html + (page ? "</div>" : "");
+    box.innerHTML = (page ? `<header class="acc-head"><button type="button" class="flow-brand" data-brandclose aria-label="Close"><b>Out</b>Clip</button><span class="flow-head-gap"></span>${LIVE ? "" : '<span class="acc-tag">Preview</span>'}<button type="button" class="acc-x" aria-label="Close">${X}</button></header><div class="acc-page-body">` : `<button type="button" class="acc-x" aria-label="Close">${X}</button>`) + html + (page ? "</div>" : "");
     box.querySelector(".acc-x").addEventListener("click", () => close(false));
+    const bc = box.querySelector("[data-brandclose]"); if (bc) bc.addEventListener("click", () => close(false));
     veil.classList.add("open");
     box.scrollTop = 0;
     if (onMount) onMount(box);
