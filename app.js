@@ -414,6 +414,7 @@
      the current screens. */
   window.vcFlow = {
     addFiles: (files) => addFiles(files, "editor"),
+    removeMedia: (id) => removeMedia(id),
     media: () => S.media.map((m) => ({ id: m.id, type: m.type, name: m.name, duration: m.duration || 0, thumb: m.thumb || null })),
     setMode: (mode) => { S.mode = mode || "entertainment"; applyModeUI(); },
     runEdit: (o) => runEdit(o || {}),
@@ -11689,7 +11690,10 @@
       line.innerHTML = SPIN + '<span class="aw-text">' + escHtml(String(s).replace(/…$/, "")) + "</span>" +
         (secs > 2 ? '<span class="aw-time">' + secs + "s</span>" : "");
       if (opts.onProgress) opts.onProgress(String(s).replace(/…$/, ""), secs);
+      // 0.86.0 Stop (next/flow.js): the next step after a stop ends the edit
+      if (opts.signal && opts.signal.aborted) throw new Error("Stopped.");
     };
+    let appliedAt = null;   // the history step before the AI cut, to roll back to on Stop
     progress("Getting started…");
 
     let g = null;
@@ -11724,6 +11728,8 @@
     try {
       if (directorFailure) throw directorFailure;
       if (!g || !g.clips.length) throw new Error("The AI Director could not prepare an edit. Reload the app and retry; your timeline has not been changed.");
+      if (opts.signal && opts.signal.aborted) throw new Error("Stopped.");
+      appliedAt = histIdx;
       applyGenerated(g, keep);
       // Business mode: the product name and call to action, as the video's last clip
       if (g.endCard) {
@@ -11776,7 +11782,9 @@
       const message = "Couldn't finish the edit. " + ((e && e.message) || "Please try again.");
       line.textContent = message;
       line.classList.remove("hidden", "working");
-      if (opts.onFail) opts.onFail(message); else toast(message, 6000);
+      // stopped after the cut landed: the timeline goes back to how it was
+      if (opts.signal && opts.signal.aborted && appliedAt != null && hist[appliedAt]) { histIdx = appliedAt; restore(hist[histIdx]); }
+      if (opts.onFail) opts.onFail(opts.signal && opts.signal.aborted ? "Stopped." : message); else toast(message, 6000);
     } finally {
       /* Always, even if the above threw. Leaving generating true locks the
          Edit button on "Working…" for the rest of the session. */

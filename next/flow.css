@@ -245,3 +245,14 @@ body.dark .flow-fast input:checked + .flow-switch::after { background: var(--f-b
 /* the search box never shows a focus box (owner, 2026-11-22): its underline turns ink instead */
 #flowRoot .flow-search input, #flowRoot .flow-search input:focus, #flowRoot .flow-search input:focus-visible { outline: none !important; box-shadow: none !important; border: 0 !important; }
 #flowRoot .flow-search input::-webkit-search-decoration, #flowRoot .flow-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* 0.86.0: remove a clip, Stop while it works, what to do with a finished edit */
+.flow-clip-x { position: absolute; top: 2px; right: 2px; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: rgba(14, 13, 12, 0.72); color: #fff; cursor: pointer; }
+.flow-clip-x:hover { background: rgba(14, 13, 12, 0.92); }
+.flow-clip-x:disabled { display: none; }
+.flow-clip-x::after { content: ""; position: absolute; inset: -11px; }
+.flow-send.is-stop { background: var(--f-ink); color: var(--f-bg); }
+.flow-send.is-stop:hover { background: var(--f-t1); }
+.flow-next { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px; border-top: 1px solid var(--f-hair); }
+.flow-next .flow-btn { height: 44px; padding: 0 18px; font-size: 15px; }
+@media (max-width: 600px) { .flow-next .flow-btn { flex: 1 1 100%; } }

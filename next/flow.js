@@ -52,6 +52,8 @@
     auto: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/><path d="M3 9h3M3 15h3M18 9h3M18 15h3"/></svg>',
     search: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>',
     chev: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>',
+    x: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>',
     send: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
     check: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>',
     film: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16"/></svg>',
@@ -176,7 +178,7 @@
     const ta = $("flowPrompt");
     ta.addEventListener("input", () => { ta.style.height = "auto"; ta.style.height = Math.min(160, ta.scrollHeight) + "px"; });
     ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("flowComposer").requestSubmit(); } });
-    $("flowComposer").addEventListener("submit", (e) => { e.preventDefault(); edit(); });
+    $("flowComposer").addEventListener("submit", (e) => { e.preventDefault(); if (F.busy) stop(); else edit(); });
     // footage dropped anywhere on the workspace
     const ag = $("flowAgent");
     ag.addEventListener("dragover", (e) => { if (hasFiles(e)) { e.preventDefault(); ag.classList.add("is-drop"); } });
@@ -259,7 +261,8 @@
   }
   function renderClips() {
     const m = window.vcFlow.media();
-    $("flowClips").innerHTML = m.map((x) => `<span class="flow-clip" title="${esc(x.name)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : I.film}<span>${x.duration ? fmt(x.duration) : esc(x.type)}</span></span>`).join("");
+    $("flowClips").innerHTML = m.map((x) => `<span class="flow-clip" title="${esc(x.name)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : I.film}<span>${x.duration ? fmt(x.duration) : esc(x.type)}</span><button type="button" class="flow-clip-x" data-rm="${x.id}" aria-label="Remove ${esc(x.name)}" ${F.busy ? "disabled" : ""}>${I.x}</button></span>`).join("");
+    $("flowClips").querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { if (F.busy) return; window.vcFlow.removeMedia(+b.dataset.rm); renderClips(); estimate(); if (!window.vcFlow.media().length && !document.querySelector(".flow-msg-drop")) dropBox(); }));
     $("flowClips").classList.toggle("hidden", !m.length);
   }
   const fmt = (s) => (s >= 60 ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") : Math.round(s) + " s");
@@ -304,11 +307,29 @@
   }
 
   /* ── Edit ── */
-  async function edit() {
+  // Stop at any moment (owner: interruptible, like a chat): the edit ends at its next step,
+  // a cut already on the timeline is rolled back, and nothing is charged
+  function stop() {
+    if (!F.ctrl || F.ctrl.signal.aborted) return;
+    F.ctrl.abort();
+    const now = document.querySelector(".flow-step.now span:last-child");
+    if (now) now.textContent = "Stopping";
+  }
+  function setBusy(on) {
+    F.busy = on;
+    const b = $("flowSend");
+    b.classList.toggle("is-stop", on);
+    b.innerHTML = on ? I.stop : I.send;
+    b.setAttribute("aria-label", on ? "Stop" : "Edit");
+    b.title = on ? "Stop" : "Edit";
+    renderClips();
+  }
+  async function edit(again) {
     if (F.busy) return;
+    if (F.running) await F.running;   // a stopped edit still winding down
     const media = window.vcFlow.media();
     if (!media.length) { dropBox(); return; }
-    const prompt = $("flowPrompt").value.trim();
+    const prompt = again != null ? again : $("flowPrompt").value.trim();
     let [lo, hi] = need();
     // value first: everything up to here needed no account; the first AI edit does
     if (window.vcAccount) {
@@ -319,8 +340,10 @@
     }
     const lv = LEVELS.find((l) => l.id === F.level);
     [lo, hi] = need();   // the level may have changed at the gate
-    F.busy = true;
-    $("flowSend").disabled = true;
+    F.ctrl = new AbortController();
+    const signal = F.ctrl.signal;
+    setBusy(true);
+    F.lastPrompt = prompt;
     $("flowPrompt").value = ""; $("flowPrompt").style.height = "";
     say(`<p>${prompt ? esc(prompt) : (F.template ? "Make it with this template." : "Make the best video this footage allows.")}</p><p class="flow-meta">${media.length} file${media.length > 1 ? "s" : ""} · ${esc(lv.name)}${F.fast ? " · Fast" : ""}</p>`, "you");
     const work = say(`<div class="flow-steps"><div class="flow-step now">${SPIN}<span>Getting started</span></div></div>`, "work");
@@ -343,20 +366,22 @@
     // minute: wait and try again twice, saying so, before giving up
     for (let attempt = 0; attempt < 3; attempt++) {
       failed = null;
-      await window.vcFlow.runEdit({ prompt: brief, onProgress: step, onFail: (m) => { failed = m; }, level: F.level, fast: F.fast });
-      if (!failed || !/\b(503|429)\b|high demand|overloaded|rate limit|quota/i.test(failed) || attempt === 2) break;
+      F.running = window.vcFlow.runEdit({ prompt: brief, onProgress: step, onFail: (m) => { failed = m; }, level: F.level, fast: F.fast, signal });
+      await F.running; F.running = null;
+      if (signal.aborted || !failed || !/\b(503|429)\b|high demand|overloaded|rate limit|quota/i.test(failed) || attempt === 2) break;
       const wait = attempt ? 30 : 12;
       step(`Google's AI is busy right now. Trying again in ${wait} s`);
       const row = steps.querySelector(".now span:last-child");
-      for (let s = wait - 1; s > 0; s--) { await new Promise((r) => setTimeout(r, 1000)); if (row) row.textContent = `Google's AI is busy right now. Trying again in ${s} s`; }
+      for (let s = wait - 1; s > 0 && !signal.aborted; s--) { await new Promise((r) => setTimeout(r, 1000)); if (row && !signal.aborted) row.textContent = `Google's AI is busy right now. Trying again in ${s} s`; }
+      if (signal.aborted) break;
       await new Promise((r) => setTimeout(r, 1000));
       step("Trying again");
     }
     const now = steps.querySelector(".now");
     if (now) { now.classList.remove("now"); now.querySelector(".ldr-line-spinner").outerHTML = `<span class="flow-done">${failed ? "" : I.check}</span>`; }
-    F.busy = false;
-    $("flowSend").disabled = false;
+    setBusy(false);
     const st = window.vcFlow.state();
+    if (signal.aborted) { say(`<p>Stopped. Nothing was changed or charged.</p>`, "agent"); return; }
     if (failed || !st.clips) {
       // a plain sentence; the technical reason folds away for support
       say(`<p>No edit this time. Nothing was charged.</p>${failed ? `<details class="flow-why"><summary>What happened</summary><p>${esc(failed)}</p></details>` : ""}`, "agent");
@@ -367,12 +392,12 @@
   }
   function result(st, spent) {
     const r = say(`<div class="flow-result"><div class="flow-player" id="flowPlayer${Date.now()}"></div>
-      <div class="flow-result-bar"><span>${fmt(st.seconds)} · ${st.clips} clips${spent ? ` · ${spent} Tokens` : ""}</span><span class="flow-head-gap"></span>
-      <button type="button" class="secondary-btn" data-fine>${I.timeline} Fine-tune</button><button type="button" class="primary-btn" data-export>Export</button></div></div>`, "agent");
+      <div class="flow-result-bar"><span>${fmt(st.seconds)} · ${st.clips} clips${spent ? ` · ${spent} Tokens` : ""}</span></div><div class="flow-next"><button type="button" class="flow-btn" data-export>Download</button><button type="button" class="flow-btn flow-btn-ghost" data-fine>Edit by hand</button><button type="button" class="flow-btn flow-btn-ghost" data-again>New version</button></div></div>`, "agent");
     const player = r.querySelector(".flow-player");
     try { window.vcFlow.mountPreview(player); } catch (e) {}
     r.querySelector("[data-fine]").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
     r.querySelector("[data-export]").addEventListener("click", () => { leave(); window.vcFlow.exportNow(); });
+    r.querySelector("[data-again]").addEventListener("click", () => edit(F.lastPrompt || ""));
   }
 
   /* ── entry: the landing's Start buttons open the flow ── */
