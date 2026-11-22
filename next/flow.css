@@ -117,7 +117,7 @@ body[data-flow] { overflow: hidden; }
 .flow-result-bar .flow-btn { height: 40px; padding: 0 16px; font-size: 14px; }
 
 .flow-composer { flex: 0 0 auto; width: calc(100% - 48px); max-width: 712px; margin: 0 auto 20px; padding: 12px 12px 10px 16px; border: 1px solid var(--f-hair2); border-radius: 8px; background: var(--f-bg); display: flex; flex-direction: column; gap: 10px; }
-.flow-composer:focus-within { border-color: var(--f-ink); }
+.flow-composer:focus-within { border-color: var(--f-hair2); }
 @media (max-width: 600px) { .flow-composer { width: 100%; margin: 0; border-radius: 0; border-width: 1px 0 0; padding-bottom: max(10px, env(safe-area-inset-bottom)); } .flow-thread { padding: 24px 16px 16px; } }
 .flow-composer textarea { width: 100%; min-height: 28px; max-height: 160px; resize: none; border: 0; background: transparent; color: var(--f-ink); font: inherit; font-size: 16px; line-height: 1.5; outline: none; }
 .flow-composer textarea::placeholder { color: var(--f-t2); }
@@ -256,3 +256,8 @@ body.dark .flow-fast input:checked + .flow-switch::after { background: var(--f-b
 .flow-next { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px; border-top: 1px solid var(--f-hair); }
 .flow-next .flow-btn { height: 44px; padding: 0 18px; font-size: 15px; }
 @media (max-width: 600px) { .flow-next .flow-btn { flex: 1 1 100%; } }
+
+/* no focus boxes on anything you type in (owner, 2026-11-22, twice): text boxes show the caret, nothing else.
+   Buttons and links keep their keyboard focus ring for accessibility. */
+#flowRoot textarea, #flowRoot input, #flowRoot textarea:focus, #flowRoot input:focus, #flowRoot textarea:focus-visible, #flowRoot input:focus-visible,
+.auth input:focus, .auth input:focus-visible, .acc-veil input:focus, .acc-veil input:focus-visible { outline: none !important; box-shadow: none !important; }

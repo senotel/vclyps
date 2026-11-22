@@ -34,7 +34,7 @@ body.auth-open { overflow: hidden; }
 .auth-form input[type=email], .auth-form input[type=password], .auth-form input[type=text]:not(.otp-input) {
   width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--f-hair2); border-radius: 4px; background: var(--f-bg); color: var(--f-ink); font: inherit; font-size: 17px;
   transition: border-color 120ms var(--f-ease); }
-.auth-form input:focus { outline: none; border-color: var(--f-ink); }
+.auth-form input:focus { outline: none; border-color: var(--f-hair2); }
 .auth-form input[aria-invalid=true] { border-color: var(--danger, var(--f-acc)); }
 .auth-pw { position: relative; }
 .auth-pw input { padding-right: 52px !important; }
