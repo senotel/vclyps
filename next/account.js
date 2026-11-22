@@ -254,7 +254,8 @@
   }
 
   if (DATA) {
-    const refresh = () => DATA.me().then((me) => { if (me) { acc = Object.assign({ signedIn: true, preview: false }, me); changed(); } });
+    // 0.93.0: the server decides who is signed in; a stale local copy (signed out elsewhere, session expired) is cleared
+    const refresh = () => DATA.me().then((me) => { if (me) { acc = Object.assign({ signedIn: true, preview: false }, me); changed(); } else if (acc && acc.signedIn) { acc = Object.assign({}, acc, { signedIn: false }); changed(); } }).catch(() => {});
     refresh();
     DATA.onSignedIn(refresh);
   }

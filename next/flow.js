@@ -280,6 +280,8 @@
     i.click();   // inside the tap, which the browser requires
   }
   function openAdd() {
+    // 0.93.0: the shared Add videos sheet (addsheet.js), the same one as the home page and the editor
+    if (window.EthAdd) return EthAdd.open({ title: "Add videos", onFiles: addFootage });
     let sh = $("flowAddSheet");
     if (!sh) {
       sh = document.createElement("div");

@@ -1,0 +1,62 @@
+[
+  {
+    "file": "dropbox.svg",
+    "icon": "logos:dropbox",
+    "name": "Dropbox",
+    "kind": "colour",
+    "source": "gilbarbara/logos@d6960edc1b7309d392c76e40d3a320df7f9ff85c",
+    "author": "Gil Barbara",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/gilbarbara/logos",
+    "trademark": true,
+    "markUrl": "https://www.dropbox.com/"
+  },
+  {
+    "file": "google-drive.svg",
+    "icon": "logos:google-drive",
+    "name": "Google Drive",
+    "kind": "colour",
+    "source": "gilbarbara/logos@d6960edc1b7309d392c76e40d3a320df7f9ff85c",
+    "author": "Gil Barbara",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/gilbarbara/logos",
+    "trademark": true,
+    "markUrl": "https://www.google.com/drive/"
+  },
+  {
+    "file": "google-photos.svg",
+    "icon": "logos:google-photos",
+    "name": "Google Photos",
+    "kind": "colour",
+    "source": "gilbarbara/logos@d6960edc1b7309d392c76e40d3a320df7f9ff85c",
+    "author": "Gil Barbara",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/gilbarbara/logos",
+    "trademark": true,
+    "markUrl": "https://photos.google.com/"
+  },
+  {
+    "file": "vimeo.svg",
+    "icon": "logos:vimeo-icon",
+    "name": "Vimeo",
+    "kind": "colour",
+    "source": "gilbarbara/logos@d6960edc1b7309d392c76e40d3a320df7f9ff85c",
+    "author": "Gil Barbara",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/gilbarbara/logos",
+    "trademark": true,
+    "markUrl": "https://vimeo.com/"
+  },
+  {
+    "file": "zoom.svg",
+    "icon": "logos:zoom-icon",
+    "name": "Zoom",
+    "kind": "colour",
+    "source": "gilbarbara/logos@d6960edc1b7309d392c76e40d3a320df7f9ff85c",
+    "author": "Gil Barbara",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/gilbarbara/logos",
+    "trademark": true,
+    "markUrl": "https://zoom.us/"
+  }
+]

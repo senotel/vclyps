@@ -24,6 +24,8 @@
 (function () {
   "use strict";
   const CFG = Object.assign({ auth: null }, window.OUTCLIP_ACCOUNTS || window.VCLYPS_ACCOUNTS || {});
+  // 0.93.0: only the sign-in providers that are switched on in Supabase (a disabled one shows Supabase's raw error page)
+  const OAUTH = (window.OUTCLIP_CONFIG && window.OUTCLIP_CONFIG.supabaseUrl) ? ((window.OUTCLIP_CONFIG.oauth) || []) : ["apple", "google"];
   const inApp = /Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Bytedance|Snapchat|LinkedInApp|Line\//i.test(navigator.userAgent || "");
   const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -117,9 +119,9 @@
         <input id="authEmail" type="email" inputmode="email" autocomplete="username email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" value="${esc(S.email || "")}" required autofocus>
         <p class="auth-err" role="alert" hidden></p>
         <button type="submit" class="auth-primary" data-label="Continue">Continue</button></form>
-      ${inApp ? `<p class="auth-note">Apple and Google sign-in don't work inside this app's browser. Use your email, or open Ethlenos in Safari or Chrome.</p>` : `<div class="auth-or"><span>or</span></div>
-      <button type="button" class="auth-alt" data-provider="apple">${I.apple}Continue with Apple</button>
-      <button type="button" class="auth-alt" data-provider="google">${I.google}Continue with Google</button>`}
+      ${!OAUTH.length ? "" : inApp ? `<p class="auth-note">Apple and Google sign-in don't work inside this app's browser. Use your email, or open Ethlenos in Safari or Chrome.</p>` : `<div class="auth-or"><span>or</span></div>
+      ${OAUTH.includes("apple") ? `<button type="button" class="auth-alt" data-provider="apple">${I.apple}Continue with Apple</button>` : ""}
+      ${OAUTH.includes("google") ? `<button type="button" class="auth-alt" data-provider="google">${I.google}Continue with Google</button>` : ""}`}
       <p class="auth-fine">By continuing you agree to the <a href="terms.html" target="_blank" rel="noopener">terms</a> and the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>`,
       { progress: S.flow === "new" ? 0.2 : null, wire(el) {
         const f = el.querySelector("form"), btn = f.querySelector("button");

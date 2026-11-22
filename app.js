@@ -707,7 +707,17 @@
   let addCtx = "editor";
   let importing = null;   // the AbortController of a download in progress
 
+  // 0.93.0: the editor sheet wears the shared tiles (addsheet.js icons, real service logos)
+  let addIcons = false;
+  function dressAddSheet() {
+    if (addIcons || !window.EthAdd) return; addIcons = true;
+    const put = (el, k) => { if (el && !el.querySelector(".ea-ic")) el.insertAdjacentHTML("afterbegin", EthAdd.icon(k)); };
+    put($("addDevice"), touchDevice.matches ? "gallery" : "computer"); put($("addFiles"), "files"); put($("addCamera"), "camera");
+    document.querySelectorAll(".add-src").forEach((b) => { if (!b.querySelector(".ea-ic")) b.innerHTML = EthAdd.icon(b.dataset.src) + "<span>" + b.textContent + "</span>"; });
+    $("addSheet").classList.add("add-dressed");
+  }
   function openAddSheet(ctx) {
+    dressAddSheet();
     if (!importing) {
       addCtx = ctx || "editor";
       $("addStatus").textContent = "";
@@ -4508,7 +4518,8 @@
     sheet.appendChild(layouts); sheet.appendChild(status); sheet.appendChild(list);
     const device = mk("button", "secondary-btn", "Add from device"); device.type = "button";
     const input = document.createElement("input"); input.type = "file"; input.accept = "video/*,image/*"; input.multiple = true; input.className = "hidden";
-    device.addEventListener("click", () => input.click());
+    // 0.93.0: the shared Add videos sheet here too (every gallery, camera, files, connected services)
+    device.addEventListener("click", () => { if (!window.EthAdd) return input.click(); EthAdd.open({ title: "Add photos and videos", ways: { files: "video/*,image/*,.mov,.heic" }, onFiles: (f) => { const dt = new DataTransfer(); f.forEach((x) => dt.items.add(x)); input.files = dt.files; input.dispatchEvent(new Event("change")); } }); });
     input.addEventListener("change", () => {
       const before = new Set(S.media.map((m) => m.id));
       addFiles(Array.from(input.files || []), "library"); input.value = "";

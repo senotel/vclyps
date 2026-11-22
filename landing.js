@@ -25,7 +25,11 @@
 
   var input = document.getElementById("lpFiles");
   home.querySelectorAll("[data-pick]").forEach(function (b) {
-    b.addEventListener("click", function () { if (input) input.click(); else begin(); });
+    b.addEventListener("click", function () {
+      // 0.93.0: every gallery, the camera, files and connected services, in one sheet
+      if (window.EthAdd) return window.EthAdd.open({ title: "Add videos", onFiles: startWith });
+      if (input) input.click(); else begin();
+    });
   });
   if (input) input.addEventListener("change", function () {
     var files = Array.prototype.slice.call(input.files || []);

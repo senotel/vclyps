@@ -3533,3 +3533,18 @@ body:not(.previewFs) #screen-editor .transport { height: var(--playrow-h); paddi
 
 /* 0.91.1 About shows the Ethlenos mark inline: no invert filter, ink follows the theme */
 svg.about-logo { color: var(--text); filter: none !important; opacity: 1; }
+
+/* 0.93.0 Add media in the editor: the same tiles as the shared Add videos sheet (addsheet.js) */
+#addSheet.add-dressed .add-device,#addSheet.add-dressed .add-way{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;text-align:left}
+#addSheet.add-dressed .add-device .ea-ic,#addSheet.add-dressed .add-way .ea-ic{grid-row:1 / span 2;width:48px;height:48px;border-radius:14px}
+#addSheet.add-dressed .add-device .ea-ic svg,#addSheet.add-dressed .add-way .ea-ic svg{width:24px;height:24px}
+#addSheet.add-dressed .add-sources{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px 8px}
+#addSheet.add-dressed .add-sources.hidden{display:none}
+#addSheet.add-dressed .add-src{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 2px 6px;border:0;border-radius:14px;background:none;color:var(--text);font-size:var(--fs-13,13px);font-weight:500;text-align:center}
+#addSheet.add-dressed .add-src.hidden{display:none}
+#addSheet.add-dressed .add-src:hover,#addSheet.add-dressed .add-src.on{background:var(--surface-2,rgba(127,127,127,.08))}
+#addSheet .ea-ic{display:grid;place-items:center;width:58px;height:58px;border-radius:17px}
+#addSheet .ea-ic-gallery,#addSheet .ea-ic-computer{background:linear-gradient(160deg,#ef3b58,#c8102e 62%,#a50d27)}
+#addSheet .ea-ic-camera,#addSheet .ea-ic-files{background:linear-gradient(160deg,#3b3833,#1b1a17)}
+body.dark #addSheet .ea-ic-camera,body.dark #addSheet .ea-ic-files{background:linear-gradient(160deg,#45423c,#2a2824)}
+#addSheet .ea-ic-brand{background:var(--surface-2,#f4f2ed);border:1px solid var(--border,#e7e4dd)}
