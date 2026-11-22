@@ -78,7 +78,7 @@
     root.setAttribute("aria-modal", "true");
     root.setAttribute("aria-labelledby", "authTitle");
     root.innerHTML = `<header class="auth-head"><button type="button" class="auth-icon" data-back aria-label="Back">${I.back}</button>
-      <button type="button" class="auth-brand" data-brandclose aria-label="Close"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span><span>by Senotel</span></button><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
+      <button type="button" class="auth-brand" data-brandclose aria-label="Close"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">Ethlenos</span><span>by Senotel</span></button><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
       <div class="auth-bar" aria-hidden="true"><span></span></div><main class="auth-body"></main>`;
     document.body.appendChild(root);
     body = root.querySelector(".auth-body");
