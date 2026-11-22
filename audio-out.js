@@ -236,7 +236,7 @@
   // Characters every system accepts in a file name, as the export does.
   function safeName(name) {
     const s = String(name || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 80);
-    return s || "vclyps-audio";
+    return s || "outclip-audio";
   }
 
   /* The file to download for a Your audio item: {blob, name, how}, where how

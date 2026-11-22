@@ -166,7 +166,7 @@
       { progress: forReset ? null : 0.32, back: forReset ? null : emailStep, wire(el) {
         eye(el);
         const inp = el.querySelector("#authNew"), btn = el.querySelector("button[type=submit]");
-        const COMMON = /^(password|123456|qwerty|letmein|welcome|iloveyou|admin|abc123|111111|vclyps)/i;
+        const COMMON = /^(password|123456|qwerty|letmein|welcome|iloveyou|admin|abc123|111111|outclip|vclyps)/i;
         const check = () => {
           const v = inp.value, user = (S.email || "").split("@")[0].toLowerCase();
           const r = { len: v.length >= 10, mix: /[a-z]/i.test(v) && /[\d\W_]/.test(v), own: v.length > 0 && !COMMON.test(v) && !(user.length > 2 && v.toLowerCase().includes(user)) };

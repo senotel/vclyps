@@ -2274,7 +2274,7 @@
   }
 
   function fileBase() {
-    return (($("projectName").value || "").trim() || "vclyps-edit").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").slice(0, 80);
+    return (($("projectName").value || "").trim() || "outclip-edit").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").slice(0, 80);
   }
   async function saveOut(text, type, ext, okMsg) {
     const blob = new Blob([text], { type: type });
@@ -7379,7 +7379,7 @@
     try {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(t)], { type: "application/json" }));
-      a.download = name.replace(/[^\w\- ]+/g, "").trim() + ".vclyps-template.json";
+      a.download = name.replace(/[^\w\- ]+/g, "").trim() + ".outclip-template.json";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     } catch (e) {}
@@ -13525,11 +13525,11 @@
     EXP.suspended = false;
     $("exportOverlay").classList.add("hidden");
     if (!blob || !blob.size) { toast("Export produced no data. Try again"); return; }
-    const safeName = ($("projectName").value.trim() || "vclyps-export")
+    const safeName = ($("projectName").value.trim() || "outclip-export")
       .replace(/[^\p{L}\p{N} ()._,'&+-]+/gu, "-")
       .replace(/\s+/g, " ")
       .replace(/^[.\s-]+|[.\s-]+$/g, "")
-      .slice(0, 80) || "vclyps-export";
+      .slice(0, 80) || "outclip-export";
     const fileName = safeName + "." + ext;
     offerExport(blob, fileName);
     idbPut("last-export", { blob, name: fileName }).catch(() => {});
