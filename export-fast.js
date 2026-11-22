@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   OutClip — fast export
+   Ethlenos — fast export
    Exports by rendering every frame as fast as the device can and handing it
    to the device's own video encoder (WebCodecs), instead of playing the edit
    in real time and recording the screen. Exposes window.SenotelFastExport.

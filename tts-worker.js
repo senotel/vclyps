@@ -150,7 +150,7 @@ function spell(word) {
 const LETTERS = { a: "ˈeɪ", b: "bˈiː", c: "sˈiː", d: "dˈiː", e: "ˈiː", f: "ˈɛf", g: "dʒˈiː", h: "ˈeɪtʃ", i: "ˈaɪ", j: "dʒˈeɪ", k: "kˈeɪ", l: "ˈɛl", m: "ˈɛm",
   n: "ˈɛn", o: "ˈoʊ", p: "pˈiː", q: "kjˈuː", r: "ˈɑːɹ", s: "ˈɛs", t: "tˈiː", u: "jˈuː", v: "vˈiː", w: "dˈʌbəljuː", x: "ˈɛks", y: "wˈaɪ", z: "zˈiː" };
 // our own names, said the way we say them
-const CUSTOM = { outclip: "ˈaʊtklɪp", vclyps: "vˈiːklɪps", senotel: "sˈɛnoʊtɛl", capcut: "kˈæpkʌt" };
+const CUSTOM = { ethlenos: "ˈɛθlənɒs", outclip: "ˈaʊtklɪp", vclyps: "vˈiːklɪps", senotel: "sˈɛnoʊtɛl", capcut: "kˈæpkʌt" };
 // little words are said without stress in running speech, as eSpeak does
 const WEAK = new Set(["a", "an", "the", "is", "are", "was", "were", "am", "be", "been", "to", "of", "and", "or", "in", "on", "at", "for", "with", "this", "that", "it", "its", "as", "by", "but", "from", "his", "her", "him", "them", "they", "we", "you", "your", "my", "me", "our", "has", "have", "had", "do", "does", "can", "will", "would", "could", "should", "just", "so", "if", "than", "then"]);
 function wordIpa(raw) {

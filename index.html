@@ -12,15 +12,15 @@
     }
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>OutClip. The story was always there.</title>
-  <meta name="description" content="OutClip by Senotel. AI that watches your footage, listens to the audio, and edits it for you. Every cut lands on a real timeline you can polish by hand. Free and private, right in your browser." />
+  <title>Ethlenos. The story was always there.</title>
+  <meta name="description" content="Ethlenos by Senotel. AI that watches your footage, listens to the audio, and edits it for you. Every cut lands on a real timeline you can polish by hand. Free and private, right in your browser." />
   <meta name="theme-color" content="#ffffff" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="OutClip. The story was always there." />
-  <meta property="og:description" content="OutClip watches your footage, finds the story, and edits your video around it, not just the highlights. One upload. One story. One click." />
+  <meta property="og:title" content="Ethlenos. The story was always there." />
+  <meta property="og:description" content="Ethlenos watches your footage, finds the story, and edits your video around it, not just the highlights. One upload. One story. One click." />
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="OutClip. The story was always there." />
-  <meta name="twitter:description" content="Every story deserves to be seen. OutClip turns raw footage into a polished short, built around your story." />
+  <meta name="twitter:title" content="Ethlenos. The story was always there." />
+  <meta name="twitter:description" content="Every story deserves to be seen. Ethlenos turns raw footage into a polished short, built around your story." />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
   <!-- fonts come from Bunny Fonts, not Google: loading Google Fonts sends each visitor's IP to Google (GDPR, Munich 2022); owner reel 2026-11-07 -->
@@ -34,9 +34,10 @@
   <!-- the landing's caption styles (0.70.2), all SIL Open Font License -->
   <link rel="stylesheet" href="https://fonts.bunny.net/css2?family=DM+Serif+Display:ital@1&family=Fredoka:wght@700&family=Montserrat:wght@800;900&family=Oswald:wght@600&family=Permanent+Marker&family=Space+Mono:wght@700&display=swap" />
   <!-- Archivo: the landing face (T17 design). Free, SIL Open Font License. -->
-  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="icon" href="brand/favicon.ico" sizes="32x32" />
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="logo.png" />
+  <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="landing.css" />
   <!-- FAQ structured data (0.79.0): the questions on this page, for search results and AI answers -->
@@ -50,9 +51,8 @@
       <button class="icon-btn hidden" id="backBtn" title="Back to modes" aria-label="Back">
         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
-      <div class="logo" id="logoHome" title="OutClip by Senotel">
-        <img src="logo.png" class="logo-img" alt="Senotel logo" />
-        <span class="logo-word"><b>Out</b>Clip</span>
+      <div class="logo" id="logoHome" title="Ethlenos by Senotel">
+        <span class="logo-word"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span></span>
       </div>
       <input id="projectName" class="project-name editor-only" type="text" value="Untitled" spellcheck="false" aria-label="Project name" />
     </div>
@@ -87,6 +87,7 @@
     <div class="lp-root">
 
       <header class="lp-nav">
+        <a class="lp-brand" href="#" aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span></a>
         <nav class="lp-links" aria-label="Site">
           <a href="#lpShow">See it edit</a>
           <a href="#lpFaq">Questions</a>
@@ -100,9 +101,9 @@
         <!-- 1 · the offer, Prime-style -->
         <section class="lp-hero" id="lpHero">
           <div class="lp-hero-copy">
-            <p class="lp-eyebrow">Video editor by Senotel</p>
+            <p class="lp-eyebrow">Automated Video Editing by Senotel</p>
             <h1 class="lp-title">The story was always there.</h1>
-            <p class="lp-lede">OutClip edits your videos for you. Drop in raw footage and get back a finished short, cut around the story. <strong>Free. No sign-up, no card, no watermark.</strong></p>
+            <p class="lp-lede">Ethlenos edits your videos for you. Drop in raw footage and get back a finished short, cut around the story. <strong>Free. No sign-up, no card, no watermark.</strong></p>
             <div class="lp-stack">
               <button class="lp-btn lp-btn-big" id="lpPlus" type="button" data-pick>Choose your footage</button>
               <a class="lp-btn lp-btn-ghost lp-btn-big" href="#lpShow">Watch it edit first</a>
@@ -117,12 +118,12 @@
         </section>
 
         <!-- 2 · the show: scroll and it edits -->
-        <section class="lp-show" id="lpShow" aria-label="How OutClip edits: raw footage becomes a timeline, the timeline becomes a short">
+        <section class="lp-show" id="lpShow" aria-label="How Ethlenos edits: raw footage becomes a timeline, the timeline becomes a short">
           <div class="lp-show-pin">
             <div class="lp-show-stage" id="lpStage" aria-hidden="true"></div>
             <div class="lp-show-say" aria-live="off">
               <p class="is-on">Your raw footage.</p>
-              <p>OutClip watches all of it.</p>
+              <p>Ethlenos watches all of it.</p>
               <p>It finds the story and cuts out the rest.</p>
               <p>Captions, music, timing. Done.</p>
               <p>One video in. One finished short.</p>
@@ -151,7 +152,7 @@
             <picture>
               <source media="(max-width: 760px)" srcset="site/editor-phone.webp" type="image/webp" width="390" height="844" />
               <source srcset="site/editor.webp" type="image/webp" />
-              <img src="site/editor.jpg" width="1440" height="900" loading="lazy" alt="The OutClip editor with two clips and a heading on the timeline." />
+              <img src="site/editor.jpg" width="1440" height="900" loading="lazy" alt="The Ethlenos editor with two clips and a heading on the timeline." />
             </picture>
           </div>
         </section>
@@ -193,7 +194,7 @@
 
       <footer class="lp-foot">
         <div class="lp-wrap">
-          <span>OutClip by Senotel</span>
+          <span>Ethlenos by Senotel</span>
           <a href="privacy.html">Privacy</a>
           <a href="terms.html">Terms</a>
         </div>
@@ -231,7 +232,7 @@
         </div>
         <p class="set-note" id="notifyStatus" role="status" aria-live="polite"></p>
         <button class="secondary-btn" id="testNotification" type="button">Send a test notification</button>
-        <p class="set-note" id="bgNote">Keep OutClip open while it works: closing it or locking your phone can stop an export. On iPhone and iPad, add OutClip to your Home Screen to get notifications.</p>
+        <p class="set-note" id="bgNote">Keep Ethlenos open while it works: closing it or locking your phone can stop an export. On iPhone and iPad, add Ethlenos to your Home Screen to get notifications.</p>
         <a class="secondary-btn hidden" id="lastExportDownload" download>Save latest video</a>
       </div>
 
@@ -269,11 +270,11 @@
         <div class="about-app">
           <img src="logo.png" class="about-logo" alt="" />
           <div class="about-lines">
-            <strong>OutClip</strong>
+            <strong>Ethlenos</strong>
             <span class="set-note">By Senotel</span>
           </div>
         </div>
-        <p class="about-version" id="aboutVersion">OutClip</p>
+        <p class="about-version" id="aboutVersion">Ethlenos</p>
         <p class="about-legal"><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of use</a></p>
       </div>
     </div>
@@ -291,7 +292,7 @@
       <h2 class="page-title">Admin</h2>
 
       <div class="admin-lock" id="adminLock">
-        <p class="set-note">This panel is for the people building OutClip: the training data stored in this browser, and the brand.</p>
+        <p class="set-note">This panel is for the people building Ethlenos: the training data stored in this browser, and the brand.</p>
         <div class="set-row">
           <input type="password" class="set-input" id="adminPass" placeholder="Passphrase" autocomplete="off" />
           <button class="secondary-btn" id="adminGo">Open</button>
@@ -411,7 +412,7 @@
   <section class="screen" id="screen-editor">
 
     <div class="ai-bar" id="aiBar">
-      <input id="semiPrompt" type="text" placeholder="Describe the edit" aria-label="Describe the edit" title="Tell OutClip what you want, or leave it blank and let it decide" />
+      <input id="semiPrompt" type="text" placeholder="Describe the edit" aria-label="Describe the edit" title="Tell Ethlenos what you want, or leave it blank and let it decide" />
       <button class="ai-go" id="semiGenerate">AI edit</button>
     </div>
 
@@ -644,7 +645,7 @@
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>
         <p class="stage-empty-title">Add your footage</p>
-        <p class="stage-empty-sub">Videos, photos or sound from this device. Then edit by hand, or tell OutClip what you want.</p>
+        <p class="stage-empty-sub">Videos, photos or sound from this device. Then edit by hand, or tell Ethlenos what you want.</p>
       </div>
     </div>
     <!-- The play row under the picture, as CapCut lays it out: where you are
@@ -858,7 +859,7 @@
           <button class="secondary-btn" id="postSrt">Captions (.srt)</button>
           <button class="secondary-btn" id="postXml">Edit for Premiere or DaVinci (.xml)</button>
         </div>
-        <p class="post-status" id="postFileStatus" aria-live="polite">The edit file holds the cuts and their sound; music, sound effects, texts and looks stay in OutClip.</p>
+        <p class="post-status" id="postFileStatus" aria-live="polite">The edit file holds the cuts and their sound; music, sound effects, texts and looks stay in Ethlenos.</p>
       </div>
     </div>
 
@@ -1003,7 +1004,7 @@
         </div>
         <div class="cap-field">
           <label for="capVocab">Names and words to spell your way</label>
-          <textarea id="capVocab" rows="3" placeholder="One per line, for example: OutClip, Chiang Mai, PromptPay"></textarea>
+          <textarea id="capVocab" rows="3" placeholder="One per line, for example: Ethlenos, Chiang Mai, PromptPay"></textarea>
           <p class="set-note">Words in the captions that look or sound like these are written exactly as you typed them.</p>
         </div>
       </div>
@@ -1071,7 +1072,7 @@
         <button class="text-btn hidden" id="addCancel">Cancel</button>
       </div>
       <div class="snd-grid" id="addList"></div>
-      <p class="add-note">Everything you add opens on this device. Google Photos, Zoom and Vimeo pass through OutClip's server on the way and are never stored.</p>
+      <p class="add-note">Everything you add opens on this device. Google Photos, Zoom and Vimeo pass through Ethlenos's server on the way and are never stored.</p>
     </div>
 
     <!-- The clips the finder chose, best first. Watch plays the raw moment
@@ -1117,7 +1118,7 @@
   <div class="done-card notice-card" id="doneCard" aria-hidden="true" inert>
     <span class="notice-symbol notice-success" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m5 12 4 4L19 6"/></svg></span>
     <div class="notice-copy">
-      <span class="notice-eyebrow">OutClip <span class="notice-dot"></span> Complete</span>
+      <span class="notice-eyebrow">Ethlenos <span class="notice-dot"></span> Complete</span>
       <div role="status" aria-live="polite" aria-atomic="true">
         <strong class="notice-title"></strong>
         <span class="notice-detail"></span>

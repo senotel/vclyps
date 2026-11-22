@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   OutClip — vision.js · Senotel Vision-1.0
+   Ethlenos — vision.js · Senotel Vision-1.0
    The editing app by Senotel.
 
    An editor that runs on the device: no server, no key, no cost per edit, and
    nothing leaves the phone. It takes the same request the AI Director gets
-   and answers in the same shape, so the rest of OutClip cannot tell them
+   and answers in the same shape, so the rest of Ethlenos cannot tell them
    apart (intelligence.js, VisionProvider).
 
    HOW IT WAS TAUGHT. Not by imitation alone. It was built as a curriculum,

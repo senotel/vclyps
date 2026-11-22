@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   OutClip — sound effects
+   Ethlenos — sound effects
    The editing app by Senotel.
 
    ── RECORDINGS FIRST (0.25.0) ─────────────────────────────────────────────

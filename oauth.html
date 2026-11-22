@@ -1,14 +1,14 @@
 <!doctype html>
 <!-- Where a Zoom or Vimeo sign-in window lands when the sign-in page has cut
-     its link back to OutClip (see resultPage in worker.js). This page is on
-     OutClip's own site, so it can hand the result to the open editor over a
+     its link back to Ethlenos (see resultPage in worker.js). This page is on
+     Ethlenos's own site, so it can hand the result to the open editor over a
      BroadcastChannel, then it closes itself. It keeps nothing. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="referrer" content="no-referrer" />
-  <title>OutClip sign-in</title>
+  <title>Ethlenos sign-in</title>
   <style>
     :root { --bg: #ffffff; --text: #111111; --muted: #666666; }
     @media (prefers-color-scheme: dark) { :root { --bg: #0d0d0f; --text: #f2f2f2; --muted: #9a9a9a; } }
@@ -29,7 +29,7 @@
       var msg = document.getElementById("msg"), sub = document.getElementById("sub");
       if (!data || data.type !== "vclyps-oauth") {
         msg.textContent = "This sign-in link isn't valid.";
-        sub.textContent = "Close this window and try again from OutClip.";
+        sub.textContent = "Close this window and try again from Ethlenos.";
         return;
       }
       try {
@@ -37,12 +37,12 @@
         ch.postMessage(data);
         ch.close();
       } catch (e) {
-        msg.textContent = "This browser couldn't pass the sign-in back to OutClip.";
+        msg.textContent = "This browser couldn't pass the sign-in back to Ethlenos.";
         sub.textContent = "Close this window and try again, or use another browser.";
         return;
       }
       msg.textContent = data.error ? data.error : "Signed in. You can close this window.";
-      sub.textContent = "Back to OutClip.";
+      sub.textContent = "Back to Ethlenos.";
       setTimeout(function () { window.close(); }, 300);
     })();
   </script>

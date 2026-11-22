@@ -1,5 +1,5 @@
 /* ================================================================
-   OutClip (was vClyps) Intelligence Layer — AI Director v2 (story-driven)
+   Ethlenos (was vClyps) Intelligence Layer — AI Director v2 (story-driven)
    SenotelBrain (orchestrator/editor) -> IntelligenceEngine -> provider
 
    Providers, in routing priority order:
@@ -56,7 +56,7 @@
   // The proxy admits only the origins listed in its ALLOWED_ORIGIN variable,
   // and gates on the request itself as well: it relays only bodies whose
   // first text part names vClyps. Every brief below opens with "You are the
-  // OutClip (formerly vClyps) AI DIRECTOR" (0.90.0); the updated worker also accepts "outclip" — keep the product name in them, or the worker will
+  // Ethlenos (formerly vClyps) AI DIRECTOR" (0.90.0); the updated worker also accepts "outclip" — keep the product name in them, or the worker will
   // refuse the call with "not a vClyps Director request".
 
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -73,7 +73,7 @@
   }
 
   function accessMessage(message, personal) {
-    if (/ALLOWED_ORIGIN/i.test(message)) return "This website address is not allowed by the AI server. Open the OutClip website, or ask the owner to allow this exact site address in Cloudflare. " + message;
+    if (/ALLOWED_ORIGIN/i.test(message)) return "This website address is not allowed by the AI server. Open the Ethlenos website, or ask the owner to allow this exact site address in Cloudflare. " + message;
     if (/HTTP 40[13]|API key not valid|API_KEY_INVALID|permission.denied/i.test(message)) {
       return (personal ? "The AI key saved on this device was refused. Remove or replace it in Settings to use the shared AI. "
         : "The shared AI server was refused access. The owner needs to check its key. ") + message;
@@ -115,7 +115,7 @@
 
   const GeminiProvider = {
     id: "gemini",
-    label: "OutClip AI",
+    label: "Ethlenos AI",
     available: () => (!!PROXY_URL || !!getKey()) && navigator.onLine,
     plan: geminiPlan
   };
@@ -281,14 +281,14 @@
      used before ("mistral-small-4-0-26-03") was never a real id, so this
      fallback had been dead since 2026-09-05 (found 2026-10-07). */
   const MISTRAL_MODELS = ["mistral-small-2603", "ministral-14b-2512", "ministral-8b-2512"];
-  const MistralProvider = openAiCompatProvider("mistral", "OutClip AI (backup)", "/mistral", MISTRAL_MODELS);
+  const MistralProvider = openAiCompatProvider("mistral", "Ethlenos AI (backup)", "/mistral", MISTRAL_MODELS);
   /* Groq shut both Llamas down on 2026-08-16 and names gpt-oss as their
      replacement. gpt-oss reasons, but on Groq the reasoning comes back apart
      from the answer, so json_object holds: a 4,500-token pass-1 prompt came
      back as clean JSON on both sizes (2026-10-07). Not qwen: its reasoning
      breaks Groq's JSON validation on the long pass 1. */
   const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
-  const GroqProvider = openAiCompatProvider("groq", "OutClip AI (second backup)", "/groq", GROQ_MODELS);
+  const GroqProvider = openAiCompatProvider("groq", "Ethlenos AI (second backup)", "/groq", GROQ_MODELS);
 
   /* Order = quality first, then vendor diversity. Mistral before Groq because
      its free tier is token-generous (1B/month) where Groq's is token-tight;
@@ -518,7 +518,7 @@
   // PASS 1, business mode: plan the product video
   function bizStoryBrief(req, lean) {
     const L = [];
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR: a launch-film editor who makes products look as good as they are. This is STEP 1 of 2: design the VIDEO. Do NOT choose final timestamps yet.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR: a launch-film editor who makes products look as good as they are. This is STEP 1 of 2: design the VIDEO. Do NOT choose final timestamps yet.");
     L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN product name and call to action are the content and are wanted.");
     L.push("You receive transcripts with timestamps, audio/motion stats, and keyframe images so you can SEE the footage. Study it first: what the product is, what it does on screen, and its single strongest moment.");
     L.push(bizBriefLine(req));
@@ -550,7 +550,7 @@
   // PASS 2, business mode: cut it, title it, end it
   function bizEditBrief(req, story, lean) {
     const L = [];
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR. This is STEP 2 of 2: EXECUTE the locked product video below into a precise edit using the transcript timestamps.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR. This is STEP 2 of 2: EXECUTE the locked product video below into a precise edit using the transcript timestamps.");
     L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN product name and call to action are the content and are wanted.");
     L.push("LOCKED PLAN (keep the beats and their order): " + JSON.stringify(story));
     L.push(bizBriefLine(req));
@@ -624,7 +624,7 @@
   // PASS 1, trailer mode: design the trailer
   function trailerStoryBrief(req, lean) {
     const L = [];
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR: a film trailer editor. This is STEP 1 of 2: design the TRAILER. Do NOT choose final timestamps yet.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR: a film trailer editor. This is STEP 1 of 2: design the TRAILER. Do NOT choose final timestamps yet.");
     L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN title and last line are the content and are wanted.");
     L.push("You receive transcripts with timestamps, audio/motion stats, and keyframe images so you can SEE the footage. Study it first: who the main character is, what their world is, what threatens it, and the most striking images and lines.");
     L.push(trailerBriefLine(req));
@@ -652,7 +652,7 @@
   // PASS 2, trailer mode: cut it, slate it, title it
   function trailerEditBrief(req, story, lean) {
     const L = [];
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR, a film trailer editor. This is STEP 2 of 2: EXECUTE the locked trailer below into a precise edit using the transcript timestamps.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR, a film trailer editor. This is STEP 2 of 2: EXECUTE the locked trailer below into a precise edit using the transcript timestamps.");
     L.push(BRANDING_RULE + " In this mode the CREATOR'S OWN title and last line are the content and are wanted.");
     L.push("LOCKED PLAN (keep the beats, their order and the slates): " + JSON.stringify(story));
     L.push(trailerBriefLine(req));
@@ -725,7 +725,7 @@
     if (req.mode === "business") return bizStoryBrief(req, lean);
     if (req.mode === "trailer") return trailerStoryBrief(req, lean);
     const L = [];
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR: an Oscar-winning editor + viral short-form strategist. This is STEP 1 of 2 — design the STORY. Do NOT choose final timestamps yet.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR: an Oscar-winning editor + viral short-form strategist. This is STEP 1 of 2 — design the STORY. Do NOT choose final timestamps yet.");
     L.push(BRANDING_RULE);
     L.push("You receive transcripts with timestamps, audio/motion stats, and keyframe images so you can SEE the footage. Study it all first: what happens, who/what is involved, the emotional payoff, and what the viewer is waiting for.");
     /* 0.26.0: the order of thinking follows the research (findings.md): what
@@ -790,7 +790,7 @@
     if (req.mode === "business") return bizEditBrief(req, story, lean);
     if (req.mode === "trailer") return trailerEditBrief(req, story, lean);
     const L = [];
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR. This is STEP 2 of 2 — EXECUTE the locked story below into a precise edit using the transcript timestamps.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR. This is STEP 2 of 2 — EXECUTE the locked story below into a precise edit using the transcript timestamps.");
     L.push(BRANDING_RULE);
     L.push("LOCKED STORY (do not change the narrative or beat order): " + JSON.stringify(story));
     L.push(HARD_RULES);
@@ -877,7 +877,7 @@
   function clipBrief(req) {
     const L = [];
     const w = req.window, len = req.length;
-    L.push("You are the OutClip (formerly vClyps) AI DIRECTOR, finding the best short clips inside one long recording. Each clip you choose is turned into a finished short afterwards (hook, captions, b-roll, music), so choose MOMENTS worth finishing, not edits.");
+    L.push("You are the Ethlenos (formerly vClyps) AI DIRECTOR, finding the best short clips inside one long recording. Each clip you choose is turned into a finished short afterwards (hook, captions, b-roll, music), so choose MOMENTS worth finishing, not edits.");
     L.push(BRANDING_RULE);
     L.push("WHAT MAKES A CLIP: it stands alone (someone scrolling with no context understands it within three seconds) · it opens on something arresting: a bold claim, a question, a number, a confession, the setup of a joke, a reaction · it pays that opening off before it ends · it ends on a finished thought, never mid-sentence. Look for complete stories, strong opinions, surprising facts, practical tips, funny exchanges, emotional peaks and big reactions. Never choose intros, greetings, sponsor reads, housekeeping, or anything that only makes sense with earlier context.");
     if (CLIP_GENRES[req.genre]) L.push(CLIP_GENRES[req.genre]);
@@ -995,7 +995,7 @@
   async function translateLines(lines, target) {
     if (navigator.onLine === false) throw directorError("You are offline. Reconnect to translate the captions.");
     const n = lines.length;
-    const prompt = "OutClip (formerly vClyps) caption translation. Translate each spoken caption line into " + target + ". " +
+    const prompt = "Ethlenos (formerly vClyps) caption translation. Translate each spoken caption line into " + target + ". " +
       "Natural, spoken " + target + " that a native speaker would say, short enough to read on a phone. " +
       "Keep names, brands, numbers and emoji as they are. Do not merge, split, add or drop lines. " +
       "Return ONLY JSON: {\"lines\": [" + n + " strings, same order]}.\nLINES:\n" + JSON.stringify(lines);
@@ -1049,7 +1049,7 @@
       instagram: "Instagram Reels: no separate title, so make the title the caption's opening line; description up to 300 characters; 3-5 hashtags.",
       any: "Works on TikTok, YouTube Shorts and Instagram Reels: title up to 70 characters; description up to 300 characters; 3-5 hashtags."
     };
-    const prompt = "OutClip (formerly vClyps) post text. Write the words a creator posts with this short video. " +
+    const prompt = "Ethlenos (formerly vClyps) post text. Write the words a creator posts with this short video. " +
       (limits[platform] || limits.any) + " " +
       "Title: the hook first, in plain words someone would search for; specific, not vague; no clickbait the video does not deliver; no ALL CAPS; at most one emoji or none. " +
       "Description: what the viewer gets, in the creator's own voice, from what is actually said; end with one natural question or prompt to comment only if it fits. " +
@@ -1321,10 +1321,10 @@
 
   /* ───────── Validation: the Director proposes, the editor verifies ───────── */
 
-  const BRANDING_RULE = "NO EDITOR BRANDING: never add Gemini, Google, Veo, Groq, Mistral, OutClip, vClyps or Senotel logos, watermarks, sparkle marks, signatures, credits, 'powered by' text, branded intros/outros or promotional CTAs. You are the invisible editor, not the subject. This applies to hooks, titles, captions and b-roll searches. Preserve genuine speech and source content; a real discussion of an AI product is not an editor credit. Do not invent attribution. Do not request stock clips for provider logos.";
+  const BRANDING_RULE = "NO EDITOR BRANDING: never add Gemini, Google, Veo, Groq, Mistral, Ethlenos, vClyps or Senotel logos, watermarks, sparkle marks, signatures, credits, 'powered by' text, branded intros/outros or promotional CTAs. You are the invisible editor, not the subject. This applies to hooks, titles, captions and b-roll searches. Preserve genuine speech and source content; a real discussion of an AI product is not an editor credit. Do not invent attribution. Do not request stock clips for provider logos.";
 
   function brandingGuard(req) {
-    const providers = /\b(?:gemini|google|veo|groq|mistral|outclip|vclyps|vevris|senotel|openai|chatgpt)\b/ig;
+    const providers = /\b(?:gemini|google|veo|groq|mistral|ethlenos|outclip|vclyps|vevris|senotel|openai|chatgpt)\b/ig;
     const source = (req.media || []).flatMap((m) => (m.transcript || []).map((t) => t.text || "")).join(" ").toLowerCase();
     const b = req.brief || {};
     const topic = source + " " + String(req.prompt || "").toLowerCase() + " " +
@@ -1723,7 +1723,7 @@
       // it, or a later model cannot tell good examples from ones made by a bug
       const stamp = window.SenotelVersion
         ? window.SenotelVersion.stamp()
-        : { app: "OutClip", version: "unknown", build: 0 };
+        : { app: "Ethlenos", version: "unknown", build: 0 };
       arr.push(Object.assign({ t: new Date().toISOString() }, stamp, entry));
       while (arr.length > 300) arr.shift();
       localStorage.setItem(DS_KEY, JSON.stringify(arr));
@@ -1737,7 +1737,7 @@
   function exportDataset() {
     const blob = new Blob([localStorage.getItem(DS_KEY) || "[]"], { type: "application/json" });
     // a download in a browser, the share sheet inside an app (platform.js)
-    return window.SenotelPlatform.save(blob, "outclip-training-data.json");
+    return window.SenotelPlatform.save(blob, "ethlenos-training-data.json");
   }
 
   /* Clearing is never final in one step. The records are first set aside

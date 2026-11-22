@@ -56,7 +56,7 @@
     }
     veil.classList.toggle("acc-page", !!page);
     const box = veil.firstChild;
-    box.innerHTML = (page ? `<header class="acc-head"><button type="button" class="flow-brand" data-brandclose aria-label="Close"><b>Out</b>Clip</button><span class="flow-head-gap"></span>${LIVE ? "" : '<span class="acc-tag">Preview</span>'}<button type="button" class="acc-x" aria-label="Close">${X}</button></header><div class="acc-page-body">` : `<button type="button" class="acc-x" aria-label="Close">${X}</button>`) + html + (page ? "</div>" : "");
+    box.innerHTML = (page ? `<header class="acc-head"><button type="button" class="flow-brand" data-brandclose aria-label="Close"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span></button><span class="flow-head-gap"></span>${LIVE ? "" : '<span class="acc-tag">Preview</span>'}<button type="button" class="acc-x" aria-label="Close">${X}</button></header><div class="acc-page-body">` : `<button type="button" class="acc-x" aria-label="Close">${X}</button>`) + html + (page ? "</div>" : "");
     box.querySelector(".acc-x").addEventListener("click", () => close(false));
     const bc = box.querySelector("[data-brandclose]"); if (bc) bc.addEventListener("click", () => close(false));
     veil.classList.add("open");
@@ -128,7 +128,7 @@
 
   /* ── checkout PREVIEW: the real steps, nothing charged ──
      Live, the payment provider's own secure checkout opens here (card, Apple
-     Pay, Google Pay, local tax); OutClip never sees card details, so this
+     Pay, Google Pay, local tax); Ethlenos never sees card details, so this
      preview shows the order and hands over, exactly as the live one will. */
   function checkout(o) {
     const isPlan = o.kind === "plan", flex = isPlan && o.plan.id === "flex";
@@ -241,7 +241,7 @@
     ["Works", "The AI edit", "Today's AI editor, on the live site (not on a local copy). The new editor with real effort levels comes when the Claude key is on (December)."],
     ["Works", "Manual editor and export", "The full timeline and 1080p export, free."],
     ["Estimate", "Effort levels and Token estimates", "The menu, estimates and the top-up check work; the numbers become exact once real edits are measured."],
-    DATA ? ["Works", "Sign up, sign in, reset password", "Real accounts on OutClip's server. Codes arrive by email."] : ["Preview", "Sign up, sign in, reset password", "Every screen works on this device. The code shows as an in-app notice instead of an email."],
+    DATA ? ["Works", "Sign up, sign in, reset password", "Real accounts on Ethlenos's server. Codes arrive by email."] : ["Preview", "Sign up, sign in, reset password", "Every screen works on this device. The code shows as an in-app notice instead of an email."],
     ["Preview", "Plans, top-ups and checkout", "Every step works and adds to a preview balance; nothing is charged until payments are connected."],
     DATA ? ["Works", "Tokens balance", "Kept on the server with your account."] : ["Preview", "Tokens balance", "Kept on this device only."],
     ["Partial", "Free-plan protection", "The device check runs now; the server rules (email, network, bot check) are written and wait to be deployed."],

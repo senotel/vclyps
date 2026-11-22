@@ -87,7 +87,7 @@
     root.id = "flowRoot";
     root.innerHTML = `
       <section class="flow-screen" id="flowStart" aria-labelledby="flowStartTitle">
-        <header class="flow-head"><button class="flow-brand" type="button" data-home aria-label="OutClip home"><b>Out</b>Clip</button><span class="flow-head-gap"></span>
+        <header class="flow-head"><button class="flow-brand" type="button" data-home aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span></button><span class="flow-head-gap"></span>
           <button class="flow-nav" type="button" data-history>History</button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
@@ -111,7 +111,7 @@
       </section>
 
       <section class="flow-screen" id="flowLibrary" aria-labelledby="flowLibTitle">
-        <header class="flow-head"><button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button><button class="flow-brand" type="button" data-home aria-label="OutClip home"><b>Out</b>Clip</button><span class="flow-head-gap"></span>
+        <header class="flow-head"><button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button><button class="flow-brand" type="button" data-home aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span></button><span class="flow-head-gap"></span>
           <button class="flow-nav" type="button" data-history>History</button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
@@ -257,7 +257,7 @@
     show("agent");
     if (!window.vcFlow.media().length) dropBox();
   }
-  /* ── Add videos (owner, 2026-11-22): every place a video can come from, in OutClip's own sheet.
+  /* ── Add videos (owner, 2026-11-22): every place a video can come from, in Ethlenos's own sheet.
      Gallery opens the phone's photo picker (iOS Photos, Android's photo picker); Files opens the
      file chooser, which also lists the other gallery apps (Google Photos, Samsung Gallery...);
      Camera records straight in; Google Photos, Drive and Dropbox appear once they are set up

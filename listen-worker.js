@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   OutClip — listen worker
+   Ethlenos — listen worker
    Runs off the page, so an hour of audio never freezes the editor.
    For each window of 16 kHz mono audio clips.js sends, it returns:
      · voice features every 0.1s: loudness and pitch, which is how

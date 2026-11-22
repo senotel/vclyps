@@ -1,4 +1,4 @@
-/* OutClip landing (0.67.0, links reworked in T21). The page is plain HTML
+/* Ethlenos landing (0.67.0, links reworked in T21). The page is plain HTML
    and CSS; this only wires it up.
    · "Choose your footage" ([data-pick]) opens the file picker, and files
      dropped anywhere on the hero do the same: both go to app.js

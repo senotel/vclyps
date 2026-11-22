@@ -10,7 +10,7 @@
    - sign in:  signInWithPassword, or a code instead (signInWithOtp, no new user)
    - reset:    resetPasswordForEmail -> verifyOtp(recovery) -> updateUser(password)
    - Apple / Google: signInWithOAuth, a full-page redirect (webviews block pop-ups)
-   The code email is OutClip's own (supabase/emails/*.html, sent through our
+   The code email is Ethlenos's own (supabase/emails/*.html, sent through our
    SMTP), with the code in the subject so the phone's notification shows it.
    The SDK loads on first use, so the page stays light.
    ═══════════════════════════════════════════════════════════ */

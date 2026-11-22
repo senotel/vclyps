@@ -56,7 +56,7 @@
   function notice(code, email) {
     let n = document.querySelector(".auth-notice");
     if (!n) { n = document.createElement("div"); n.className = "auth-notice"; n.setAttribute("role", "status"); document.body.appendChild(n); }
-    n.innerHTML = `<span class="auth-notice-tag">Preview</span><span class="auth-notice-text"><b>OutClip code: ${code}</b></span><button type="button" class="auth-notice-copy">Copy</button>`;
+    n.innerHTML = `<span class="auth-notice-tag">Preview</span><span class="auth-notice-text"><b>Ethlenos code: ${code}</b></span><button type="button" class="auth-notice-copy">Copy</button>`;
     n.querySelector(".auth-notice-copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); n.querySelector(".auth-notice-copy").textContent = "Copied"; } catch (e) {} setTimeout(() => n.classList.remove("show"), 900); });
     requestAnimationFrame(() => n.classList.add("show"));
     clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove("show"), 12000);
@@ -78,7 +78,7 @@
     root.setAttribute("aria-modal", "true");
     root.setAttribute("aria-labelledby", "authTitle");
     root.innerHTML = `<header class="auth-head"><button type="button" class="auth-icon" data-back aria-label="Back">${I.back}</button>
-      <button type="button" class="auth-brand" data-brandclose aria-label="Close"><b>Out</b>Clip<span>by Senotel</span></button><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
+      <button type="button" class="auth-brand" data-brandclose aria-label="Close"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">ethlenos</span><span>by Senotel</span></button><button type="button" class="auth-icon" data-close aria-label="Close">${I.x}</button></header>
       <div class="auth-bar" aria-hidden="true"><span></span></div><main class="auth-body"></main>`;
     document.body.appendChild(root);
     body = root.querySelector(".auth-body");
@@ -112,12 +112,12 @@
 
   /* ── 1. email first ── */
   function emailStep() {
-    step(`<p class="auth-eyebrow">Account</p><h1 id="authTitle">${S.reason === "edit" ? "One step before your edit" : "Welcome to OutClip"}</h1>
+    step(`<p class="auth-eyebrow">Account</p><h1 id="authTitle">${S.reason === "edit" ? "One step before your edit" : "Welcome to Ethlenos"}</h1>
       <form class="auth-form" novalidate><label for="authEmail">Email</label>
         <input id="authEmail" type="email" inputmode="email" autocomplete="username email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" value="${esc(S.email || "")}" required autofocus>
         <p class="auth-err" role="alert" hidden></p>
         <button type="submit" class="auth-primary" data-label="Continue">Continue</button></form>
-      ${inApp ? `<p class="auth-note">Apple and Google sign-in don't work inside this app's browser. Use your email, or open OutClip in Safari or Chrome.</p>` : `<div class="auth-or"><span>or</span></div>
+      ${inApp ? `<p class="auth-note">Apple and Google sign-in don't work inside this app's browser. Use your email, or open Ethlenos in Safari or Chrome.</p>` : `<div class="auth-or"><span>or</span></div>
       <button type="button" class="auth-alt" data-provider="apple">${I.apple}Continue with Apple</button>
       <button type="button" class="auth-alt" data-provider="google">${I.google}Continue with Google</button>`}
       <p class="auth-fine">By continuing you agree to the <a href="terms.html" target="_blank" rel="noopener">terms</a> and the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>`,
@@ -166,7 +166,7 @@
       { progress: forReset ? null : 0.32, back: forReset ? null : emailStep, wire(el) {
         eye(el);
         const inp = el.querySelector("#authNew"), btn = el.querySelector("button[type=submit]");
-        const COMMON = /^(password|123456|qwerty|letmein|welcome|iloveyou|admin|abc123|111111|outclip|vclyps)/i;
+        const COMMON = /^(password|123456|qwerty|letmein|welcome|iloveyou|admin|abc123|111111|ethlenos|outclip|vclyps)/i;
         const check = () => {
           const v = inp.value, user = (S.email || "").split("@")[0].toLowerCase();
           const r = { len: v.length >= 10, mix: /[a-z]/i.test(v) && /[\d\W_]/.test(v), own: v.length > 0 && !COMMON.test(v) && !(user.length > 2 && v.toLowerCase().includes(user)) };
@@ -211,7 +211,7 @@
           if (d.length < 6) inp._sent = false;
         };
         inp.addEventListener("input", () => { err(el, ""); el.querySelector(".otp").classList.remove("bad"); paint(); });
-        // a paste of the whole line ("Your OutClip code is 482 913") still lands as the six digits
+        // a paste of the whole line ("Your Ethlenos code is 482 913") still lands as the six digits
         inp.addEventListener("paste", (e) => {
           const t = (e.clipboardData || window.clipboardData).getData("text") || "";
           const m = t.match(/\b(\d{3})[\s-]?(\d{3})\b/) || t.match(/\d{6}/);

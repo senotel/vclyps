@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   OutClip — caption worker
+   Ethlenos — caption worker
    Turns a clip's speech into word-timed captions, off the page so the
    editor never freezes, and on the device so nothing is uploaded.
 

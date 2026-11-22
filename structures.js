@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   OutClip — edit structures (0.74.0)
+   Ethlenos — edit structures (0.74.0)
    Owner 2026-11-07: the AI "can never edit without a structure anymore".
    Every AI edit now starts by choosing one of these: a proven shape for a
    video (beats in order, each with its share of the length and how long its

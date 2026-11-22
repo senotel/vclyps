@@ -4,7 +4,7 @@
      { bpm, period, offset, beats: [t…], strength: [0..1…] }
 
    Our own code, no library (the licence-safe beat trackers are thin, and
-   the AGPL/GPL ones are not allowed in OutClip): an onset envelope (how
+   the AGPL/GPL ones are not allowed in Ethlenos): an onset envelope (how
    suddenly the sound gets louder, 100 times a second), the tempo from its
    autocorrelation with a gentle preference for 120 BPM (where most music
    sits, as in librosa's beat tracker), then the phase: the grid offset

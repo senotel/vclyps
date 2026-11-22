@@ -1142,7 +1142,7 @@
     if (m._an) {
       const st = document.createElement("span");
       st.className = "ms-state" + (m._an === "working" ? " work" : "");
-      st.title = m._an === "working" ? "OutClip is watching this clip…" : "Analyzed ✓";
+      st.title = m._an === "working" ? "Ethlenos is watching this clip…" : "Analyzed ✓";
       el.appendChild(st);
     }
     if (withPlus) {
@@ -2223,7 +2223,7 @@
   function buildXML() {
     const size = exportSize();
     const dims = size.w === size.h ? { w: 1080, h: 1080 } : size.w > size.h ? { w: 1920, h: 1080 } : { w: 1080, h: 1920 };
-    const name = ($("projectName").value || "").trim() || "OutClip edit";
+    const name = ($("projectName").value || "").trim() || "Ethlenos edit";
     const rate = "<rate><timebase>" + XML_FPS + "</timebase><ntsc>FALSE</ntsc></rate>";
     const files = new Map();
     let fileSeq = 0, itemSeq = 0;
@@ -2274,7 +2274,7 @@
   }
 
   function fileBase() {
-    return (($("projectName").value || "").trim() || "outclip-edit").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").slice(0, 80);
+    return (($("projectName").value || "").trim() || "ethlenos-edit").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").slice(0, 80);
   }
   async function saveOut(text, type, ext, okMsg) {
     const blob = new Blob([text], { type: type });
@@ -3828,7 +3828,7 @@
      it stopped dead on release and could scroll the whole editor up and
      down, which CapCut never does.) */
   const HOLD_MS = 280;
-  // one tap of the phone's vibration motor, wherever OutClip runs (platform.js haptic)
+  // one tap of the phone's vibration motor, wherever Ethlenos runs (platform.js haptic)
   function buzz(kind) { try { if (window.SenotelPlatform && SenotelPlatform.haptic) SenotelPlatform.haptic(kind); } catch (e) {} }
   function holdToDrag(e, start) {
     if (e.pointerType !== "touch") { start(e); return; }
@@ -6107,13 +6107,13 @@
       const fb = mk("button", "font-btn");
       fb.type = "button";
       const fname = mk("span", "font-btn-name", "");
-      fname.textContent = fam || "OutClip's own";
+      fname.textContent = fam || "Ethlenos's own";
       if (fam) fname.style.fontFamily = "'" + fam + "', system-ui, sans-serif";
       fb.appendChild(fname);
       fb.appendChild(mk("span", "font-btn-more", SF ? SF.TEXT.length + " fonts" : ""));
       fb.addEventListener("click", () => {
         if (!SF) return;
-        const extra = [{ value: "", label: heading ? "Anton (the original)" : "OutClip's own", family: heading ? "Anton" : null, note: "What texts used before fonts could be picked" }];
+        const extra = [{ value: "", label: heading ? "Anton (the original)" : "Ethlenos's own", family: heading ? "Anton" : null, note: "What texts used before fonts could be picked" }];
         SF.openPicker({
           kind: "text", value: t.font || "", extra: extra,
           onPick: (v) => {
@@ -7379,7 +7379,7 @@
     try {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(t)], { type: "application/json" }));
-      a.download = name.replace(/[^\w\- ]+/g, "").trim() + ".outclip-template.json";
+      a.download = name.replace(/[^\w\- ]+/g, "").trim() + ".ethlenos-template.json";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     } catch (e) {}
@@ -7422,7 +7422,7 @@
           list.unshift(t);
           storeTemplates(list.slice(0, 30));
           wrap.remove(); openVideoTemplates();
-        } catch (e) { toast("That file is not a OutClip template"); }
+        } catch (e) { toast("That file is not a Ethlenos template"); }
       });
       inp.click();
     });
@@ -9974,7 +9974,7 @@
     }
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
-    catch (e) { toast("OutClip needs the microphone to record. Allow it in the browser's address bar and try again", 6000); return; }
+    catch (e) { toast("Ethlenos needs the microphone to record. Allow it in the browser's address bar and try again", 6000); return; }
     if (S.playing) pause();
     VO.stream = stream;
     VO.startAt = clamp(S.time, 0, Math.max(0, total() - 0.2));
@@ -11546,7 +11546,7 @@
     // enough to know exactly what the user was running
     if (window.SenotelVersion) D.build = window.SenotelVersion.label;
     const bits = [];
-    const NAMES = { gemini: "OutClip AI", mistral: "OutClip AI (backup)", groq: "OutClip AI (second backup)", "vision-1": "Vision-1.0" };
+    const NAMES = { gemini: "Ethlenos AI", mistral: "Ethlenos AI (backup)", groq: "Ethlenos AI (second backup)", "vision-1": "Vision-1.0" };
     if (NAMES[D.provider]) {
       bits.push("<b>Director: " + NAMES[D.provider] + " ✓</b>");
       // a fallback that ran silently looks like nothing happened — say which
@@ -11590,7 +11590,7 @@
     if (D.brainError) bits.push('<span class="warn">Error: ' + escHtml(D.brainError) + "</span>");
     el.innerHTML = bits.join(" &nbsp;·&nbsp; ");
     el.classList.remove("hidden");
-    try { console.log("[OutClip status]", JSON.parse(JSON.stringify(D)), summary || ""); } catch (e) {}
+    try { console.log("[Ethlenos status]", JSON.parse(JSON.stringify(D)), summary || ""); } catch (e) {}
   }
 
   $("semiGenerate").addEventListener("click", () => {
@@ -12159,7 +12159,7 @@
     EXP.suspended = true;
     try { if (EXP.rec && EXP.rec.state === "recording") EXP.rec.pause(); } catch (e) {}
     pause();
-    $("expStatus").textContent = "paused, come back to OutClip to carry on";
+    $("expStatus").textContent = "paused, come back to Ethlenos to carry on";
   }
 
   function resumeExport() {
@@ -13525,11 +13525,11 @@
     EXP.suspended = false;
     $("exportOverlay").classList.add("hidden");
     if (!blob || !blob.size) { toast("Export produced no data. Try again"); return; }
-    const safeName = ($("projectName").value.trim() || "outclip-export")
+    const safeName = ($("projectName").value.trim() || "ethlenos-export")
       .replace(/[^\p{L}\p{N} ()._,'&+-]+/gu, "-")
       .replace(/\s+/g, " ")
       .replace(/^[.\s-]+|[.\s-]+$/g, "")
-      .slice(0, 80) || "outclip-export";
+      .slice(0, 80) || "ethlenos-export";
     const fileName = safeName + "." + ext;
     offerExport(blob, fileName);
     idbPut("last-export", { blob, name: fileName }).catch(() => {});

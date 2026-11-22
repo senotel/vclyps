@@ -57,7 +57,7 @@
 
   // nextId: a function handing out ids, as the editor does
   function build(t, media, nextId) {
-    if (!valid(t)) throw new Error("not a OutClip template");
+    if (!valid(t)) throw new Error("not a Ethlenos template");
     if (!media.length) throw new Error("no footage");
     const clips = t.slots.map((s, i) => {
       const m = media[i % media.length];

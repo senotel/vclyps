@@ -1,20 +1,20 @@
 /* ═══════════════════════════════════════════════════════════
-   OutClip — import sources
+   Ethlenos — import sources
    Everything that brings a file into the project from somewhere other
    than the device's own file picker. Each source ends the same way: a
    real File in this browser, handed to app.js, which treats it exactly
    like a file picked from the device. Nothing is kept anywhere else.
 
      · Google Photos Google's Photos Picker; the person chooses inside
-                     Google Photos, OutClip sees only what they chose
+                     Google Photos, Ethlenos sees only what they chose
      · Google Drive  Google's own Picker, signed in with Google, asking
                      only for the files the person chooses (drive.file)
-     · Dropbox       Dropbox's own Chooser; no OutClip sign-in at all
+     · Dropbox       Dropbox's own Chooser; no Ethlenos sign-in at all
      · Zoom          the person's cloud recordings
      · Vimeo         the person's uploaded videos
 
    Drive and Dropbox download straight from Google and Dropbox. Google
-   Photos, Zoom and Vimeo pass through the OutClip worker on the way (see
+   Photos, Zoom and Vimeo pass through the Ethlenos worker on the way (see
    worker.js): Google Photos refuses browsers, and Zoom and Vimeo sign-in
    needs a secret that can only live on a server. Never stored there.
    There is no pasted-link source any more (removed 0.23.1): the links
@@ -22,7 +22,7 @@
 
    SETUP: the four values below are filled in once by the owner (see
    HANDOFF.md, "Import sources"). They are PUBLIC identifiers, made for
-   browser code, not secrets: Google's key is locked to OutClip's own sites
+   browser code, not secrets: Google's key is locked to Ethlenos's own sites
    and Dropbox's to its domains. A source whose value is empty is simply
    not offered. Zoom and Vimeo are set up on the worker instead.
    Exposes window.SenotelSources.
@@ -34,7 +34,7 @@
   const GOOGLE_CLIENT_ID = "";   // OAuth client ID, type "Web application"
   const GOOGLE_API_KEY = "";     // API key restricted to the Picker API + this site
   const GOOGLE_APP_ID = "";      // the Cloud project NUMBER (digits only)
-  const DROPBOX_APP_KEY = "";    // Dropbox app key, with OutClip's domains listed
+  const DROPBOX_APP_KEY = "";    // Dropbox app key, with Ethlenos's domains listed
   // true once the Photos Picker API is turned on in the same Google project
   // (HANDOFF.md, "Google Photos"); it uses GOOGLE_CLIENT_ID above
   const GOOGLE_PHOTOS = false;
@@ -224,7 +224,7 @@
 
   /* ═══════════ Google Photos ═══════════
      Google's Photos Picker: the person chooses in Google Photos itself (on a
-     phone it opens the Google Photos app), and OutClip only ever sees what
+     phone it opens the Google Photos app), and Ethlenos only ever sees what
      they chose. Two steps, because a browser allows one pop-up per tap:
      the first tap signs in with Google, the next opens Google Photos. Google
      does not let a browser download the chosen files itself, so they come
@@ -267,7 +267,7 @@
     let res;
     try {
       res = await fetch(proxy() + pathAndQuery, { method: method || "GET", headers: { Authorization: "Bearer " + photosToken }, cache: "no-store" });
-    } catch (e) { throw new Error("Couldn't reach the OutClip server. Check your connection."); }
+    } catch (e) { throw new Error("Couldn't reach the Ethlenos server. Check your connection."); }
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) photosToken = null;
     if (!res.ok) throw new Error((data && data.error && data.error.message) || "Google Photos didn't answer (" + res.status + ").");
@@ -287,9 +287,9 @@
     opts = opts || {};
     if (!photosReady()) throw new Error("Google Photos isn't set up yet.");
     if (!photosLive()) throw new Error("Sign in to Google Photos first.");
-    if (!proxy()) throw new Error("The OutClip server isn't configured.");
+    if (!proxy()) throw new Error("The Ethlenos server isn't configured.");
     const win = global.open("", "vclyps-gphotos");
-    if (!win) throw new Error("Your browser blocked the Google Photos window. Allow pop-ups for OutClip and try again.");
+    if (!win) throw new Error("Your browser blocked the Google Photos window. Allow pop-ups for Ethlenos and try again.");
     let session;
     try { session = await photosCall("/gphotos/session", "POST"); }
     catch (e) { try { win.close(); } catch (x) {} throw e; }
@@ -399,13 +399,13 @@
     opts = opts || {};
     const live = signedIn[provider];
     if (live && Date.now() < live.until) return Promise.resolve(live.token);
-    if (!proxy()) return Promise.reject(new Error("The OutClip server isn't configured."));
+    if (!proxy()) return Promise.reject(new Error("The Ethlenos server isn't configured."));
     const nonce = randomId();
     const back = new URL(".", global.location.href).href + "index.html";
     const win = global.open(proxy() + "/oauth/start?" + new URLSearchParams({
       provider: provider, origin: global.location.origin, back: back, nonce: nonce
     }).toString(), "vclyps-" + provider, "width=520,height=720");
-    if (!win) return Promise.reject(new Error("Your browser blocked the sign-in window. Allow pop-ups for OutClip and try again."));
+    if (!win) return Promise.reject(new Error("Your browser blocked the sign-in window. Allow pop-ups for Ethlenos and try again."));
     const workerOrigin = new URL(proxy()).origin;
     return new Promise((resolve, reject) => {
       let done = false, channel = null, giveUp = null;
@@ -440,7 +440,7 @@
     if (!live) throw new Error("Sign in first.");
     let res;
     try { res = await fetch(proxy() + path, { headers: { Authorization: "Bearer " + live.token }, cache: "no-store" }); }
-    catch (e) { throw new Error("Couldn't reach the OutClip server. Check your connection."); }
+    catch (e) { throw new Error("Couldn't reach the Ethlenos server. Check your connection."); }
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) delete signedIn[provider];
     if (!res.ok) throw new Error((data && data.error && data.error.message) || "That didn't work (" + res.status + ").");

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   OutClip — audio out
+   Ethlenos — audio out
    Saves the sound of something in Your audio as a file of its own, for
    the Download button there. Exposes window.SenotelAudioOut.
 
@@ -236,7 +236,7 @@
   // Characters every system accepts in a file name, as the export does.
   function safeName(name) {
     const s = String(name || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 80);
-    return s || "outclip-audio";
+    return s || "ethlenos-audio";
   }
 
   /* The file to download for a Your audio item: {blob, name, how}, where how

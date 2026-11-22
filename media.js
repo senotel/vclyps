@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   OutClip — b-roll: GIFs, photos and stock video
+   Ethlenos — b-roll: GIFs, photos and stock video
    The editing app by Senotel.
 
    Finds a clip or image for a phrase and hands back something the editor can
@@ -119,7 +119,7 @@
   /* kind: "gif" | "photo" | "video". Returns a normalised list; never throws
      for an empty result, only for a real failure the status line should show. */
   async function search(query, kind, limit) {
-    if (!available()) throw new Error("b-roll needs the OutClip worker (PROXY_URL is empty)");
+    if (!available()) throw new Error("b-roll needs the Ethlenos worker (PROXY_URL is empty)");
     const q = String(query || "").trim().slice(0, 100);
     if (!q) return [];
     const n = Math.min(Math.max(limit || 8, 1), 24);

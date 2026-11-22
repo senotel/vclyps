@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   OutClip: Auto reframe (ccl25, round 2)
+   Ethlenos: Auto reframe (ccl25, round 2)
    When a wide picture goes into a narrower frame (landscape footage in a
    9:16 edit), only a slice of it shows. Auto reframe moves that slice with
    the subject, as a calm camera operator would: it follows where the face

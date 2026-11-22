@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   OutClip — emoji intelligence
+   Ethlenos — emoji intelligence
    The editing app by Senotel.
 
    Captions carry emojis the way a good editor uses them: rarely, and only when
