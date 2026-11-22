@@ -293,3 +293,29 @@ button.flow-start-wall:hover img:nth-child(2) { transform: translateY(-28px) sca
 .flow-hist-empty { padding: 24px 0; color: var(--f-t2); font-size: 14px; }
 @media (max-width: 600px) { .flow-hist { border-left: 0; } .flow-hist-head { padding-left: 16px; } .flow-hist-list { padding: 8px 16px 24px; } }
 .acc-head .flow-brand { color: var(--f-ink); }
+
+/* 0.89.0 Add videos: OutClip's own sheet (bottom sheet on phones, a panel on computers) */
+.flow-addveil { position: fixed; inset: 0; z-index: 70; display: none; align-items: flex-end; justify-content: center; background: rgba(14, 13, 12, 0.4); }
+.flow-addveil.open { display: flex; }
+.flow-addsheet { width: 100%; max-width: 560px; padding: 8px 20px max(24px, env(safe-area-inset-bottom)); border-radius: 12px 12px 0 0; background: var(--f-bg); color: var(--f-ink); transform: translateY(24px); opacity: 0; transition: transform 260ms var(--f-ease), opacity 200ms var(--f-ease); }
+.flow-addveil.in .flow-addsheet { transform: none; opacity: 1; }
+@media (min-width: 761px) { .flow-addveil { align-items: center; } .flow-addsheet { border-radius: 12px; padding: 8px 24px 24px; border: 1px solid var(--f-hair); } }
+.flow-addhead { display: flex; align-items: center; height: 56px; }
+.flow-addhead h2 { flex: 1 1 auto; margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.03em; }
+.flow-addgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+.flow-addtile { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 28px; min-height: 120px; padding: 18px; border: 1px solid var(--f-hair); border-radius: 10px; background: var(--f-s1); color: var(--f-ink); font: inherit; font-size: 15px; font-weight: 500; text-align: left; cursor: pointer;
+  transition: background 120ms var(--f-ease), border-color 120ms var(--f-ease), transform 120ms var(--f-ease); }
+.flow-addtile:hover { background: var(--f-s2); border-color: var(--f-hair2); }
+.flow-addtile:active { transform: scale(0.98); }
+.flow-addtile svg { color: var(--f-ink); }
+.flow-addtile:first-child svg { color: var(--f-acc); }
+.flow-addstatus { min-height: 20px; margin: 12px 0 0; font-size: 13px; color: var(--f-t1); }
+@media (prefers-reduced-motion: reduce) { .flow-addsheet { transition: none; transform: none; opacity: 1; } }
+
+/* bars never wrap their words; on small phones the workspace bar keeps only what matters */
+.flow-nav, .flow-preview, .flow-btn, .flow-head-title { white-space: nowrap; }
+@media (max-width: 480px) {
+  #flowAgent .flow-head [data-plans] { display: none; }
+  #flowAgent .flow-head .flow-btn-sm { padding: 0 10px; }
+  .flow-addtile { min-height: 104px; padding: 14px; gap: 20px; }
+}

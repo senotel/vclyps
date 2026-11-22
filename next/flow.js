@@ -186,7 +186,7 @@
     document.querySelectorAll("#flowRoot [data-theme-flow]").forEach((b) => b.addEventListener("click", () => { const t = document.querySelector("[data-theme-toggle]"); if (t) t.click(); }));
     $("flowFine").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
     $("flowSearch").addEventListener("input", (e) => { F.q = e.target.value.trim().toLowerCase(); renderGrid(); });
-    $("flowAdd").addEventListener("click", () => $("flowFiles").click());
+    $("flowAdd").addEventListener("click", openAdd);
     $("flowFiles").addEventListener("change", (e) => { const files = Array.from(e.target.files || []); e.target.value = ""; addFootage(files); });
     $("flowEffort").addEventListener("click", toggleMenu);
     document.addEventListener("click", (e) => { if (!e.target.closest(".flow-effort-wrap")) closeMenu(); });
@@ -257,6 +257,74 @@
     show("agent");
     if (!window.vcFlow.media().length) dropBox();
   }
+  /* ── Add videos (owner, 2026-11-22): every place a video can come from, in OutClip's own sheet.
+     Gallery opens the phone's photo picker (iOS Photos, Android's photo picker); Files opens the
+     file chooser, which also lists the other gallery apps (Google Photos, Samsung Gallery...);
+     Camera records straight in; Google Photos, Drive and Dropbox appear once they are set up
+     (sources.js). On a computer: one choose button, and drag and drop anywhere. ── */
+  const ADD_ICONS = {
+    gallery: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15.5l-4.6-4.6a1.4 1.4 0 0 0-2 0L5 20"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.5l6-3v9l-6-3"/></svg>',
+    files: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
+    cloud: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5a4.5 4.5 0 0 1-.5-8.97A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 10z"/></svg>',
+    computer: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'
+  };
+  const touch = () => matchMedia("(pointer: coarse)").matches;
+  const VIDEO_EXT = ".mp4,.mov,.m4v,.webm,.mkv,.avi,.3gp,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,.mp3,.wav,.m4a,.aac";
+  function picker(accept, capture) {
+    const i = document.createElement("input");
+    i.type = "file"; i.multiple = !capture; i.accept = accept; i.hidden = true;
+    if (capture) i.setAttribute("capture", "environment");
+    i.addEventListener("change", () => { const f = Array.from(i.files || []); i.remove(); if (f.length) addFootage(f); });
+    document.body.appendChild(i);
+    i.click();   // inside the tap, which the browser requires
+  }
+  function openAdd() {
+    let sh = $("flowAddSheet");
+    if (!sh) {
+      sh = document.createElement("div");
+      sh.id = "flowAddSheet"; sh.className = "flow-addveil";
+      sh.innerHTML = '<div class="flow-addsheet" role="dialog" aria-modal="true" aria-labelledby="flowAddTitle"><div class="flow-addhead"><h2 id="flowAddTitle">Add videos</h2><button type="button" class="flow-icon" data-addclose aria-label="Close">' + I.x + '</button></div><div class="flow-addgrid"></div><p class="flow-addstatus" role="status"></p></div>';
+      sh.addEventListener("click", (e) => { if (e.target === sh || e.target.closest("[data-addclose]")) closeAdd(); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sh.classList.contains("open")) closeAdd(); });
+      $("flowRoot").appendChild(sh);
+    }
+    const tiles = touch()
+      ? [["gallery", "Gallery"], ["camera", "Camera"], ["files", "Files"]]
+      : [["computer", "Choose from computer"]];
+    const grid = sh.querySelector(".flow-addgrid");
+    grid.innerHTML = tiles.map(([k, l]) => '<button type="button" class="flow-addtile" data-add="' + k + '">' + ADD_ICONS[k] + "<span>" + esc(l) + "</span></button>").join("");
+    sh.querySelector(".flow-addstatus").textContent = "";
+    // the connected sources, only once each is set up
+    if (window.SenotelSources) {
+      SenotelSources.warm && SenotelSources.warm();
+      SenotelSources.available().then((av) => {
+        [["gphotos", "Google Photos"], ["drive", "Google Drive"], ["dropbox", "Dropbox"]].forEach(([k, l]) => {
+          if (!av[k] || grid.querySelector('[data-add="' + k + '"]')) return;
+          grid.insertAdjacentHTML("beforeend", '<button type="button" class="flow-addtile" data-add="' + k + '">' + ADD_ICONS.cloud + "<span>" + esc(l) + "</span></button>");
+        });
+      }).catch(() => {});
+    }
+    grid.onclick = (e) => {
+      const b = e.target.closest("[data-add]"); if (!b) return;
+      const k = b.dataset.add, st = sh.querySelector(".flow-addstatus");
+      if (k === "gallery") { closeAdd(); picker("image/*,video/*"); }
+      else if (k === "camera") { closeAdd(); picker("video/*", true); }
+      else if (k === "files" || k === "computer") { closeAdd(); picker(VIDEO_EXT + ",video/*,image/*,audio/*"); }
+      else {
+        const run = k === "drive" ? (o) => SenotelSources.fromDrive(o) : k === "dropbox" ? (o) => SenotelSources.fromDropbox(o)
+          : (o) => (SenotelSources.photos.signedIn() ? SenotelSources.fromGooglePhotos(o) : SenotelSources.photos.signIn().then(() => SenotelSources.fromGooglePhotos(o)));
+        st.textContent = "Opening " + b.textContent + "...";
+        Promise.resolve(run({})).then((got) => { const f = Array.isArray(got) ? got : got ? [got] : []; closeAdd(); if (f.length) addFootage(f); })
+          .catch((err) => { st.textContent = (err && err.message) || "That didn't open. Try again."; });
+      }
+    };
+    sh.classList.add("open");
+    requestAnimationFrame(() => sh.classList.add("in"));
+    const first = grid.querySelector("button"); if (first) first.focus({ preventScroll: true });
+  }
+  function closeAdd() { const sh = $("flowAddSheet"); if (!sh) return; sh.classList.remove("in", "open"); }
+
   /* ── chat history (owner, 2026-11-22): every chat is kept on this device and can be reopened ── */
   const chats = () => store.get("chats", []);
   function record(k, t) {
@@ -312,7 +380,7 @@
   }
   function dropBox() {
     const m = say(`<button type="button" class="flow-drop">${I.plus}<span><b>Add videos</b></span></button>`, "drop");
-    m.querySelector(".flow-drop").addEventListener("click", () => $("flowFiles").click());
+    m.querySelector(".flow-drop").addEventListener("click", openAdd);
   }
   function addFootage(files) {
     files = files.filter((f) => /^(video|image|audio)\//.test(f.type));
