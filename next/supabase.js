@@ -41,6 +41,14 @@
 
   const auth = {
     preview: false,
+    instant: !!C.instantSignup,
+    // 0.92.0: with Supabase's "Confirm email" off, signUp returns a session at once
+    async signUp(email, password) {
+      const c = await sb();
+      const { data, error } = await c.auth.signUp({ email, password });
+      if (error) return { ok: false, message: /registered|exists/i.test(error.message || "") ? "This email already has an account. Sign in instead." : plain(error, "Couldn't create the account. Try again.") };
+      return data && data.session ? { ok: true } : { ok: false, message: "Check your email to confirm, then sign in." };
+    },
     async lookup(email) {
       const c = await sb();
       const { data, error } = await c.rpc("outclip_email_exists", { e: email });
@@ -100,7 +108,7 @@
     },
     async checkout(body) {
       const c = await sb();
-      const { data: r, error } = await c.functions.invoke("polar-checkout", { body });
+      const { data: r, error } = await c.functions.invoke("polar-checkout", { body: Object.assign({}, body, { returnUrl: location.origin + location.pathname }) });
       if (error || !r || !r.url) throw new Error("Checkout isn't available right now.");
       location.href = r.url;   // Polar's own secure page; it comes back here when done
     },

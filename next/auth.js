@@ -180,6 +180,14 @@
           e.preventDefault(); if (btn.disabled) return;
           S.pw = inp.value;
           if (forReset) { busy(btn, true, "Saving"); await A.setPassword(S.email, S.pw); busy(btn, false, "Continue"); return done(false); }
+          // 0.92.0: real accounts without our own email yet: create it straight away, no code
+          if (A.instant && A.signUp) {
+            busy(btn, true, "Creating");
+            const r = await A.signUp(S.email, S.pw);
+            busy(btn, false, "Continue");
+            if (!r.ok) return err(el, r.message);
+            S.pw = null; await adoptNow(true); return onboard(0);
+          }
           codeStep("signup");
         });
       } });
