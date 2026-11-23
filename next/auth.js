@@ -25,7 +25,13 @@
   "use strict";
   const CFG = Object.assign({ auth: null }, window.OUTCLIP_ACCOUNTS || window.VCLYPS_ACCOUNTS || {});
   // 0.93.0: only the sign-in providers that are switched on in Supabase (a disabled one shows Supabase's raw error page)
-  const OAUTH = (window.OUTCLIP_CONFIG && window.OUTCLIP_CONFIG.supabaseUrl) ? ((window.OUTCLIP_CONFIG.oauth) || []) : ["apple", "google"];
+  let OAUTH = (window.OUTCLIP_CONFIG && window.OUTCLIP_CONFIG.supabaseUrl) ? ((window.OUTCLIP_CONFIG.oauth) || []) : ["apple", "google"];
+  // 0.94.1: only show a provider Supabase really has switched on (a switched-off one shows Supabase's raw error page)
+  if (OAUTH.length && window.OUTCLIP_CONFIG && window.OUTCLIP_CONFIG.supabaseUrl) {
+    const want = OAUTH; OAUTH = [];
+    fetch(window.OUTCLIP_CONFIG.supabaseUrl + "/auth/v1/settings", { headers: { apikey: window.OUTCLIP_CONFIG.supabaseKey } })
+      .then((r) => r.json()).then((j) => { OAUTH = want.filter((p) => j && j.external && j.external[p]); }).catch(() => {});
+  }
   const inApp = /Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Bytedance|Snapchat|LinkedInApp|Line\//i.test(navigator.userAgent || "");
   const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
