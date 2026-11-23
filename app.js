@@ -9,6 +9,11 @@
 
 (function () {
   "use strict";
+  /* 0.95.0: the public site (senotel/ethlenos, built by NO UPLOAD/public/build.mjs) sets window.ETH_PUBLIC:
+     manual editing only. No tool, button or flow that uses AI (on-device models included) can be reached. */
+  const PUBLIC = !!window.ETH_PUBLIC;
+  const AI_TOOLS = new Set(["captions", "lyrics", "tidy", "post", "cutout", "retouch", "reframe", "denoise", "enhance", "tts"]);
+  if (PUBLIC) document.documentElement.classList.add("eth-public");
 
   const $ = (id) => document.getElementById(id);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -347,7 +352,7 @@
 
   /* landing "+" lands here, not straight in the editor: the mode has to be
      chosen first now that Entertainment is one of several. */
-  function showModes() { showScreen("modes"); }
+  function showModes() { if (PUBLIC) { enterEditor(); return; } showScreen("modes"); }
 
   function enterEditor() {
     showScreen("editor");
@@ -391,7 +396,7 @@
   // vcEnterEditor stays a direct jump, used by the session-resume path: a
   // resumed edit on boot should land in the editor, not play a transition at
   // someone who has not asked for one yet.
-  window.vcBegin = function () { go(showModes); };
+  window.vcBegin = function () { if (PUBLIC) { if (window.ethNew) window.ethNew(); else enterEditor(); return; } go(showModes); };
 
   /* The landing's "Choose your footage" (0.67.0): files picked or dropped on
      the home page go straight onto the timeline, as on OpusClip and Captions.
@@ -2328,12 +2333,14 @@
   }).observe($("exportOverlay"), { attributes: true, attributeFilter: ["class"] });
 
   $("tbPost").addEventListener("click", () => {
+    if (PUBLIC) return;
     if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
     movePostPanel("sheet");
     openSheet("postSheet");
   });
 
   function openTidy() {
+    if (PUBLIC) return;
     if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
     struck = new Set();
     $("tidyStatus").textContent = "";
@@ -3289,7 +3296,7 @@
   }
 
   (function wireCaptions() {
-    $("tbCaptions").addEventListener("click", openCaptionSheet);
+    $("tbCaptions").addEventListener("click", () => { if (!PUBLIC) openCaptionSheet(); });
     $("capMake").addEventListener("click", () => buildCaptions());
     $("capRemove").addEventListener("click", () => {
       S.captions = [];
@@ -5910,7 +5917,7 @@
     box.appendChild(row);
   }
 
-  function currentTools() { return S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools(); }
+  function currentTools() { const l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools(); return PUBLIC ? l.filter((t) => !(t && AI_TOOLS.has(t.id))) : l; }
 
   function renderActionBar() {
     const bar = $("actionBar");
@@ -11683,6 +11690,7 @@
      Make runs it over one found clip (opts.range), with the clip's own
      keyframes and a direction built from why it was chosen. */
   async function runEdit(opts) {
+    if (PUBLIC) return;
     if (EXP.active || EXP.starting) { toast("Let your export finish before starting another edit."); return; }
     if (!(opts.media || S.media).some((m) => m.type !== "audio")) { toast("Add footage first. Tap Add below the preview"); return; }
     if (generating) return;
@@ -11897,6 +11905,7 @@
   });
 
   async function runFind() {
+    if (PUBLIC) return;
     if (EXP.active || EXP.starting) { toast("Let your export finish first."); return; }
     if (generating) { toast("Let your edit finish first."); return; }
     const item = findSource();
