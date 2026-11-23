@@ -326,3 +326,21 @@ button.flow-start-wall:hover img:nth-child(2) { transform: translateY(-28px) sca
 .brand-word { font-weight: 600; letter-spacing: -0.035em; text-transform: none; }
 .flow-brand { display: inline-flex; align-items: center; font-size: 16px; }
 .flow-brand:hover .bm-cut { transform: translateX(1.5px); }
+
+/* 0.94.0 phones: the bar never cuts anything off. History and Account become icons, the name hides
+   on screens with a Back button (the mark stays), Tokens stay as a number. */
+.flow-nav { display: inline-flex; align-items: center; gap: 6px; }
+.flow-nav .nav-ic { display: none; }
+@media (max-width: 600px) {
+  .flow-head { gap: 6px; }
+  .flow-nav .nav-ic { display: block; }
+  .flow-nav:has(.nav-ic) .nav-tx:not(.nav-keep) { display: none; }
+  .flow-nav { min-width: 44px; min-height: 44px; justify-content: center; padding: 0 6px; }
+  .flow-head:has([data-to]) .brand-word { display: none; }
+  .flow-head:has([data-to]) .brand-mark { margin-right: 0; }
+  .flow-head .flow-icon { min-width: 40px; }
+}
+@media (max-width: 480px) { #flowAgent .flow-head [data-plans], .flow-head [data-plans] { display: inline-flex; } }
+
+/* 0.94.0 the category row scrolls sideways on phones: it fades at the edge instead of cutting a word */
+@media (max-width: 760px) { .flow-cats { margin-right: -16px; padding-right: 32px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); } }

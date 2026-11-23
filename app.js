@@ -10260,6 +10260,29 @@
     ctx.drawImage(img, x, y, w, h);
     ctx.restore();
   }
+  /* 0.94.0: the Ethlenos mark, bottom right, on every frame of the preview and the export until the
+     account has paid (vcAccount.state().paid). No setting turns it off. */
+  function ethMarkOn() { try { return !(window.vcAccount && vcAccount.state().paid); } catch (e) { return true; } }
+  function drawEthMark(ctx, f) {
+    if (!ethMarkOn()) return;
+    const u = Math.min(f.w, f.h) * 0.034;                // mark height
+    ctx.save();
+    ctx.font = "600 " + (u * 0.98).toFixed(1) + 'px "Switzer", -apple-system, "Segoe UI", Roboto, sans-serif';
+    const tw = ctx.measureText("Ethlenos").width, pad = u * 0.42, gap = u * 0.36;
+    const w = pad + u * 0.9 + gap + tw + pad, h = u + pad * 1.4, m = Math.min(f.w, f.h) * 0.035;
+    const x = f.x + f.w - m - w, y = f.y + f.h - m - h;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(14,13,12,0.5)";
+    const r = h * 0.28;
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
+    // the mark: three clips, the middle one cut, crimson
+    const s = u / 20, mx = x + pad - 3 * s * 0.9, my = y + (h - u) / 2 - 2 * s;
+    const bar = (bx, by, bw, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(mx + bx * s * 0.9, my + by * s, bw * s * 0.9, 4.4 * s, 1.4 * s) : ctx.rect(mx + bx * s * 0.9, my + by * s, bw * s * 0.9, 4.4 * s); ctx.fill(); };
+    bar(3, 2, 18, "#f4f2ed"); bar(3, 9.8, 5, "#f4f2ed"); bar(9.5, 9.8, 7.5, "#dc143c"); bar(3, 17.6, 18, "#f4f2ed");
+    ctx.fillStyle = "#f4f2ed"; ctx.textBaseline = "middle";
+    ctx.fillText("Ethlenos", x + pad + u * 0.9 + gap, y + h / 2 + u * 0.04);
+    ctx.restore();
+  }
   function textStyleOf(t) { return t.style === "lower" || t.style === "card" ? t.style : "heading"; }
 
   function drawStyledText(ctx, t, f, time) {
@@ -10885,7 +10908,7 @@
     ctx.clearRect(0, 0, pw, ph);
     // lower thirds and title cards, inside the picture, under the captions; then the logo
     const marked = S.clips.length && BRAND.mark && BRAND.mark !== "off" && BRAND.logo;
-    if (S.texts.length || marked || brollAt(S.time).length) {
+    if (S.texts.length || marked || ethMarkOn() || brollAt(S.time).length) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const box = pictureBox();
       drawTexts(ctx, box, S.time, textHits);
@@ -10894,6 +10917,7 @@
       // headings on the picture can be pinched, so the browser must not take two fingers for itself
       $("stage").classList.toggle("text-on", textHits.size > 0);
       if (marked) drawWatermark(ctx, box);
+      if (S.clips.length) drawEthMark(ctx, box);
     }
     const C = global_SenotelCaptions();
     if (C && S.captions && S.captions.length) {
@@ -13794,6 +13818,7 @@
     drawTexts(ctx, { x: 0, y: 0, w: W, h: H }, S.time, null);
 
     drawWatermark(ctx, { x: 0, y: 0, w: W, h: H });
+    drawEthMark(ctx, { x: 0, y: 0, w: W, h: H });
 
     // Word-timed captions last, so they sit above every other overlay.
     if (S.captions && S.captions.length && global_SenotelCaptions()) {

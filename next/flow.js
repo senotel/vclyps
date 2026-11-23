@@ -88,7 +88,7 @@
     root.innerHTML = `
       <section class="flow-screen" id="flowStart" aria-labelledby="flowStartTitle">
         <header class="flow-head"><button class="flow-brand" type="button" data-home aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">Ethlenos</span></button><span class="flow-head-gap"></span>
-          <button class="flow-nav" type="button" data-history>History</button>
+          <button class="flow-nav" type="button" data-history aria-label="History"><svg class="nav-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="nav-tx">History</span></button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
           <button class="flow-nav" type="button" data-plans></button>
@@ -112,7 +112,7 @@
 
       <section class="flow-screen" id="flowLibrary" aria-labelledby="flowLibTitle">
         <header class="flow-head"><button class="flow-icon" type="button" data-to="start" aria-label="Back">${I.back}</button><button class="flow-brand" type="button" data-home aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">Ethlenos</span></button><span class="flow-head-gap"></span>
-          <button class="flow-nav" type="button" data-history>History</button>
+          <button class="flow-nav" type="button" data-history aria-label="History"><svg class="nav-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="nav-tx">History</span></button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-icon" type="button" data-theme-flow aria-label="Switch theme" title="Theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
           <button class="flow-nav" type="button" data-plans></button>
@@ -135,7 +135,7 @@
           <button class="flow-icon" type="button" data-to="library" aria-label="Back to templates">${I.back}</button>
           <h1 class="flow-head-title" id="flowAgentTitle">Auto clip</h1>
           <span class="flow-head-gap"></span>
-          <button class="flow-nav" type="button" data-history>History</button>
+          <button class="flow-nav" type="button" data-history aria-label="History"><svg class="nav-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="nav-tx">History</span></button>
           <button class="flow-preview" type="button" data-status>Preview</button>
           <button class="flow-nav" type="button" data-plans></button>
           <button class="flow-btn flow-btn-ghost flow-btn-sm" type="button" id="flowFine" title="Open the timeline and edit by hand">Fine-tune</button>
@@ -437,7 +437,7 @@
     const acc = window.vcAccount && vcAccount.state();
     // low balance (research: warn before it runs out): under one Standard edit the label turns red; at 0 it says Top up
     document.querySelectorAll("#flowRoot [data-plans]").forEach((b) => { const on = acc && acc.signedIn; b.textContent = on ? (acc.tokens > 0 ? acc.tokens.toLocaleString() + " Tokens" : "Top up") : "Plans"; b.classList.toggle("low", !!on && acc.tokens < 55); });
-    document.querySelectorAll("#flowRoot [data-account]").forEach((b) => { b.textContent = acc && acc.signedIn ? "Account" : "Sign in"; });
+    document.querySelectorAll("#flowRoot [data-account]").forEach((b) => { const t = acc && acc.signedIn ? "Account" : "Sign in"; b.setAttribute("aria-label", t); b.innerHTML = (acc && acc.signedIn ? '<svg class="nav-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 19.5c1.3-3.3 4-5 7.2-5s5.9 1.7 7.2 5"/></svg>' : "") + '<span class="nav-tx' + (acc && acc.signedIn ? "" : " nav-keep") + '">' + t + "</span>"; });
     if (F.screen === "agent") estimate();
   }
 

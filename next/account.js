@@ -261,7 +261,9 @@
   }
 
   window.vcAccount = {
-    state: () => ({ signedIn: !!(acc && acc.signedIn), tokens: acc ? acc.tokens : 0, plan: acc && acc.plan, preview: !DATA }),
+    state: () => ({ signedIn: !!(acc && acc.signedIn), tokens: acc ? acc.tokens : 0, plan: acc && acc.plan, preview: !DATA,
+      // 0.94.0: paid = a paid plan or Tokens bought; everyone else exports with the Ethlenos mark
+      paid: !!(acc && acc.signedIn && ((acc.plan && acc.plan !== "free") || (acc.ledger || []).some((l) => /top-up|plan|purchase/i.test(l.why || "")))) }),
     onChange: (f) => subs.push(f),
     ready, charge, continueSheet, openPlans, openAccount, openSignIn, openStatus, adopt, PLANS, FLEX
   };
