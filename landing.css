@@ -594,3 +594,17 @@ body.dark .eth-menu { --m-bg: #1c1b19; --m-group: #262421; --m-ink: #f2efe8; --m
 
 /* 0.95.1 phones: the same floating card as a computer, as wide as the thumb needs */
 @media (max-width: 600px) { .eth-menu { width: min(300px, calc(100vw - 24px)); } }
+
+/* 0.95.2 New project leads the menu: the red + square, the same recipe as the + button */
+.eth-menu .eth-menu-row.eth-menu-feat { min-height: 64px; gap: 14px; padding: 10px 12px 10px 10px; justify-content: flex-start; background: #dc143c; color: #fff; transition: background 160ms ease, transform 200ms cubic-bezier(0.32, 0.72, 0, 1); }
+.eth-menu-group:has(.eth-menu-feat) { background: none; }
+.eth-feat-sq { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 13px; background: rgba(255, 255, 255, 0.18); transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1), border-radius 260ms ease; }
+.eth-feat-sq svg { transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1); }
+.eth-feat-tx { display: grid; gap: 2px; flex: 1; min-width: 0; text-align: left; }
+.eth-feat-tx b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.eth-feat-tx span { font-size: 13px; color: rgba(255, 255, 255, 0.82); }
+.eth-menu-feat svg:last-child { color: rgba(255, 255, 255, 0.85); }
+.eth-menu .eth-menu-row.eth-menu-feat:hover { background: #c4112f; }
+.eth-menu-feat:hover .eth-feat-sq { transform: scale(1.06); border-radius: 15px; }
+.eth-menu-feat:hover .eth-feat-sq svg { transform: rotate(90deg); }
+.eth-menu-feat:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
