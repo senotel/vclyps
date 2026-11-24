@@ -608,3 +608,6 @@ body.dark .eth-menu { --m-bg: #1c1b19; --m-group: #262421; --m-ink: #f2efe8; --m
 .eth-menu-feat:hover .eth-feat-sq { transform: scale(1.06); border-radius: 15px; }
 .eth-menu-feat:hover .eth-feat-sq svg { transform: rotate(90deg); }
 .eth-menu-feat:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* 0.95.4 the version, quiet, at the end of the footer line */
+.lp-ver { margin-left: auto; color: var(--lp-on2); font-variant-numeric: tabular-nums; }
