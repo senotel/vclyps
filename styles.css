@@ -3552,13 +3552,10 @@ svg.about-logo { color: var(--text); filter: none !important; opacity: 1; }
 body.dark #addSheet .ea-ic-camera,body.dark #addSheet .ea-ic-files{background:linear-gradient(160deg,#45423c,#2a2824)}
 #addSheet .ea-ic-brand{background:var(--surface-2,#f4f2ed);border:1px solid var(--border,#e7e4dd)}
 
-/* 0.95.2 (admin): every tap shows, darkening and a small dip (press.js adds .is-pressed on touch) */
-.is-pressed { filter: brightness(0.82); transition: filter 0s, transform 90ms cubic-bezier(0.32, 0.72, 0, 1) !important; }
+/* 0.95.3 (admin): a held button darkens; press.js shrinks it and springs it back past its size on release */
+.is-pressed { filter: brightness(0.84); transition: filter 0s !important; }
 body.dark .is-pressed { filter: brightness(0.8) contrast(1.05); }
-.lp-btn.is-pressed, .lp-menu-btn.is-pressed, .lp-theme.is-pressed, .primary-btn.is-pressed, .secondary-btn.is-pressed, .icon-btn.is-pressed,
-.flow-btn.is-pressed, .flow-nav.is-pressed, .flow-icon.is-pressed, .flow-card.is-pressed, .tool.is-pressed, .fchip.is-pressed,
-.pub-opt-main.is-pressed, .pub-icon.is-pressed { transform: scale(0.96); }
 .pub-plus.is-pressed { filter: none; }
 .pub-plus.is-pressed .pub-plus-sq { transform: scale(0.92); filter: brightness(0.82); }
 .eth-menu-row.is-pressed { filter: none; background: rgba(127, 120, 110, 0.26); }
-.eth-menu .eth-menu-row.eth-menu-feat.is-pressed { background: #b80f2d; transform: scale(0.98); transition: none; }
+.eth-menu .eth-menu-row.eth-menu-feat.is-pressed { background: #b80f2d; transition: none; }
