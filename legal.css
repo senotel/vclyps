@@ -2,6 +2,9 @@
    The editor's palette (styles.css), on its own so these pages load nothing
    else. Dark is the ground, as in the app; a light system setting gets the
    paper version. */
+/* 0.95.1 (admin): never the blue tap flash on a phone, anywhere in the app or site */
+html, html * { -webkit-tap-highlight-color: transparent; }
+
 :root {
   --bg0: #111210;
   --bg1: #171815;

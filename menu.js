@@ -10,8 +10,8 @@
   var click = function (id) { return function () { var b = $(id); if (b) b.click(); }; };
   var CHEV = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>';
 
-  function home() { var h = $("screen-home"); if (window.vcFlow && document.body.dataset.screen !== "home") window.vcFlow.home(); if (h) h.scrollTo({ top: 0, behavior: "smooth" }); }
-  function show() { var s = $("lpShow"); if (s) s.scrollIntoView({ behavior: "smooth" }); }
+  function home() { var h = $("screen-home"); if (window.vcFlow && document.body.dataset.screen !== "home") window.vcFlow.home(); if (window.vcLandingShow) window.vcLandingShow.navigate(false); if (h) h.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+  function show() { var s = $("lpShow"); if (!s) return; if (window.vcLandingShow) window.vcLandingShow.navigate(true); s.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }
   function newProject() {
     if (typeof window.ethNew === "function") return window.ethNew();
     if (typeof window.vcFlowShow === "function") return window.vcFlowShow("start");
@@ -42,7 +42,7 @@
   btn.setAttribute("aria-controls", "ethMenu");
 
   var reduce = matchMedia("(prefers-reduced-motion: reduce)");
-  var phone = matchMedia("(max-width: 600px)");
+  var phone = { matches: false };   // 0.95.1: one look everywhere, the floating card
   var SPRING = "cubic-bezier(0.32, 0.72, 0, 1)";   // the iOS sheet curve: fast out, no bounce
 
   function render() {
@@ -64,10 +64,9 @@
   }
 
   function place() {
-    if (phone.matches) { panel.style.top = panel.style.right = ""; return; }
     var r = btn.getBoundingClientRect();
     panel.style.top = Math.round(r.bottom + 8) + "px";
-    panel.style.right = Math.round(window.innerWidth - r.right) + "px";
+    panel.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + "px";
   }
 
   var open = false;
@@ -106,5 +105,7 @@
   btn.addEventListener("click", function () { open ? close() : openMenu(); });
   scrim.addEventListener("click", function () { close(); });
   document.addEventListener("keydown", function (e) { if (open && e.key === "Escape") close(); });
-  window.addEventListener("resize", function () { if (open) close(true); });
+  // phones resize while the address bar slides; only a real width change closes it
+  var lastW = window.innerWidth;
+  window.addEventListener("resize", function () { if (window.innerWidth !== lastW) { lastW = window.innerWidth; if (open) close(true); } else if (open) place(); });
 })();

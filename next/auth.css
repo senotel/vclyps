@@ -2,6 +2,9 @@
    One filled (crimson) button per step and nothing else in the accent;
    the progress bar is ink on a warm grey track, one flat colour.
    44px+ targets, 16px+ inputs (no iOS zoom), light and dark from the app tokens. */
+/* 0.95.1 (admin): never the blue tap flash on a phone, anywhere in the app or site */
+html, html * { -webkit-tap-highlight-color: transparent; }
+
 
 .auth { position: fixed; inset: 0; z-index: 120; display: none; flex-direction: column; background: var(--f-bg); color: var(--f-ink); font-family: inherit; }
 .auth.open { display: flex; }

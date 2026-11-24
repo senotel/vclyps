@@ -4,6 +4,9 @@
    sits beside video, and bright chrome washes out the picture); light is
    opt-in via Settings. :root holds light, body.dark overrides it.
    ================================================================ */
+/* 0.95.1 (admin): never the blue tap flash on a phone, anywhere in the app or site */
+html, html * { -webkit-tap-highlight-color: transparent; }
+
 
 :root {
   /* LIGHT — the landing's story section: warm paper, warm ink. Not white.

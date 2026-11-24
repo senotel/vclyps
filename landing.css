@@ -591,3 +591,6 @@ body.dark .eth-menu { --m-bg: #1c1b19; --m-group: #262421; --m-ink: #f2efe8; --m
 .eth-menu-head b { font-size: 17px; font-weight: 600; }
 .eth-menu-close { min-height: 44px; padding: 0 4px; border: 0; background: none; color: #dc143c; font: inherit; font-size: 17px; font-weight: 600; cursor: pointer; }
 @media (max-width: 600px) { .lp-menu-btn .lp-menu-tx { display: none; } .lp-menu-btn { width: 44px; height: 44px; padding: 0; justify-content: center; } }
+
+/* 0.95.1 phones: the same floating card as a computer, as wide as the thumb needs */
+@media (max-width: 600px) { .eth-menu { width: min(300px, calc(100vw - 24px)); } }

@@ -2,6 +2,9 @@
    (landing.css): Switzer, 500-weight headings set tight, small uppercase
    signposts, hairlines instead of boxes, 4px corners, crimson only on the one
    main action, no shadows. White in light, the warm night in dark. */
+/* 0.95.1 (admin): never the blue tap flash on a phone, anywhere in the app or site */
+html, html * { -webkit-tap-highlight-color: transparent; }
+
 
 #flowRoot, .acc-veil, .auth, .auth-notice {
   --f-bg: #ffffff; --f-s1: #f6f5f2; --f-s2: #eeece7; --f-hair: #e4e1da; --f-hair2: #cfcbc2;
