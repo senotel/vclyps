@@ -230,3 +230,7 @@ body.dark .pub-opts { --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n
 .pub-auto-say { margin: 0; font-size: 16px; line-height: 1.45; color: var(--lp-on1); }
 .pub-hero .pub-plus { margin-top: 28px; }
 @media (max-width: 600px) { .pub-auto { padding: 14px 14px 14px 12px; gap: 12px; } .pub-auto-ic { width: 44px; height: 44px; border-radius: 12px; } .pub-auto-name { font-size: 19px; } .pub-auto-say { font-size: 15px; } }
+
+/* 0.98.2 More on the New project page */
+.pub-new .pub-more { justify-self: start; margin-top: 6px; color: var(--n-ink); }
+.pub-new .pub-more svg { color: var(--n-sub); }
