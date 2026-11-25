@@ -14,6 +14,14 @@
   const PUBLIC = !!window.ETH_PUBLIC;
   const AI_TOOLS = new Set(["captions", "lyrics", "tidy", "post", "cutout", "retouch", "reframe", "denoise", "enhance", "tts"]);
   if (PUBLIC) document.documentElement.classList.add("eth-public");
+  // the AI controls outside the tool bar: visible, tagged, and a tap only says Coming soon (it never reaches their own handlers)
+  const SOON_CTRL = "#semiGenerate, #semiPrompt, #findChip, #speechChip, #tbCaptions, #tbTidy, #tbPost, #capTrGo";
+  if (PUBLIC) {
+    const stop = (e) => { const c = e.target.closest && e.target.closest(SOON_CTRL); if (!c) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.type === "click") toast("Automatic editing is coming soon"); };
+    ["click", "keydown", "focusin"].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === "keydown" && e.key !== "Enter" && e.key !== " ") return; if (ev === "focusin") { const c = e.target.closest && e.target.closest("#semiPrompt"); if (c) c.blur(); return; } stop(e); }, true));
+    const markSoon = () => { document.querySelectorAll(SOON_CTRL).forEach((c) => c.classList.add("is-soon")); const p = document.getElementById("semiPrompt"); if (p) { p.readOnly = true; p.placeholder = "Automatic editing is coming soon"; } };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", markSoon); else markSoon();
+  }
 
   const $ = (id) => document.getElementById(id);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -5917,7 +5925,8 @@
     box.appendChild(row);
   }
 
-  function currentTools() { const l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools(); return PUBLIC ? l.filter((t) => !(t && AI_TOOLS.has(t.id))) : l; }
+  // 0.96.1 (admin): on the public site the AI tools stay in view marked Coming soon; tapping one only says so
+  function currentTools() { const l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools(); return PUBLIC ? l.map((t) => (t && AI_TOOLS.has(t.id)) ? { id: t.id, label: t.label, icon: t.icon, soon: true, run: () => toast(t.label + " is coming soon") } : t) : l; }
 
   function renderActionBar() {
     const bar = $("actionBar");
@@ -5940,10 +5949,10 @@
     }
     const strip = mk("div", "ab-strip");
     currentTools().forEach((t) => {
-      const b = mk("button", "ab-tool" + (activeTool === t.id && S.sel ? " active" : "") + (t.id === "delete" ? " danger" : ""));
+      const b = mk("button", "ab-tool" + (activeTool === t.id && S.sel ? " active" : "") + (t.id === "delete" ? " danger" : "") + (t.soon ? " is-soon" : ""));
       b.type = "button";
-      b.innerHTML = t.icon + '<span class="ab-label"></span>';
-      b.lastChild.textContent = t.label;
+      b.innerHTML = t.icon + '<span class="ab-label"></span>' + (t.soon ? '<span class="soon-tag">Soon</span>' : "");
+      b.querySelector(".ab-label").textContent = t.label;
       b.addEventListener("click", () => {
         if (t.group) { toolGroup = t.group; renderInspector(); return; }
         if (t.panel) {
