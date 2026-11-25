@@ -4130,23 +4130,18 @@
 
   /* Scroll position IS the playhead position. One listener closes the loop, so
      a flick, a trackpad, a scrollbar and the drag above all scrub identically. */
-  let scrubRaf = 0, scrubSeek = 0;
+  let scrubRaf = 0;
   $("tlScroll").addEventListener("scroll", () => {
     if (scrollLock || S.playing || deskTimeline()) return;   // on a computer, scrolling only looks along the edit
+    const t = clamp($("tlScroll").scrollLeft / S.pps, 0, total());
+    if (Math.abs(t - S.time) < 0.0005) return;
+    /* 0.99.2: the time follows the finger at once (a re-centre must never pull the timeline back to an older
+       time); the heavy part (moving the video, redrawing overlays) runs once per frame. */
+    S.time = t;
+    $("playhead").style.left = padL() + S.time * S.pps + "px";
+    updateTransport();
     if (scrubRaf) return;
-    // 0.98.0: at most one update per frame, and the video seeks when the scroll settles (no lag on a mouse wheel)
-    scrubRaf = requestAnimationFrame(() => {
-      scrubRaf = 0;
-      const t = clamp($("tlScroll").scrollLeft / S.pps, 0, total());
-      if (Math.abs(t - S.time) < 0.0005) return;
-      S.time = t;
-      resetSfxCursor();
-      syncOverlays();
-      updateTransport();
-      $("playhead").style.left = padL() + S.time * S.pps + "px";
-      clearTimeout(scrubSeek);
-      scrubSeek = setTimeout(syncMedia, 70);
-    });
+    scrubRaf = requestAnimationFrame(() => { scrubRaf = 0; resetSfxCursor(); syncMedia(); syncOverlays(); });
   });
 
   $("zoomSlider").addEventListener("input", () => zoomTimeline(+$("zoomSlider").value));
@@ -7669,21 +7664,24 @@
         use(t);
       });
       row.appendChild(go1);
-      // removing asks for the word, as every delete in the app does
-      const rm = mk("button", "fchip", "Remove");
+      // 0.99.2 (admin): deleting is one clear confirm, never typing; Undo brings it back for a few seconds
+      const rm = mk("button", "fchip tpl-rm", "Delete");
       rm.type = "button";
       rm.addEventListener("click", () => {
-        const ask = document.createElement("input");
-        ask.className = "panel-input"; ask.placeholder = "Type delete to remove it";
-        ask.addEventListener("input", () => {
-          if (ask.value.trim().toLowerCase() !== "delete") return;
-          const all = savedTemplates();
-          all.splice(i, 1);
+        const ask = mk("div", "tpl-confirm");
+        ask.innerHTML = '<span>Delete this template?</span>';
+        const yes = mk("button", "tpl-yes", "Delete"); yes.type = "button";
+        const no = mk("button", "tpl-no", "Keep"); no.type = "button";
+        ask.appendChild(no); ask.appendChild(yes);
+        no.addEventListener("click", () => row.replaceChild(rm, ask));
+        yes.addEventListener("click", () => {
+          const all = savedTemplates(), gone = all.splice(i, 1)[0];
           storeTemplates(all);
           wrap.remove(); openVideoTemplates();
+          toast("Template deleted", { action: "Undo", ms: 6000, run: () => { const back = savedTemplates(); back.splice(Math.min(i, back.length), 0, gone); storeTemplates(back); const open = document.querySelector(".tpl-sheet"); if (open) { open.remove(); openVideoTemplates(); } } });
         });
         row.replaceChild(ask, rm);
-        ask.focus();
+        yes.focus({ preventScroll: true });
       });
       row.appendChild(rm);
       info.appendChild(row);
@@ -14249,8 +14247,9 @@
       panel.classList.remove("hidden");
       btn.disabled = true;
       input.value = "";
-      go.disabled = true;
-      input.focus();
+      input.classList.add("hidden"); label.classList.add("hidden");   // 0.99.2: no typing; the panel with its Delete button is the confirm
+      go.disabled = false;
+      go.focus();
     });
     input.addEventListener("input", () => { go.disabled = input.value.trim().toLowerCase() !== "delete"; });
     input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) go.click(); if (e.key === "Escape") close(); });
