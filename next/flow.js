@@ -216,6 +216,8 @@
   const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
 
   function show(name) {
+    // 0.100.0: New project is the shared chooser (public.js), on both sites
+    if (name === "start" && window.ethNew) { leave(); if (window.vcFlow) window.vcFlow.home(); window.ethNew(); return; }
     F.screen = name;
     document.body.dataset.flow = name;
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
@@ -227,6 +229,8 @@
   function leave() {
     if (window.vcFlow && window.vcFlow.returnPreview) window.vcFlow.returnPreview(); F.screen = null; delete document.body.dataset.flow; document.querySelectorAll(".flow-screen").forEach((s) => s.classList.remove("active")); }
   window.vcFlowShow = show;
+  window.vcFlowAuto = () => openAgent(null);
+  window.vcFlowLeave = () => leave();
   window.vcFlowAdd = (files) => addFootage(files);   // tests and the landing drop
 
   /* ── library ── */

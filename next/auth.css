@@ -132,3 +132,11 @@ button.auth-brand:hover { opacity: 0.75; }
 .auth-brand { display: inline-flex; align-items: center; }
 .auth-brand .brand-word { font-weight: 600; }
 button.auth-brand:hover .bm-cut { transform: translateX(1.5px); }
+
+
+/* 0.100.0 design-skills01: sign-in in the public site's shapes; fields are soft cards (no focus box, as before) */
+.auth-form input, .auth-pw input { min-height: 48px; border: 0; border-radius: 12px; background: var(--f-s1); box-shadow: none; padding: 0 14px; }
+.auth-primary { min-height: 50px; border-radius: 12px; font-weight: 600; }
+.auth-alt { min-height: 50px; border-radius: 12px; box-shadow: none; background: var(--f-s1); font-weight: 600; }
+.auth-choice { border-radius: 14px; }
+.auth-chip { border-radius: 8px; }

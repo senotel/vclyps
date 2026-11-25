@@ -350,3 +350,40 @@ button.flow-start-wall:hover img:nth-child(2) { transform: translateY(-28px) sca
 
 /* 0.97.0 (audit 11): the top bar words readable, not tiny capitals */
 .flow-nav, .flow-preview { font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+
+
+/* ══ 0.100.0 design-skills01 on the developer-only screens (admin 2026-11-26): sign-in, account and plans,
+   the template library and the AI chat take the public site's shapes. Soft squares (10 to 20px), 44px+
+   targets, cards instead of hairlines, crimson for the one main action. ══ */
+.flow-btn, .acc-btn, .auth-primary { border-radius: 12px; font-weight: 600; }
+.flow-btn-ghost, .auth-alt { border-radius: 12px; box-shadow: none; background: var(--f-s1); }
+.flow-btn-ghost:hover, .auth-alt:hover { background: var(--f-s2); box-shadow: none; }
+.flow-icon, .auth-icon { width: 44px; height: 44px; border-radius: 10px; }
+.flow-icon:hover, .auth-icon:hover { background: var(--f-s1); }
+.flow-head { gap: 8px; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); }
+.flow-nav { min-height: 40px; padding: 0 12px; border-radius: 10px; transition: background-color 160ms ease; }
+.flow-nav:hover { background: var(--f-s1); }
+.flow-preview { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: rgba(220, 20, 60, 0.1); color: var(--f-acc); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+/* the template library */
+.flow-lib { max-width: 1120px; margin: 0 auto; padding-top: 28px; }
+.flow-h1 { font-size: clamp(34px, 4.2vw, 52px); font-weight: 700; letter-spacing: -0.035em; }
+.flow-auto { margin-top: 20px; padding: 20px 20px 20px 24px; border: 0; border-radius: 20px; background: #161513; color: #f2efe8; }
+.flow-auto-text { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: #f2efe8; }
+.flow-search { height: 48px; margin-top: 24px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--f-s1); }
+.flow-search input { background: transparent; }
+.flow-cats { gap: 6px; padding: 12px 0 4px; }
+.flow-cat { min-height: 36px; padding: 0 14px; border: 0; border-radius: 10px; font-size: 14px; letter-spacing: 0; text-transform: none; transition: background-color 160ms ease, color 160ms ease; }
+.flow-cat:hover { background: var(--f-s1); }
+.flow-cat.active { border: 0; background: rgba(220, 20, 60, 0.1); color: var(--f-acc); }
+.flow-card-pic { border-radius: 14px; }
+.flow-card:hover .flow-card-pic { transform: translateY(-2px); }
+.flow-card-pic { transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1); }
+/* the AI chat */
+.flow-composer { border: 0; border-radius: 20px; padding: 12px 12px 10px 16px; box-shadow: 0 0 0 1px var(--f-hair2), 0 12px 32px rgba(0, 0, 0, 0.08); }
+.flow-add, .flow-effort { height: 40px; border-radius: 10px; }
+.flow-add:hover, .flow-effort:hover { background: var(--f-s1); }
+.flow-send { width: 44px; height: 44px; border-radius: 12px; }
+.flow-menu { border-radius: 14px; }
+.flow-thread { max-width: 760px; }
+/* account and plans */
+.acc-h1 { letter-spacing: -0.03em; }
