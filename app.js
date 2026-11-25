@@ -12,10 +12,10 @@
   /* 0.95.0: the public site (senotel/ethlenos, built by NO UPLOAD/public/build.mjs) sets window.ETH_PUBLIC:
      manual editing only. No tool, button or flow that uses AI (on-device models included) can be reached. */
   const PUBLIC = !!window.ETH_PUBLIC;
-  const AI_TOOLS = new Set(["captions", "lyrics", "tidy", "post", "cutout", "retouch", "reframe", "denoise", "enhance", "tts"]);
+  const AI_TOOLS = new Set(["lyrics", "tidy", "post", "cutout", "retouch", "reframe", "denoise", "enhance", "tts"]);
   if (PUBLIC) document.documentElement.classList.add("eth-public");
   // the AI controls outside the tool bar: visible, tagged, and a tap only says Coming soon (it never reaches their own handlers)
-  const SOON_CTRL = "#semiGenerate, #semiPrompt, #findChip, #speechChip, #tbCaptions, #tbTidy, #tbPost, #capTrGo";
+  const SOON_CTRL = "#semiGenerate, #semiPrompt, #findChip, #speechChip, #tbTidy, #tbPost, #capTrGo";
   if (PUBLIC) {
     const stop = (e) => { const c = e.target.closest && e.target.closest(SOON_CTRL); if (!c) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.type === "click") toast("Automatic editing is on its way"); };
     ["click", "keydown", "focusin"].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === "keydown" && e.key !== "Enter" && e.key !== " ") return; if (ev === "focusin") { const c = e.target.closest && e.target.closest("#semiPrompt"); if (c) c.blur(); return; } stop(e); }, true));
@@ -346,6 +346,7 @@
   let cameFrom = "home";
 
   function showScreen(name) {
+    if (name !== "editor" && name !== "settings") setFocus(null);
     const prev = document.body.dataset.screen;
     if (prev && prev !== name && name !== "settings" && name !== "admin") cameFrom = name;
     document.body.dataset.screen = name;
@@ -436,7 +437,10 @@
     returnPreview: () => { const st = $("editorStage"); if (st) mountPreview(st); },
     state: () => ({ clips: S.clips.length, seconds: total(), mode: S.mode }),
     play: () => play(), pause: () => pause(),
-    openEditor: () => enterEditor(),
+    openEditor: () => { setFocus(null); enterEditor(); },
+    openFocus: (k) => openFocus(k),
+    openTemplates: () => openVideoTemplates(),
+    templateCount: () => savedTemplates().length,
     home: () => showScreen("home"),
     exportNow: () => { enterEditor(); const b = $("exportBtn"); if (b) b.click(); }
   };
@@ -647,8 +651,9 @@
     if (!sounds.length) {
       toast(added + (added === 1 ? " file" : " files") + " added" +
         (skipped ? " (" + skipped + " skipped: not a video, photo or audio file)" : "") +
-        (onTimeline ? (PUBLIC ? ". Press play to watch it" : ". Describe your edit above, or press play") : ""));
+        (onTimeline ? ". Press play to watch it" : ""));
     }
+    if (FOCUS === "captions" && onTimeline) setTimeout(() => { if (FOCUS === "captions") $("tbCaptions").click(); }, 500);
     return added;
   }
 
@@ -3304,7 +3309,7 @@
   }
 
   (function wireCaptions() {
-    $("tbCaptions").addEventListener("click", () => { if (!PUBLIC) openCaptionSheet(); });
+    $("tbCaptions").addEventListener("click", openCaptionSheet);   // captions are free on every site (0.98.0)
     $("capMake").addEventListener("click", () => buildCaptions());
     $("capRemove").addEventListener("click", () => {
       S.captions = [];
@@ -4123,16 +4128,23 @@
 
   /* Scroll position IS the playhead position. One listener closes the loop, so
      a flick, a trackpad, a scrollbar and the drag above all scrub identically. */
+  let scrubRaf = 0, scrubSeek = 0;
   $("tlScroll").addEventListener("scroll", () => {
     if (scrollLock || S.playing || deskTimeline()) return;   // on a computer, scrolling only looks along the edit
-    const t = clamp($("tlScroll").scrollLeft / S.pps, 0, total());
-    if (Math.abs(t - S.time) < 0.0005) return;
-    S.time = t;
-    resetSfxCursor();
-    syncMedia();
-    syncOverlays();
-    updateTransport();
-    $("playhead").style.left = padL() + S.time * S.pps + "px";
+    if (scrubRaf) return;
+    // 0.98.0: at most one update per frame, and the video seeks when the scroll settles (no lag on a mouse wheel)
+    scrubRaf = requestAnimationFrame(() => {
+      scrubRaf = 0;
+      const t = clamp($("tlScroll").scrollLeft / S.pps, 0, total());
+      if (Math.abs(t - S.time) < 0.0005) return;
+      S.time = t;
+      resetSfxCursor();
+      syncOverlays();
+      updateTransport();
+      $("playhead").style.left = padL() + S.time * S.pps + "px";
+      clearTimeout(scrubSeek);
+      scrubSeek = setTimeout(syncMedia, 70);
+    });
   });
 
   $("zoomSlider").addEventListener("input", () => zoomTimeline(+$("zoomSlider").value));
@@ -4229,6 +4241,18 @@
     });
   })();
 
+  (function () {
+    const bar = $("actionBar");
+    if (!bar) return;
+    bar.addEventListener("wheel", (e) => {
+      const strip = e.target.closest && e.target.closest(".ab-strip");
+      if (!strip || e.ctrlKey) return;
+      const sideways = strip.scrollWidth > strip.clientWidth + 2;
+      if (!sideways || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      strip.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    }, { passive: false });
+  })();
   $("tlScroll").addEventListener("wheel", (e) => {
     const sc = $("tlScroll");
     if (e.ctrlKey || e.metaKey) {
@@ -5607,7 +5631,7 @@
       { id: "post", label: "Post", icon: ICON.post, run: () => $("tbPost").click() },
       { id: "add", label: "Add", icon: ICON.add, run: () => $("tbAdd").click() },
       // ccl20: this edit, kept as a template for new projects (and shared as a file)
-      { id: "template", label: "Save as template", icon: ICON.template, run: () => saveAsTemplate() }
+      { id: "template", label: "Save as template", icon: ICON.template, run: () => openTemplateSave() }
     ];
   }
   function groupTools(g) {
@@ -5927,7 +5951,9 @@
 
   // 0.96.1 (admin): on the public site the AI tools stay in view marked Coming soon; tapping one only says so
   function currentTools() {
-    const l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools();
+    let l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools();
+    // the captions editor: captions and footage, nothing else (admin: do not over design)
+    if (FOCUS === "captions" && !S.sel && !toolGroup) l = l.filter((t) => t && (t.id === "captions" || t.id === "add"));
     if (!PUBLIC) return l;
     // 0.97.0 (admin, audit 4): every automatic tool in one Auto tile that lists them all, marked Coming soon
     const soon = l.filter((t) => t && AI_TOOLS.has(t.id)), rest = l.filter((t) => !(t && AI_TOOLS.has(t.id)));
@@ -5935,6 +5961,112 @@
     const at = Math.min(rest.length, Math.max(0, l.indexOf(soon[0])));
     rest.splice(at, 0, { id: "auto-soon", label: "Auto", soon: true, icon: SOON_ICON, run: () => openSoonSheet(soon.map((t) => t.id)) });
     return rest;
+  }
+  /* 0.98.0 (admin): two focused editors opened from More on the home page.
+     "captions": an editor for captions only: add a video, its captions are made on this device, edit them, export.
+     "template": the whole editor plus a Save template button: every clip becomes a slot others fill with their footage. */
+  var FOCUS = null;   // var: showScreen can run before this line during start-up
+  function setFocus(k) {
+    FOCUS = k || null;
+    if (FOCUS) document.body.dataset.focus = FOCUS; else delete document.body.dataset.focus;
+    const chip = $("focusChip"); if (chip) chip.textContent = FOCUS === "captions" ? "Captions editor" : FOCUS === "template" ? "Template designer" : "";
+    if ($("actionBar")) renderActionBar();
+  }
+  function openFocus(k) {
+    setFocus(k);
+    enterEditor();
+    if (k === "captions") {
+      if (S.clips.length) setTimeout(() => { if (FOCUS === "captions") $("tbCaptions").click(); }, 300);
+      else setTimeout(() => openPicker("editor"), 300);
+    }
+    if (k === "template") toast("Build the edit, then Save template. Every clip becomes a slot people fill with their own footage", 6000);
+  }
+  // the focus chip and the Save template button live in the top bar
+  (function () {
+    const name = $("projectName");
+    if (!name) return;
+    const chip = document.createElement("span"); chip.id = "focusChip"; chip.className = "focus-chip editor-only";
+    name.insertAdjacentElement("afterend", chip);
+    const save = document.createElement("button"); save.id = "focusSave"; save.type = "button"; save.className = "primary-btn focus-save editor-only"; save.textContent = "Save template";
+    save.addEventListener("click", () => openTemplateSave());
+    const exp = $("exportBtn"); if (exp) exp.insertAdjacentElement("beforebegin", save);
+  })();
+
+  /* Save as template (admin 2026-11-25): keep it private, or send it to Ethlenos to review for the public template
+     library. A template is the edit's shape (slots, timing, text, effects, sound), never the footage itself. */
+  const TPL_REVIEW = { url: "https://thfwydpugnvwwzmrhszz.supabase.co/rest/v1/template_requests", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZnd5ZHB1Z252d3d6bXJoc3p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzMDk5MzQsImV4cCI6MjExMDg4NTkzNH0.gD69OcjCj-JDSVqU4Y3x9OziTuby0hHl9ucZM8GnKZY" };
+  function buildTemplate() {
+    const TP = window.SenotelTemplates;
+    if (!TP || !S.clips.length) { toast("Make an edit first, then save it as a template"); return null; }
+    const name = ($("projectName").value || "").trim() || "My template";
+    return TP.make(S, {
+      name: name, app: window.SenotelVersion ? SenotelVersion.version : "", thumb: templateThumb(),
+      dispDur: dispDur, kindOf: (c) => { const m = mediaById(c.mediaId); return m ? m.type : "video"; }
+    });
+  }
+  function keepTemplate(t) {
+    const list = savedTemplates().filter((x) => x.name !== t.name);
+    list.unshift(t);
+    return storeTemplates(list.slice(0, 30));
+  }
+  function openTemplateSave() {
+    if (!S.clips.length) { toast("Make an edit first, then save it as a template"); return; }
+    let el = document.getElementById("tplSave");
+    if (!el) {
+      el = document.createElement("div"); el.id = "tplSave"; el.className = "soon-sheet"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Save as template");
+      document.body.appendChild(el);
+      el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-close]")) el.hidden = true; });
+    }
+    const name = escHtml(($("projectName").value || "").trim() || "My template");
+    el.innerHTML = '<div class="soon-panel tpl-save"><div class="soon-head"><b>Save as template</b><button type="button" class="icon-btn" data-close aria-label="Close">' + ICON.close + '</button></div>' +
+      '<label class="tpl-field"><span>Name</span><input id="tplName" maxlength="80" value="' + name + '"></label>' +
+      '<div class="tpl-ways">' +
+        '<button type="button" class="tpl-way" data-way="private"><b>Private template</b><span>Only you can use it</span></button>' +
+        '<button type="button" class="tpl-way" data-way="public"><b>Request a public template</b><span>Ethlenos reviews it for everyone to use</span></button>' +
+      '</div>' +
+      '<label class="tpl-field tpl-note hidden"><span>What is it for? (optional)</span><input id="tplNote" maxlength="300" placeholder="A recipe video, a trip recap..."></label>' +
+      '<button type="button" class="primary-btn tpl-send hidden" id="tplSend">Send for review</button>' +
+      '<button type="button" class="tpl-file" id="tplFile">Download as a file</button></div>';
+    el.hidden = false;
+    const panel = el.querySelector(".soon-panel");
+    if (panel.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) panel.animate([{ transform: "translateY(24px) scale(0.98)" }, { transform: "none" }], { duration: 360, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+    const named = () => { const v = ($("tplName").value || "").trim(); if (v) $("projectName").value = v; };
+    el.querySelector('[data-way="private"]').addEventListener("click", () => {
+      named(); const t = buildTemplate(); if (!t || !keepTemplate(t)) return;
+      el.hidden = true;
+      toast("Saved as a private template (" + t.slots.length + " slots). Find it in More, Your templates", 6000);
+      recordEdit("template-save", { slots: t.slots.length });
+    });
+    el.querySelector('[data-way="public"]').addEventListener("click", () => {
+      el.querySelector(".tpl-note").classList.remove("hidden"); el.querySelector("#tplSend").classList.remove("hidden");
+      el.querySelector('[data-way="public"]').classList.add("on");
+    });
+    el.querySelector("#tplSend").addEventListener("click", async (ev) => {
+      named(); const t = buildTemplate(); if (!t) return;
+      const btn = ev.currentTarget; btn.disabled = true; btn.textContent = "Sending";
+      keepTemplate(t);
+      try {
+        const r = await fetch(TPL_REVIEW.url, { method: "POST", headers: { apikey: TPL_REVIEW.key, Authorization: "Bearer " + TPL_REVIEW.key, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ name: t.name.slice(0, 80), note: (($("tplNote").value || "").trim().slice(0, 300)) || null, app_version: (t.app || "").slice(0, 20), template: t }) });
+        if (!r.ok) throw new Error(String(r.status));
+        el.hidden = true;
+        toast("Sent for review. It is also saved as your private template", 6000);
+        recordEdit("template-request", { slots: t.slots.length });
+      } catch (e) {
+        btn.disabled = false; btn.textContent = "Send for review";
+        toast("That did not send. Check your connection and try again");
+      }
+    });
+    el.querySelector("#tplFile").addEventListener("click", () => {
+      named(); const t = buildTemplate(); if (!t) return;
+      try {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(t)], { type: "application/json" }));
+        a.download = t.name.replace(/[^\w\- ]+/g, "").trim() + ".ethlenos-template.json";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      } catch (e) {}
+    });
   }
   const SOON_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.7 4.6 4.8 1.7-4.8 1.7L12 16.1l-1.7-4.6-4.8-1.7 4.8-1.7z"/><path d="M18.5 15l.8 2.1 2.2.8-2.2.8-.8 2.1-.8-2.1-2.2-.8 2.2-.8z"/></svg>';
   const SOON_WHAT = { captions: ["Captions", "Captions from what is said"], lyrics: ["Auto lyrics", "Lyrics timed to the song"], tidy: ["Tidy", "Removes pauses and filler words"], post: ["Post", "A title, description and hashtags"], cutout: ["Remove background", "Cuts the person out of the scene"], retouch: ["Retouch", "Smooths skin and faces"], reframe: ["Auto reframe", "Keeps the subject in the frame"], denoise: ["Reduce noise", "Takes out background noise"], enhance: ["Enhance voice", "Makes voices clearer"], tts: ["Text to speech", "Reads your text aloud"] };

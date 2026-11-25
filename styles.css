@@ -3670,3 +3670,15 @@ body.previewFs .transport .play-btn { background: rgba(255, 255, 255, 0.16); col
 #screen-settings .about-legal { display: flex; gap: 8px; margin: 0; }
 #screen-settings .about-legal a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 10px; background: var(--bg0); color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none; }
 #screen-settings .about-legal a:hover { background: var(--bg2); }
+
+/* 0.98.0 (admin): the manual editor has no AI editing in it: no prompt bar, no mode strip, no Find clips or Speech */
+#screen-editor > .ai-bar, #screen-editor > .fmt-row, #screen-editor > #findRow, #screen-editor > #bizRow, #screen-editor > .ai-status { display: none !important; }
+/* the focused editors (More on the home page): a chip naming the mode, Save template in the template designer */
+.focus-chip { display: none; align-items: center; height: 28px; margin-left: 8px; padding: 0 10px; border-radius: 8px; background: rgba(220, 20, 60, 0.12); color: #dc143c; font-size: 12px; font-weight: 700; white-space: nowrap; }
+body[data-focus][data-screen="editor"] .focus-chip { display: inline-flex; }
+.focus-save { display: none; }
+body[data-focus="template"][data-screen="editor"] .focus-save { display: inline-flex; }
+body[data-focus="template"][data-screen="editor"] #exportBtn { display: none; }
+@media (max-width: 600px) { .focus-chip { display: none !important; } }
+.topbar #focusSave { display: none; }
+body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: inline-flex; }
