@@ -128,11 +128,11 @@ body.dark .pub-opt-auto { background: #232120; }
 .eth-public .ab-tool.is-soon { position: relative; opacity: 1; }
 .eth-public .ab-tool.is-soon svg, .eth-public .ab-tool.is-soon .ab-label { opacity: 0.55; }
 .soon-tag { position: absolute; top: 4px; right: 4px; padding: 1px 5px; border-radius: 5px; background: #dc143c; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.5; }
-.eth-public #semiGenerate.is-soon { opacity: 1; background: #dc143c; color: #fff; }
+.eth-public #semiGenerate.is-soon { opacity: 1; background: var(--bg3); color: var(--t2); }
 .eth-public #semiPrompt.is-soon { opacity: 1; }
 .pub-modes-tag { margin-left: 14px; vertical-align: middle; }
 .eth-public #semiGenerate.is-soon { font-size: 0; }
-.eth-public #semiGenerate.is-soon::after { content: "Coming soon"; font-size: 13px; }
+.eth-public #semiGenerate.is-soon::after { content: "Auto edit"; font-size: 13px; }
 .eth-public .ab-tool.is-soon .soon-tag { position: absolute !important; top: -3px; right: -2px; margin: 0; font-size: 8px; padding: 0 4px; }
 
 /* ══ 0.97.0 (admin): Auto clip stands out without looking pressable. No solid slab and no empty black
@@ -199,3 +199,6 @@ body.dark .pub-opts { --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n
 .eth-public #semiGenerate.is-soon { width: auto !important; min-width: 0; height: auto; min-height: 32px; border-radius: 10px; }
 .eth-public #semiPrompt.is-soon { flex: 1 1 auto; min-width: 0; }
 .eth-public #semiGenerate.is-soon::after { position: static; inset: auto; }
+
+/* 0.97.2 (admin): Coming soon only where it matters; the effort section gets a quiet kicker instead */
+.lp-modes-kicker { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lp-on2); }

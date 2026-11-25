@@ -17,7 +17,7 @@
   // the AI controls outside the tool bar: visible, tagged, and a tap only says Coming soon (it never reaches their own handlers)
   const SOON_CTRL = "#semiGenerate, #semiPrompt, #findChip, #speechChip, #tbCaptions, #tbTidy, #tbPost, #capTrGo";
   if (PUBLIC) {
-    const stop = (e) => { const c = e.target.closest && e.target.closest(SOON_CTRL); if (!c) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.type === "click") toast("Automatic editing is coming soon"); };
+    const stop = (e) => { const c = e.target.closest && e.target.closest(SOON_CTRL); if (!c) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.type === "click") toast("Automatic editing is on its way"); };
     ["click", "keydown", "focusin"].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === "keydown" && e.key !== "Enter" && e.key !== " ") return; if (ev === "focusin") { const c = e.target.closest && e.target.closest("#semiPrompt"); if (c) c.blur(); return; } stop(e); }, true));
     const markSoon = () => { document.querySelectorAll(SOON_CTRL).forEach((c) => c.classList.add("is-soon")); const note = document.querySelector("#addSheet .add-note"); if (note) note.textContent = "Everything you add opens on this device."; const p = document.getElementById("semiPrompt"); if (p) { p.readOnly = true; p.placeholder = "Automatic editing is coming soon"; } };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", markSoon); else markSoon();
