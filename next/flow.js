@@ -180,7 +180,11 @@
     $("flowHist").querySelector("[data-histclose]").addEventListener("click", closeHistory);
     $("flowHist").querySelector("[data-newchat]").addEventListener("click", () => { closeHistory(); show("library"); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("flowHist").hidden) closeHistory(); });
-    $("flowManual").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
+    // 0.99.0 (admin): clips first, then the editor
+    $("flowManual").addEventListener("click", () => {
+      const go = (files) => { if (!files || !files.length) return; leave(); if (window.vcStartWith) window.vcStartWith(files); else window.vcFlow.openEditor(); };
+      if (window.EthAdd) window.EthAdd.open({ title: "Add videos", onFiles: go }); else { leave(); window.vcFlow.openEditor(); }
+    });
     $("flowResume").addEventListener("click", () => { leave(); window.vcFlow.openEditor(); });
     $("flowAuto").addEventListener("click", () => openAgent(null));
     document.querySelectorAll("#flowRoot [data-to]").forEach((b) => b.addEventListener("click", () => show(b.dataset.to)));

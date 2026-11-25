@@ -438,7 +438,7 @@
     state: () => ({ clips: S.clips.length, seconds: total(), mode: S.mode }),
     play: () => play(), pause: () => pause(),
     openEditor: () => { setFocus(null); enterEditor(); },
-    openFocus: (k) => openFocus(k),
+    openFocus: (k, files) => openFocus(k, files),
     openTemplates: () => openVideoTemplates(),
     templateCount: () => savedTemplates().length,
     home: () => showScreen("home"),
@@ -527,8 +527,9 @@
   $("backBtn").addEventListener("click", () => {
     const at = document.body.dataset.screen;
     const to = (at === "settings" || at === "admin") ? cameFrom
-      : at === "editor" ? "modes" : "home";
-    go(() => showScreen(to));
+      : at === "editor" ? ((PUBLIC || FOCUS) ? "home" : "modes") : "home";
+    const after = at === "editor" && window.ethBackTo; window.ethBackTo = null;
+    go(() => { showScreen(to === "modes" && PUBLIC ? "home" : to); if (after) setTimeout(after, 0); });
   });
   $("logoHome").addEventListener("click", () => go(() => showScreen("home")));
 
@@ -653,7 +654,8 @@
         (skipped ? " (" + skipped + " skipped: not a video, photo or audio file)" : "") +
         (onTimeline ? ". Press play to watch it" : ""));
     }
-    if (FOCUS === "captions" && onTimeline) setTimeout(() => { if (FOCUS === "captions") $("tbCaptions").click(); }, 500);
+    if (FOCUS === "captions" && onTimeline) setTimeout(() => { layoutFocus(); makeFocusCaptions(); }, 500);
+    if (FOCUS === "template") setTimeout(renderTemplateDock, 300);
     return added;
   }
 
@@ -5971,15 +5973,52 @@
     if (FOCUS) document.body.dataset.focus = FOCUS; else delete document.body.dataset.focus;
     const chip = $("focusChip"); if (chip) chip.textContent = FOCUS === "captions" ? "Captions editor" : FOCUS === "template" ? "Template designer" : "";
     if ($("actionBar")) renderActionBar();
+    if (!FOCUS) focusCapsStarted = false;
+    if (typeof dock !== "undefined") layoutFocus();
   }
-  function openFocus(k) {
+  function openFocus(k, files) {
     setFocus(k);
     enterEditor();
-    if (k === "captions") {
-      if (S.clips.length) setTimeout(() => { if (FOCUS === "captions") $("tbCaptions").click(); }, 300);
-      else setTimeout(() => openPicker("editor"), 300);
+    if (files && files.length) addFiles(files, "editor");
+    else if (!S.clips.length) setTimeout(() => openPicker("editor"), 300);
+    if (k === "captions" && S.clips.length && !(S.captions && S.captions.length)) setTimeout(makeFocusCaptions, 600);
+  }
+  // the captions editor starts making captions as soon as there is footage (once per opening)
+  var focusCapsStarted = false;
+  function makeFocusCaptions() {
+    if (FOCUS !== "captions" || focusCapsStarted || !S.clips.length) return;
+    focusCapsStarted = true;
+    const b = $("capMake"); if (b && !b.disabled) b.click();
+  }
+
+  /* 0.99.0 (admin, design-skills01): the focused editors are designed, not the hand editor with less in it.
+     Captions: the picture large and the captions panel docked beside it (under it on a phone); no tool rail,
+     no media bin. Template designer: the editor's tools plus a docked Template panel listing every slot the
+     edit makes, live, with Save template. */
+  var dock = document.createElement("aside");   // var: setFocus can run during start-up, before this line
+  dock.id = "focusDock"; dock.className = "focus-dock"; dock.hidden = true; dock.setAttribute("aria-label", "Panel");
+  (function () { const ed = $("screen-editor"), tl = ed && ed.querySelector(".tl-zone"); if (ed) ed.insertBefore(dock, tl || null); })();
+  var capHome = null;
+  function layoutFocus() {
+    const cap = $("captionSheet");
+    // put the captions panel back where it lives when this is not the captions editor
+    if (FOCUS !== "captions" && cap && capHome && cap.parentElement === dock) { capHome.appendChild(cap); cap.classList.add("hidden"); cap.classList.remove("docked"); }
+    dock.innerHTML = ""; dock.hidden = !FOCUS; dock.dataset.kind = FOCUS || "";
+    if (FOCUS === "captions" && cap) {
+      if (!capHome) capHome = cap.parentElement;
+      dock.appendChild(cap); cap.classList.remove("hidden"); cap.classList.add("docked");
+      $("capStatus").textContent = "";
+      try { renderCaptionSheet(); } catch (e) {}
     }
-    if (k === "template") toast("Build the edit, then Save template. Every clip becomes a slot people fill with their own footage", 6000);
+    if (FOCUS === "template") renderTemplateDock();
+  }
+  function renderTemplateDock() {
+    if (FOCUS !== "template") return;
+    const slots = S.clips.map((c, i) => { const m = mediaById(c.mediaId); return '<li><span class="fd-thumb"' + (m && m.thumb ? ' style="background-image:url(' + m.thumb + ')"' : "") + '></span><b>Slot ' + (i + 1) + '</b><span>' + dispDur(c).toFixed(1) + " s</span></li>"; }).join("");
+    dock.innerHTML = '<div class="fd-head"><b>Template</b><span>Every clip is a slot people fill with their own footage. Text, effects and music stay.</span></div>' +
+      (slots ? '<ol class="fd-slots">' + slots + "</ol>" : '<p class="fd-empty">Add clips to make slots.</p>') +
+      '<button type="button" class="primary-btn fd-save">Save template</button>';
+    dock.querySelector(".fd-save").addEventListener("click", () => openTemplateSave());
   }
   // the focus chip and the Save template button live in the top bar
   (function () {

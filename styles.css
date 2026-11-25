@@ -3682,3 +3682,42 @@ body[data-focus="template"][data-screen="editor"] #exportBtn { display: none; }
 @media (max-width: 600px) { .focus-chip { display: none !important; } }
 .topbar #focusSave { display: none; }
 body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: inline-flex; }
+
+/* ══ 0.99.0 the focused editors, designed (design-skills01): one docked panel beside the picture (under it on a
+   phone). Captions editor: the picture and the captions panel, nothing else. Template designer: the tools plus a
+   Template panel that lists every slot, live. ══ */
+.topbar #focusSave, body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: none; }
+#focusDock[hidden] { display: none !important; }
+.focus-dock { background: var(--bg1); color: var(--text); }
+.sheet.docked { position: static; inset: auto; display: block; width: 100%; max-width: none; max-height: none; margin: 0; padding: 18px 18px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; animation: none; opacity: 1; overflow: visible; }
+.sheet.docked .sheet-grab, .sheet.docked .sheet-handle { display: none; }
+.fd-head { display: grid; gap: 6px; padding: 20px 18px 14px; }
+.fd-head b { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.fd-head span { font-size: 13px; line-height: 1.45; color: var(--t2); }
+.fd-slots { list-style: none; margin: 0; padding: 0 12px; display: grid; gap: 8px; }
+.fd-slots li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; border-radius: 12px; background: var(--bg0); }
+.fd-thumb { display: block; width: 56px; height: 40px; border-radius: 8px; background: var(--bg3) center / cover no-repeat; }
+.fd-slots b { font-size: 14px; font-weight: 600; }
+.fd-slots li > span:last-child { font-size: 13px; color: var(--t2); font-variant-numeric: tabular-nums; }
+.fd-empty { margin: 0; padding: 4px 18px; font-size: 14px; color: var(--t2); }
+.fd-save { display: flex; justify-content: center; width: calc(100% - 24px); height: 46px; margin: 16px 12px 20px; font-size: 15px; }
+@media (min-width: 1200px) {
+  body[data-screen="editor"][data-focus] #screen-editor { --props-w: 400px !important; }
+  body[data-screen="editor"][data-focus] #screen-editor::after { display: none; }
+  #screen-editor > #focusDock { grid-area: props; position: relative; z-index: 2; min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); }
+  body.panel-open #screen-editor > #focusDock { display: none; }
+  body[data-focus="captions"] #screen-editor { --rail-w: 0px !important; --asset-w: 0px !important; }
+  body[data-focus="captions"] #screen-editor > .action-bar, body[data-focus="captions"] #screen-editor > .media-strip { display: none !important; }
+}
+@media (max-width: 1199px) {
+  #screen-editor > #focusDock { flex: 0 0 auto; max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); }
+  body[data-focus="captions"] #screen-editor > #focusDock { flex: 1 1 auto; max-height: none; min-height: 0; }
+  body[data-focus="captions"] #screen-editor > .tl-zone, body[data-focus="captions"] #screen-editor > .action-bar { display: none !important; }
+  body[data-focus="captions"] #screen-editor > #editorStage { flex: 0 0 auto; height: 44vh; min-height: 0; }
+  body[data-focus="template"] .fd-head span { display: none; }
+  body[data-focus="template"] .fd-head { padding: 12px 16px 8px; }
+  body[data-focus="template"] .fd-slots { grid-auto-flow: column; grid-auto-columns: 168px; overflow-x: auto; padding-bottom: 4px; }
+  body[data-focus="template"] .fd-save { height: 44px; margin: 10px 12px 12px; }
+}
+.sheet.docked .sheet-grip { display: none; }
+.sheet.docked .sheet-head h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
