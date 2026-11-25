@@ -196,3 +196,6 @@ body.dark .pub-opts { --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n
 @media (max-width: 600px) { .eth-public .lp-show-say { bottom: calc(9% + 84px); } }
 .pub-opt.pub-opt-auto.pub-live { display: flex; align-items: center; min-height: 96px; padding: 18px; }
 .pub-opt.pub-opt-auto.pub-live .pub-opt-tx { flex: 1; }
+.eth-public #semiGenerate.is-soon { width: auto !important; min-width: 0; height: auto; min-height: 32px; border-radius: 10px; }
+.eth-public #semiPrompt.is-soon { flex: 1 1 auto; min-width: 0; }
+.eth-public #semiGenerate.is-soon::after { position: static; inset: auto; }
