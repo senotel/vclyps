@@ -234,3 +234,7 @@ body.dark .pub-opts { --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n
 /* 0.98.2 More on the New project page */
 .pub-new .pub-more { justify-self: start; margin-top: 6px; color: var(--n-ink); }
 .pub-new .pub-more svg { color: var(--n-sub); }
+
+/* 0.99.1 More reveals more tool cards in place on New project */
+.pub-extra { display: grid; gap: 12px; }
+.pub-extra[hidden] { display: none; }
