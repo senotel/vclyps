@@ -639,7 +639,7 @@
     if (!sounds.length) {
       toast(added + (added === 1 ? " file" : " files") + " added" +
         (skipped ? " (" + skipped + " skipped: not a video, photo or audio file)" : "") +
-        (onTimeline ? ". Describe your edit above, or press play" : ""));
+        (onTimeline ? (PUBLIC ? ". Press play to watch it" : ". Describe your edit above, or press play") : ""));
     }
     return added;
   }

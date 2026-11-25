@@ -3559,3 +3559,59 @@ body.dark .is-pressed { filter: brightness(0.8) contrast(1.05); }
 .pub-plus.is-pressed .pub-plus-sq { transform: scale(0.92); filter: brightness(0.82); }
 .eth-menu-row.is-pressed { filter: none; background: rgba(127, 120, 110, 0.26); }
 .eth-menu .eth-menu-row.eth-menu-feat.is-pressed { background: #b80f2d; transition: none; }
+
+
+/* ══ 0.96.0 editor redesign (admin 2026-11-25): every editor control is built with the button recipe
+   (Apple HIG shapes and 44px touch targets, prompt-motion springs, tasteskill hover; press.js gives the
+   hold-shrink and the spring back). CapCut's layout stays; the controls change. No glow, no pills. ══ */
+:root { --e-spring: cubic-bezier(0.32, 0.72, 0, 1); }
+.icon-btn { border-radius: 12px; }
+.icon-btn svg, .primary-btn svg, .ab-tool svg, .play-btn svg { transition: transform 320ms var(--e-spring); }
+.topbar .icon-btn, #screen-editor .icon-btn { width: 40px; height: 40px; }
+.topbar .icon-btn:hover svg, #screen-editor .icon-btn:hover svg { transform: scale(1.1); }
+@media (pointer: coarse) { .topbar .icon-btn, #screen-editor .icon-btn { width: 44px; height: 44px; } }
+.topbar #ratioBtn { border-radius: 12px !important; }
+
+.primary-btn { height: 40px; padding: 0 16px; border-radius: 12px; font-size: 13px; }
+.primary-btn:hover { filter: none; background: #c4112f; }
+.primary-btn:hover svg { transform: translateY(2px); }
+.secondary-btn, .ghost-btn { border-radius: 12px; min-height: 40px; }
+
+/* the play button: the editor's one big round control, ink until the pointer finds it */
+.play-btn { width: 48px; height: 48px; border: 0; background: var(--text); color: var(--bg0); }
+.play-btn:hover { border: 0; background: var(--acc); color: #fff; }
+.play-btn:hover svg { transform: scale(1.12); }
+
+/* the tool bar and rail: soft tiles, the icon lifts, the open tool is tinted red */
+.ab-tool { border-radius: 14px; transition: background-color 160ms ease, color 160ms ease; }
+.ab-tool:hover svg { transform: translateY(-2px) scale(1.06); }
+.ab-tool.active, #screen-editor .ab-tool.active { background: rgba(220, 20, 60, 0.1); }
+.ab-back { border-radius: 0 14px 14px 0; }
+
+/* adding things: the red + square from the home page, everywhere something is added */
+.ms-add { border: 0; border-radius: 14px; background: #dc143c; color: #fff; transition: background-color 160ms ease; }
+.ms-add:hover { border: 0; background: #c4112f; color: #fff; }
+.clip-add { border: 0; border-radius: 12px; background: #dc143c; color: #fff; font-size: 22px; font-weight: 500; transition: background-color 160ms ease; }
+.clip-add:hover { border: 0; background: #c4112f; color: #fff; }
+.lane-add { border-radius: 10px; font-weight: 600; transition: background-color 160ms ease, color 160ms ease; }
+.lane-add:hover { background: rgba(220, 20, 60, 0.1); color: #dc143c; }
+
+/* chips: soft squares, the chosen one tinted red */
+.chip, .fchip { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 14px; border-radius: 10px; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+.chip.selected, .fchip.active { border-color: #dc143c; background: rgba(220, 20, 60, 0.1); color: #dc143c; }
+@media (pointer: coarse) { .chip, .fchip { min-height: 40px; } }
+
+/* sheets and sliders */
+.sheet { border-radius: 20px 20px 0 0; }
+@media (min-width: 761px) { .sheet { border-radius: 20px; } }
+#screen-editor input[type="range"], .sheet input[type="range"] { accent-color: #dc143c; }
+#screen-editor .transport .play-btn, .transport .play-btn { background: var(--text); color: var(--bg0); }
+#screen-editor .transport .play-btn:hover, .transport .play-btn:hover { background: var(--acc); color: #fff; }
+body.previewFs .transport .play-btn { background: rgba(255, 255, 255, 0.16); color: #fff; }
+#screen-editor .ms-add, #screen-editor .ms-add span, .ms-add span { color: #fff; }
+.panel-body .fchip.active, #inspector .panel-body .fchip.active, .tpl-actions .fchip.active { border-color: #dc143c; background: rgba(220, 20, 60, 0.1); color: #dc143c; }
+:is(#fxCats, #stkCats, #tmplCats, #capCats, #sndCats) .fchip.active { color: #dc143c; border-bottom-color: #dc143c; background: none; }
+.anim-tile { border-radius: 12px; overflow: hidden; transition: border-color 160ms ease; }
+.anim-tile.selected { border-color: #dc143c; color: #dc143c; box-shadow: inset 0 0 0 1px #dc143c; }
+@media (max-width: 600px) { #screen-editor .transport .icon-btn:not(.play-btn) { width: 36px; height: 40px; } #screen-editor .transport .play-btn { width: 44px; height: 44px; } }
+@media (max-width: 360px) { #screen-editor .transport .icon-btn:not(.play-btn) { width: 31px; } #screen-editor .transport .play-btn { width: 42px; height: 42px; } }
