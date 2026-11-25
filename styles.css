@@ -3730,3 +3730,27 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
 .tpl-yes:hover { background: #c4112f; }
 .tpl-no { background: transparent; color: var(--text); }
 .tpl-no:hover { background: rgba(127, 120, 110, 0.14); }
+
+/* ══ 0.100.1 the editor, more intuitive (CapCut research + design-skills01 editor audit, admin 2026-11-26) ══ */
+/* sheets slide up solid on the iOS spring (they used to fade in see-through) */
+@keyframes sheetSlide { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheetPop { from { transform: translateY(18px) scale(0.98); } to { transform: none; } }
+.sheet { animation: sheetSlide 360ms cubic-bezier(0.32, 0.72, 0, 1); }
+@media (min-width: 761px) { .sheet { animation-name: sheetPop; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+/* the phone tool bar: whole tiles (five on a phone), and a fade on the edge that has more tools behind it */
+@media (max-width: 1199px) {
+  #actionBar .ab-tool { flex: 0 0 auto; min-width: max(64px, calc((100vw - 64px) / 5)); }
+  #actionBar .ab-strip.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+  #actionBar .ab-strip.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+  #actionBar .ab-strip.more-l:not(.more-r) { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
+}
+/* the add lanes read as places to add, not as disabled fields */
+.lane-add { background: transparent; border: 1.5px dashed var(--line); color: var(--t1); }
+.lane-add:hover { border-color: #dc143c; background: rgba(220, 20, 60, 0.06); color: #dc143c; }
+/* the play row: icons you can read, all the same soft square */
+#screen-editor .transport .icon-btn:not(.play-btn) { color: var(--t1); }
+#screen-editor .transport .icon-btn:not(.play-btn):hover { color: var(--text); }
+#screen-editor .transport .icon-btn:disabled { opacity: 0.35; }
+.topbar #ratioBtn { border: 0 !important; background: var(--bg1); }
+.topbar #ratioBtn:hover { background: var(--bg3); }

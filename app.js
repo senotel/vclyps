@@ -6152,6 +6152,12 @@
       strip.appendChild(b);
     });
     bar.appendChild(strip);
+    // 0.100.1: the strip says when more tools sit past either edge (it fades that edge)
+    const edges = () => { const max = strip.scrollWidth - strip.clientWidth; strip.classList.toggle("more-r", max > 2 && strip.scrollLeft < max - 2); strip.classList.toggle("more-l", strip.scrollLeft > 2); };
+    strip.addEventListener("scroll", edges, { passive: true });
+    requestAnimationFrame(edges); setTimeout(edges, 80);
+    // it may be drawn while the editor is still hidden (everything measures 0): check again once it has a size
+    if (window.ResizeObserver) new ResizeObserver(edges).observe(strip);
   }
 
   /* A tool's panel can be pulled down to its title bar and back up, so the
