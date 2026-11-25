@@ -81,7 +81,9 @@
   var ind = document.createElement("span"); ind.className = "lp-level-ind"; ind.setAttribute("aria-hidden", "true"); wrap.appendChild(ind);
   names.forEach(function (n) {
     var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio"); b.dataset.level = n;
-    b.innerHTML = n + (n === "Standard" ? '<span class="lp-level-rec">Recommended</span>' : "");
+    // 0.98.1 (design-skills01): equal segments, labels only; Standard carries a small red dot and says Recommended underneath
+    b.innerHTML = n + (n === "Standard" ? '<span class="lp-level-dot" aria-hidden="true"></span>' : "");
+    if (n === "Standard") b.setAttribute("aria-label", "Standard, recommended");
     wrap.appendChild(b);
   });
   var say = document.createElement("p"); say.className = "lp-level-say"; say.setAttribute("aria-live", "polite");
@@ -94,7 +96,7 @@
     ind.style.width = b.offsetWidth + "px"; ind.style.height = b.offsetHeight + "px";
     ind.style.transform = "translate(" + b.offsetLeft + "px," + (b.offsetTop - 4) + "px)";
     if (still) { void ind.offsetWidth; ind.style.transition = ""; }
-    say.textContent = SAY[n] || "";
+    say.innerHTML = (n === "Standard" ? '<span class="lp-level-rec">Recommended</span>' : "") + (SAY[n] || "");
   }
   wrap.addEventListener("click", function (e) { var b = e.target.closest("button[data-level]"); if (b) pick(b.dataset.level); });
   wrap.addEventListener("keydown", function (e) {

@@ -648,3 +648,14 @@ body.dark .lp-levels .lp-level-ind { background: #2a2825; }
 .lp-foot .lp-wrap.lp-foot-v2 { display: block; }
 .lp-foot-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-top: 20px; border-top: 1px solid var(--lp-hair); }
 .lp-foot-line .lp-ver { margin-left: auto; }
+
+/* 0.98.1 the effort levels, tightened (design-skills01): six equal segments with labels only (Apple's segmented
+   control), a small red dot marks the recommended one, the line underneath says what the chosen level does */
+.lp-levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); width: min(560px, 100%); }
+.lp-levels button { min-height: 44px; padding: 0 6px; font-size: clamp(14px, 1.3vw, 17px); }
+.lp-levels .lp-level-ind { height: 44px; }
+.lp-level-dot { position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-radius: 3px; background: #dc143c; }
+.lp-level-say { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 18px; font-size: clamp(18px, 1.8vw, 24px); }
+.lp-level-say .lp-level-rec { display: inline-flex; align-items: center; height: 24px; margin: 0; padding: 0 8px; border-radius: 6px; background: #dc143c; color: #fff; font-size: 11px; letter-spacing: 0.08em; }
+@media (max-width: 600px) { .lp-levels { grid-template-columns: repeat(3, minmax(0, 1fr)); } .lp-level-dot { top: 7px; right: 7px; } }
+.lp-level-dot, .lp-levels .lp-level-dot { top: auto; bottom: 5px; right: auto; left: 50%; width: 5px; height: 5px; transform: translateX(-50%); }

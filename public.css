@@ -221,3 +221,12 @@ body.dark .pub-opts { --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n
 .pub-more:hover { background: rgba(127, 120, 110, 0.24); }
 .pub-more svg { color: var(--lp-on1); }
 .pub-hero .pub-plus, .pub-end .pub-plus { display: flex; }
+
+/* 0.98.1 Auto clip leads the first screen: a dashed card (not open yet), the red tag, one line on what it does */
+.pub-auto { display: flex; align-items: flex-start; gap: 16px; max-width: 540px; margin: 26px 0 4px; padding: 18px 20px 18px 18px; border: 1.5px dashed var(--lp-on2); border-radius: 18px; }
+.pub-auto-ic { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border-radius: 14px; border: 1.5px dashed var(--lp-on2); color: var(--lp-on1); }
+.pub-auto-tx { display: grid; gap: 6px; min-width: 0; }
+.pub-auto-name { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--lp-on); }
+.pub-auto-say { margin: 0; font-size: 16px; line-height: 1.45; color: var(--lp-on1); }
+.pub-hero .pub-plus { margin-top: 28px; }
+@media (max-width: 600px) { .pub-auto { padding: 14px 14px 14px 12px; gap: 12px; } .pub-auto-ic { width: 44px; height: 44px; border-radius: 12px; } .pub-auto-name { font-size: 19px; } .pub-auto-say { font-size: 15px; } }
