@@ -7,7 +7,8 @@
 (function () {
   "use strict";
   var SEL = 'button, a[href], [role="button"], [role="tab"], label[for], summary, .tool, .fchip';
-  var SKIP = ".pub-plus";          // the big + has its own press, admin's favourite: left as it is
+  // the big + has its own press (admin's favourite); list rows only tint, a shrinking row inside a list reads as a loose grey box
+  var SKIP = ".pub-plus, .eth-menu-row, .eth-menu-row *, .flow-hist-list button";
   var MIN = 110, cur = null, t0 = 0, downAnim = null;
   var reduce = matchMedia("(prefers-reduced-motion: reduce)");
   var IN = "cubic-bezier(0.32, 0.72, 0, 1)";
@@ -58,5 +59,28 @@
     }
     if (reduce.matches) wait = 0;
     setTimeout(fn, wait);
+  };
+
+  /* 0.97.0 (audit 7): every move to another screen is one shape growing out of what was tapped
+     (prompt-motion twoclipping-221cab): the tapped thing becomes the next screen. A paused tab
+     still gets there: the move runs on a timer too, and the cover never stays up. */
+  window.ethMorph = function (el, color, go) {
+    var done = false, run = function () { if (!done) { done = true; go(); } };
+    if (!el || reduce.matches || !document.body.animate) { run(); return; }
+    var r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    var g = document.createElement("div");
+    g.setAttribute("aria-hidden", "true");
+    g.style.cssText = "position:fixed;inset:0;z-index:200;pointer-events:none;background:" + color;
+    document.body.appendChild(g);
+    var a = g.animate([{ clipPath: "inset(" + r.top + "px " + (W - r.right) + "px " + (H - r.bottom) + "px " + r.left + "px round 14px)" }, { clipPath: "inset(0px 0px 0px 0px round 0px)" }], { duration: 380, easing: IN });
+    var finish = function () { run(); requestAnimationFrame(function () { requestAnimationFrame(function () { if (!g.isConnected) return; var b = g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160 }); b.onfinish = function () { g.remove(); }; setTimeout(function () { g.remove(); }, 400); }); }); };
+    a.onfinish = finish;
+    setTimeout(function () { if (!done) finish(); }, 700);
+  };
+  window.ethScreenColor = function (kind) {
+    var dark = document.body.classList.contains("dark");
+    if (kind === "new") return dark ? "#0e0d0c" : "#ffffff";
+    var v = getComputedStyle(document.body).getPropertyValue("--bg0").trim();
+    return v || (dark ? "#141311" : "#f0ede6");
   };
 })();

@@ -57,6 +57,8 @@
     send: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
     check: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>',
     film: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16"/></svg>',
+    next: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>',
+    tpl: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="10" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="6" rx="1.5"/><rect x="3" y="15.5" width="7.5" height="5.5" rx="1.5"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="1.5"/></svg>',
     bolt: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>'
   };
   const SPIN = '<span class="ldr-line-spinner" aria-hidden="true">' + "<i></i>".repeat(12) + "</span>";
@@ -97,9 +99,11 @@
           <div class="flow-start-copy">
             <p class="flow-eyebrow">New project</p>
             <h1 class="flow-title" id="flowStartTitle">What are we making?</h1>
-            <div class="flow-actions">
-              <button class="flow-btn" type="button" id="flowNew">New edit</button>
-              <button class="flow-btn flow-btn-ghost" type="button" id="flowManual">Manual edit</button>
+            <!-- 0.97.0: the same New project chooser as the public site (design-skills01); here every mode is live -->
+            <div class="flow-actions pub-opts">
+              <button class="pub-opt pub-opt-auto pub-live" type="button" id="flowNewAuto"><span class="pub-opt-ic">${I.auto}</span><span class="pub-opt-tx"><b>Auto clip</b><span>Drop in your footage. Ethlenos edits it for you.</span></span>${I.next}</button>
+              <button class="pub-opt pub-opt-tpl pub-live" type="button" id="flowNew"><span class="pub-opt-ic">${I.tpl}</span><span class="pub-opt-tx"><b>Templates</b><span>Pick a style, add your footage</span></span>${I.next}</button>
+              <button class="pub-opt pub-opt-main" type="button" id="flowManual"><span class="pub-opt-ic">${I.timeline}</span><span class="pub-opt-tx"><b>Manual edit</b><span>Edit by hand on a timeline</span></span>${I.next}</button>
             </div>
             <p class="flow-small-print"><button class="flow-textlink hidden" type="button" id="flowResume">Continue your last project</button></p>
             <div class="flow-recent" id="flowRecent"></div>
@@ -170,6 +174,7 @@
 
   function wire() {
     $("flowNew").addEventListener("click", () => show("library"));
+    $("flowNewAuto").addEventListener("click", () => openAgent(null));
     document.querySelectorAll("#flowRoot [data-home]").forEach((b) => b.addEventListener("click", () => { closeHistory(); leave(); window.vcFlow.home(); }));
     document.querySelectorAll("#flowRoot [data-history]").forEach((b) => b.addEventListener("click", openHistory));
     $("flowHist").querySelector("[data-histclose]").addEventListener("click", closeHistory);

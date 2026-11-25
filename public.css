@@ -1,0 +1,198 @@
+/* Ethlenos public site (pre-launch): the + button, the coming-soon tag, the New project chooser.
+   Crimson is the one accent; no glow, no pill shapes. Anything that uses AI is never shown. */
+
+/* nothing AI is hidden (admin 2026-11-25): it shows, tagged Coming soon, and cannot run. Only the AI mode screen and the owner tools stay unreachable. */
+.eth-public #screen-modes, .eth-public #screen-admin { display: none !important; }
+
+/* ── the + button: a red square that answers the pointer ── */
+.pub-plus {
+  display: inline-flex; align-items: center; gap: 18px; margin-top: 36px; padding: 0 22px 0 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pub-plus-sq {
+  display: grid; place-items: center; width: 88px; height: 88px; flex: none;
+  border-radius: 24px; background: #dc143c; color: #fff;
+  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1), background 160ms ease, border-radius 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pub-plus-sq svg { transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1); }
+.pub-plus:hover .pub-plus-sq { transform: scale(1.05); background: #c4112f; border-radius: 28px; }
+.pub-plus:hover .pub-plus-sq svg { transform: rotate(90deg); }
+.pub-plus:active .pub-plus-sq { transform: scale(0.94); }
+.pub-plus:focus-visible { outline: 2px solid currentColor; outline-offset: 6px; border-radius: 28px; }
+.pub-plus-tx { display: grid; gap: 4px; }
+.pub-plus-tx b { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.pub-plus-tx span { font-size: 15px; color: var(--lp-on1); }
+.pub-plus:hover .pub-plus-tx b { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+
+.pub-tag {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 6px;
+  background: rgba(127, 120, 110, 0.18); color: inherit;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+}
+.pub-soon { display: flex; align-items: center; gap: 10px; margin: 28px 0 0; font-size: 14px; color: var(--lp-on1); }
+
+.pub-end { text-align: left; }
+.pub-end-sub { margin: 18px 0 0; font-size: 18px; color: var(--lp-on1); }
+.pub-end .pub-plus { margin-top: 32px; }
+
+/* ── New project: Manual edit first and loudest, the rest waits ── */
+.pub-new {
+  --n-bg: #ffffff; --n-card: #f2f1ee; --n-ink: #111210; --n-sub: #77746b; --n-hair: #e2dfd8;
+  position: fixed; inset: 0; z-index: 80; overflow: auto;
+  background: var(--n-bg); color: var(--n-ink);
+  font-family: "Switzer", -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+body.dark .pub-new { --n-bg: #0e0d0c; --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n-hair: #2b2925; }
+.pub-new-on, .pub-new-on body { overflow: hidden; }
+.pub-new-head {
+  display: flex; align-items: center; gap: 6px; height: 60px;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--n-hair);
+}
+.pub-icon { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; color: inherit; cursor: pointer; }
+.pub-icon:hover { background: var(--n-card); }
+.pub-icon:active { transform: scale(0.94); }
+.pub-new-brand { display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.pub-new-brand .brand-mark { width: 22px; height: 22px; }
+.pub-new-body { width: min(560px, 100% - 32px); margin: 0 auto; padding: 56px 0 48px; display: grid; gap: 12px; }
+.pub-new-title { margin: 0 0 20px; font-size: clamp(34px, 6vw, 48px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.05; }
+.pub-opt {
+  display: flex; align-items: center; gap: 16px; width: 100%; min-height: 76px; padding: 14px 16px 14px 18px;
+  border: 0; border-radius: 16px; background: var(--n-card); color: inherit; font: inherit; text-align: left;
+}
+.pub-opt-ic { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 12px; background: rgba(127, 120, 110, 0.14); }
+.pub-opt-tx { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.pub-opt-tx b { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.pub-opt-tx span { font-size: 14px; }
+.pub-opt-main {
+  min-height: 112px; background: #dc143c; color: #fff; cursor: pointer;
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), background 160ms ease;
+}
+.pub-opt-main .pub-opt-ic { width: 52px; height: 52px; background: rgba(255, 255, 255, 0.16); }
+.pub-opt-main .pub-opt-tx b { font-size: 22px; }
+.pub-opt-main .pub-opt-tx span { color: rgba(255, 255, 255, 0.82); }
+.pub-opt-main > svg { flex: none; transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1); }
+.pub-opt-main:hover { background: #c4112f; transform: translateY(-2px); }
+.pub-opt-main:hover > svg { transform: translateX(3px); }
+.pub-opt-main:active { transform: scale(0.98); }
+.pub-opt-main:focus-visible { outline: 2px solid var(--n-ink); outline-offset: 3px; }
+.pub-tag-free { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.pub-opt.is-soon { color: var(--n-sub); cursor: default; }
+.pub-opt.is-soon .pub-opt-ic { opacity: 0.7; }
+.pub-morph { position: fixed; z-index: 81; background: #dc143c; pointer-events: none; }
+
+@media (max-width: 600px) {
+  .pub-plus-sq { width: 76px; height: 76px; border-radius: 22px; }
+  .pub-plus-tx b { font-size: 20px; }
+  .pub-new-body { padding-top: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pub-plus-sq, .pub-plus-sq svg, .pub-opt-main, .pub-opt-main > svg { transition: none; }
+}
+
+/* the hero fills the first screen alone */
+.pub-hero { min-height: calc(100svh - 60px); }
+
+/* headings by level: the closing h2 sits below the h1 */
+.pub-end .lp-end-title { font-size: clamp(32px, 4.4vw, 60px); }
+.pub-soon .pub-tag { margin-left: 0; }
+
+/* 0.95.5 (admin): the automatic editor leads, unmistakably not open yet; manual waits at the bottom */
+.pub-eyebrow { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.pub-tag-soon { background: #dc143c; color: #fff; }
+.pub-opt-auto { position: relative; display: grid; grid-template-columns: auto 1fr; align-content: end; gap: 16px; min-height: 200px; padding: 22px; border-radius: 20px; background: #161513; color: #f2efe8; }
+body.dark .pub-opt-auto { background: #232120; }
+.pub-opt-auto .pub-tag-soon { position: absolute; top: 18px; right: 18px; }
+.pub-opt-auto .pub-opt-ic { width: 56px; height: 56px; border-radius: 16px; background: rgba(255, 255, 255, 0.1); opacity: 1; }
+.pub-opt-auto .pub-opt-tx b { font-size: 28px; letter-spacing: -0.025em; }
+.pub-opt-auto .pub-opt-tx span { font-size: 15px; color: rgba(242, 239, 232, 0.66); }
+.pub-opt.is-soon.pub-opt-auto { color: #f2efe8; }
+.pub-opt-tpl { min-height: 92px; }
+.pub-opt-tpl .pub-opt-tx span { color: var(--n-sub); }
+.pub-now { margin: 18px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--n-sub); }
+.pub-new .pub-opt-main { min-height: 84px; }
+.pub-new .pub-opt-main .pub-opt-tx b { font-size: 19px; }
+@media (max-width: 600px) { .pub-opt-auto { min-height: 172px; } .pub-opt-auto .pub-opt-tx b { font-size: 24px; } }
+.pub-new .pub-opt-main { background: var(--n-card); color: var(--n-ink); box-shadow: inset 0 0 0 1px var(--n-hair); }
+.pub-new .pub-opt-main:hover { background: var(--n-card); box-shadow: inset 0 0 0 1px var(--n-sub); }
+.pub-new .pub-opt-main .pub-opt-ic { background: #dc143c; color: #fff; }
+.pub-new .pub-opt-main .pub-opt-tx span { color: var(--n-sub); }
+.pub-new .pub-opt-main .pub-tag-free { background: rgba(220, 20, 60, 0.12); color: #dc143c; }
+.pub-new .pub-opt-main > svg { color: var(--n-sub); }
+.eth-menu .eth-menu-row.eth-menu-feat.is-pressed, .pub-new .pub-opt-main.is-pressed { filter: brightness(0.92); }
+
+
+/* Coming soon controls: visible, quieter, a small red tag; a tap only says Coming soon */
+.eth-public .is-soon { opacity: 0.62; cursor: default; }
+.eth-public .ab-tool.is-soon { position: relative; opacity: 1; }
+.eth-public .ab-tool.is-soon svg, .eth-public .ab-tool.is-soon .ab-label { opacity: 0.55; }
+.soon-tag { position: absolute; top: 4px; right: 4px; padding: 1px 5px; border-radius: 5px; background: #dc143c; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.5; }
+.eth-public #semiGenerate.is-soon { opacity: 1; background: #dc143c; color: #fff; }
+.eth-public #semiPrompt.is-soon { opacity: 1; }
+.pub-modes-tag { margin-left: 14px; vertical-align: middle; }
+.eth-public #semiGenerate.is-soon { font-size: 0; }
+.eth-public #semiGenerate.is-soon::after { content: "Coming soon"; font-size: 13px; }
+.eth-public .ab-tool.is-soon .soon-tag { position: absolute !important; top: -3px; right: -2px; margin: 0; font-size: 8px; padding: 0 4px; }
+
+/* ══ 0.97.0 (admin): Auto clip stands out without looking pressable. No solid slab and no empty black
+   space: a compact card with a dashed outline that reads "not here yet", the red tag in its corner.
+   On the dev site, where Auto clip works, it is the solid live card (.pub-live). ══ */
+.pub-opt-auto { min-height: 0; align-content: center; padding: 20px 132px 20px 18px; background: transparent; color: var(--n-ink); border: 1.5px dashed var(--n-sub); box-shadow: none; }
+body.dark .pub-opt-auto { background: transparent; }
+.pub-opt.is-soon.pub-opt-auto { color: var(--n-ink); }
+.pub-opt-auto .pub-opt-ic { width: 52px; height: 52px; background: transparent; border: 1.5px dashed var(--n-sub); color: var(--n-sub); }
+.pub-opt-auto .pub-opt-tx b { font-size: 24px; }
+.pub-opt-auto .pub-opt-tx span { color: var(--n-sub); }
+.pub-opt-auto .pub-tag-soon { top: 50%; right: 18px; transform: translateY(-50%); }
+@media (max-width: 600px) { .pub-opt-auto { min-height: 0; padding: 48px 16px 18px; } .pub-opt-auto .pub-tag-soon { top: 14px; right: 14px; transform: none; } .pub-opt-auto .pub-opt-tx b { font-size: 22px; } }
+.pub-opt-auto.pub-live { border: 0; padding-right: 18px; background: #161513; color: #f2efe8; cursor: pointer; transition: transform 220ms var(--e-spring, ease), background 160ms ease; }
+.pub-opt-auto.pub-live .pub-opt-ic { border: 0; background: rgba(255, 255, 255, 0.1); color: #f2efe8; }
+.pub-opt-auto.pub-live .pub-opt-tx span { color: rgba(242, 239, 232, 0.66); }
+.pub-opt-auto.pub-live:hover { background: #26241f; transform: translateY(-2px); }
+.pub-opt.pub-live { cursor: pointer; }
+.pub-opt-tpl.pub-live { color: var(--n-ink); }
+.pub-opt-tpl.pub-live:hover { box-shadow: inset 0 0 0 1px var(--n-sub); }
+/* Coming soon text: solid secondary colours, never faded (contrast) */
+.eth-public .is-soon { opacity: 1; color: var(--t2); }
+.eth-public .ab-tool.is-soon svg, .eth-public .ab-tool.is-soon .ab-label { opacity: 1; color: var(--t2); }
+
+/* the chooser inside the dev flow (next/flow.js): the same cards, the page's own colours */
+.pub-opts { --n-card: #f2f1ee; --n-ink: #111210; --n-sub: #77746b; --n-hair: #e2dfd8; display: grid; gap: 10px; width: 100%; max-width: 560px; }
+body.dark .pub-opts { --n-card: #1c1b19; --n-ink: #f2efe8; --n-sub: #9a958b; --n-hair: #2b2925; }
+.pub-opts .pub-opt-main { background: var(--n-card); color: var(--n-ink); box-shadow: inset 0 0 0 1px var(--n-hair); min-height: 84px; cursor: pointer; }
+.pub-opts .pub-opt-main:hover { background: var(--n-card); box-shadow: inset 0 0 0 1px var(--n-sub); }
+.pub-opts .pub-opt-main .pub-opt-ic { background: #dc143c; color: #fff; }
+.pub-opts .pub-opt-main .pub-opt-tx span, .pub-opts .pub-opt-tpl .pub-opt-tx span { color: var(--n-sub); }
+.pub-opts .pub-opt > svg:last-child { flex: none; color: var(--n-sub); margin-left: auto; }
+.pub-opts .pub-opt-auto.pub-live > svg:last-child { color: rgba(242, 239, 232, 0.7); }
+
+/* the Auto tile's sheet: every automatic tool that is coming, one line each */
+.soon-sheet { position: fixed; inset: 0; z-index: 95; display: grid; place-items: end center; background: rgba(0, 0, 0, 0.32); }
+.soon-sheet[hidden] { display: none; }
+.soon-panel { width: min(520px, 100%); max-height: 80dvh; overflow: auto; padding: 8px 16px calc(20px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; background: var(--bg0); color: var(--text); }
+@media (min-width: 761px) { .soon-sheet { place-items: center; } .soon-panel { border-radius: 20px; padding-bottom: 20px; } }
+.soon-head { display: flex; align-items: center; justify-content: space-between; min-height: 56px; }
+.soon-head > div { display: flex; align-items: center; gap: 10px; }
+.soon-head b { font-size: 18px; font-weight: 600; }
+.soon-list { list-style: none; margin: 0; padding: 0; border-radius: 14px; background: var(--bg1); overflow: hidden; }
+.soon-list li { display: grid; gap: 2px; padding: 12px 16px; min-height: 52px; }
+.soon-list li + li { border-top: 1px solid var(--line); }
+.soon-list b { font-size: 15px; font-weight: 600; }
+.soon-list span { font-size: 13px; color: var(--t2); }
+.eth-public .ab-tool.is-soon svg { color: #dc143c; }
+
+/* 2: on a phone the main action waits at the bottom, in thumb reach, once the page's own + has scrolled away */
+.pub-dock { position: fixed; z-index: 70; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: none; }
+@media (max-width: 600px) { .pub-dock { display: block; } }
+.pub-dock[hidden] { display: none !important; }
+.pub-dock .pub-plus { display: flex; width: 100%; margin: 0; padding: 8px 18px 8px 8px; gap: 14px; border-radius: 20px; background: #dc143c; color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); }
+.pub-dock .pub-plus-sq { width: 48px; height: 48px; border-radius: 14px; background: rgba(255, 255, 255, 0.18); }
+.pub-dock .pub-plus-sq svg { width: 26px; height: 26px; }
+.pub-dock .pub-plus-tx b { font-size: 17px; }
+.pub-dock .pub-plus-tx span { color: rgba(255, 255, 255, 0.82); font-size: 13px; }
+.pub-dock .pub-plus:hover .pub-plus-sq { background: rgba(255, 255, 255, 0.26); }
+.eth-public #semiGenerate.is-soon { flex: none; white-space: nowrap; padding: 0 12px; }
+@media (max-width: 600px) { .eth-public .lp-show-say { bottom: calc(9% + 84px); } }
+.pub-opt.pub-opt-auto.pub-live { display: flex; align-items: center; min-height: 96px; padding: 18px; }
+.pub-opt.pub-opt-auto.pub-live .pub-opt-tx { flex: 1; }

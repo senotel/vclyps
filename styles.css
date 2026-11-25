@@ -3615,3 +3615,58 @@ body.previewFs .transport .play-btn { background: rgba(255, 255, 255, 0.16); col
 .anim-tile.selected { border-color: #dc143c; color: #dc143c; box-shadow: inset 0 0 0 1px #dc143c; }
 @media (max-width: 600px) { #screen-editor .transport .icon-btn:not(.play-btn) { width: 36px; height: 40px; } #screen-editor .transport .play-btn { width: 44px; height: 44px; } }
 @media (max-width: 360px) { #screen-editor .transport .icon-btn:not(.play-btn) { width: 31px; } #screen-editor .transport .play-btn { width: 42px; height: 42px; } }
+
+/* 0.97.0: the + after the clips steps aside while a clip is selected, so the trim handle never covers it */
+.clip-add { transition: margin-left 220ms var(--e-spring), background-color 160ms ease; }
+.clip.sel ~ .clip-add { margin-left: 26px; }
+
+/* 0.97.0 (audit 3): on a computer the properties column opens only when something is selected; the picture takes the room otherwise */
+@media (min-width: 1200px) {
+  body[data-screen="editor"]:not(.panel-open) #screen-editor { --props-w: 0px; }
+  body[data-screen="editor"]:not(.panel-open) #screen-editor::after { display: none; }
+  body[data-screen="editor"] #screen-editor { transition: grid-template-columns 360ms var(--e-spring); }
+}
+
+/* 0.97.0 (audit 11): + Add text / + Add audio rows are 44px to tap on touch screens */
+@media (pointer: coarse) { .track-uaudio.offer, .track-text.offer { height: 44px; } }
+
+/* ══ 0.97.0 Settings, redesigned with design-skills01 (admin 2026-11-25): iOS Settings' grouped
+   inset cards, the label on the left and its control on the right, a real switch (soft square,
+   the knob springs across), a segmented control for the theme, notes under each card. ══ */
+#screen-settings .page-wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
+#screen-settings .page-title { margin: 8px 4px 20px; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; }
+#screen-settings .set-group { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 10px; margin: 0 0 22px; padding: 14px 16px; border: 0; border-radius: 16px; background: var(--bg1); }
+#screen-settings .set-group > label { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; }
+#screen-settings .set-group > label .set-note { display: block; margin-top: 4px; font-size: 13px; font-weight: 400; line-height: 1.4; color: var(--t2); }
+#screen-settings .set-group > :not(label):not(.ins-seg) { grid-column: 1 / -1; }
+#screen-settings .set-group > .set-sub { grid-column: 1; padding-top: 12px; border-top: 1px solid var(--line); font-size: 15px; font-weight: 500; }
+#screen-settings .set-group > .set-sub + .ins-seg { margin-top: 12px; }
+#screen-settings .set-note:empty { display: none; }
+#screen-settings .set-group > .set-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--t2); }
+#screen-settings .secondary-btn, #screen-settings .ghost-btn { justify-self: start; min-height: 44px; padding: 0 16px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+#screen-settings .danger-btn { border: 0; background: rgba(220, 20, 60, 0.1); color: #dc143c; }
+#screen-settings .danger-btn:hover { background: rgba(220, 20, 60, 0.16); }
+#screen-settings .set-row { margin: 0; }
+/* the theme: a segmented control */
+#screen-settings .ins-seg:not(.seg-switch) { display: inline-flex; gap: 2px; padding: 3px; border: 0; border-radius: 12px; background: var(--bg3); }
+#screen-settings .ins-seg:not(.seg-switch) button { min-width: 72px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: none; color: var(--t1); font-size: 14px; font-weight: 600; transition: background-color 200ms ease, color 200ms ease, box-shadow 200ms ease; }
+#screen-settings .ins-seg:not(.seg-switch) button.active { background: var(--bg0); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16); }
+/* On/Off: a switch. Both halves cover the whole switch; the one that is not chosen sits on top, so a tap anywhere flips it */
+#screen-settings .seg-switch { position: relative; display: block; width: 54px; height: 32px; padding: 0; border: 0; border-radius: 10px; background: var(--bg3); transition: background-color 220ms ease; }
+#screen-settings .seg-switch:has(> button:last-child.active) { background: #dc143c; }
+#screen-settings .seg-switch > button { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 10px; background: transparent; color: transparent; font-size: 0; cursor: pointer; }
+#screen-settings .seg-switch > button.active { pointer-events: none; z-index: 0; }
+#screen-settings .seg-switch > button:not(.active) { z-index: 1; }
+#screen-settings .seg-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); pointer-events: none; z-index: 2; transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1.25); }
+#screen-settings .seg-switch:has(> button:last-child.active)::after { transform: translateX(22px); }
+#screen-settings .seg-switch > button:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+/* About */
+#screen-settings .about-group { grid-template-columns: 1fr; }
+#screen-settings .about-group > label { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t2); }
+#screen-settings .about-app { display: flex; align-items: center; gap: 14px; }
+#screen-settings .about-app svg.about-logo { width: 52px; height: 52px; padding: 10px; border-radius: 14px; background: var(--bg0); }
+#screen-settings .about-lines strong { font-size: 17px; }
+#screen-settings .about-version { margin: 0; font-size: 13px; color: var(--t2); font-variant-numeric: tabular-nums; }
+#screen-settings .about-legal { display: flex; gap: 8px; margin: 0; }
+#screen-settings .about-legal a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 10px; background: var(--bg0); color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none; }
+#screen-settings .about-legal a:hover { background: var(--bg2); }

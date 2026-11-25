@@ -71,7 +71,14 @@
     var gs = groups();
     panel.querySelectorAll(".eth-menu-group").forEach(function (ul, gi) {
       ul.querySelectorAll("button[data-i]").forEach(function (b) {
-        b.addEventListener("click", function () { var fn = gs[gi][+b.dataset.i][1]; var run = function () { close(true); setTimeout(fn, 0); }; if (window.ethPress) window.ethPress(b, run); else run(); });
+        b.addEventListener("click", function () {
+          var row = gs[gi][+b.dataset.i], fn = row[1], label = row[0];
+          var run = function () { close(true); setTimeout(fn, 0); };
+          // a row that opens another screen grows into it (audit 7); scrolling rows just go
+          var screen = /^(New project|Editor|Library|Settings|Account|Sign in|Plans)$/.test(label);
+          var go = screen && window.ethMorph ? function () { window.ethMorph(b, window.ethScreenColor(label === "New project" ? "new" : "app"), run); } : run;
+          if (window.ethPress) window.ethPress(b, go); else go();
+        });
       });
     });
     var c = panel.querySelector("[data-close]"); if (c) c.addEventListener("click", function () { close(); });
@@ -122,4 +129,13 @@
   // phones resize while the address bar slides; only a real width change closes it
   var lastW = window.innerWidth;
   window.addEventListener("resize", function () { if (window.innerWidth !== lastW) { lastW = window.innerWidth; if (open) close(true); } else if (open) place(); });
+
+  // the footer's grouped links (audit 12) use the same actions as the menu
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("[data-go]"); if (!a) return;
+    e.preventDefault();
+    var acts = { home: home, show: show, "new": newProject, editor: editor, library: click("libraryBtn"), settings: click("settingsBtn") };
+    var fn = acts[a.dataset.go]; if (!fn) return;
+    if (/^(new|editor|library|settings)$/.test(a.dataset.go) && window.ethMorph) window.ethMorph(a, window.ethScreenColor(a.dataset.go === "new" ? "new" : "app"), fn); else fn();
+  });
 })();

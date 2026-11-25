@@ -243,7 +243,7 @@ body.dark .th-moon { display: block; }
 
 /* ── 2 · the show ── */
 /* the show is the product itself, so it stays on its dark stage in both themes */
-.lp-show { position: relative; height: 760vh; background: #0e0d0c; color: #fff; }
+.lp-show { position: relative; height: 440vh; background: #0e0d0c; color: #fff; }
 .lp-show-pin {
   position: sticky; top: 60px;
   height: calc(100vh - 60px); height: calc(100dvh - 60px);
@@ -420,7 +420,7 @@ body.dark .th-moon { display: block; }
   .lp-stack { display: grid; margin-top: 32px; }
   .lp-stack .lp-btn { width: 100%; }
   .lp-wall { height: 380px; --wall-gap: 8px; }
-  .lp-show { height: 700vh; }
+  .lp-show { height: 420vh; }
   .lp-show-stage { height: 70%; }
   .lp-show-say { bottom: 12%; }
   .lp-big { padding-top: 104px; gap: 104px; }
@@ -443,7 +443,7 @@ body.dark .th-moon { display: block; }
    the scroll room there and the same swipe moves half as much of the story.
    Everything inside is a fraction of the section, so only the pace changes. */
 @media (pointer: coarse) {
-  .lp-show:not(.is-still) { height: 1400vh; }
+  .lp-show:not(.is-still) { height: 560vh; }
 }
 
 /* ── New project (the mode choice), the same system ──
@@ -611,3 +611,40 @@ body.dark .eth-menu { --m-bg: #1c1b19; --m-group: #262421; --m-ink: #f2efe8; --m
 
 /* 0.95.4 the version, quiet, at the end of the footer line */
 .lp-ver { margin-left: auto; color: var(--lp-on2); font-variant-numeric: tabular-nums; }
+
+/* 0.97.0 (audit 5): the show is about 4 screens (was 7, 14 on phones), with a thin progress line */
+.lp-show-pin::before { content: ""; position: absolute; z-index: 3; left: 0; top: 0; height: 3px; width: calc(var(--show-p, 0) * 100%); background: #dc143c; }
+.lp-show.is-still .lp-show-pin::before { display: none; }
+
+/* ══ 0.97.0 audit (design-skills01) ══ */
+/* 8: the heading rises out of its own line once on load (masked, under a second; starts half shown, so a paused tab still reads it) */
+@keyframes lp-rise { from { transform: translateY(28%); clip-path: inset(0 0 48% 0); } to { transform: none; clip-path: inset(-10% -5% -20% -5%); } }
+.lp-hero .lp-title { animation: lp-rise 760ms cubic-bezier(0.2, 0, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) { .lp-hero .lp-title { animation: none; } }
+/* 9: wall captions straight, the quiet ones on a soft dark plate */
+.cap-marker .lp-short-cap { transform: none; }
+.cap-quiet .lp-short-cap { padding: 0.35em 0.5em; border-radius: 0.5em; background: rgba(10, 10, 10, 0.42); }
+.lp-short-cap { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+/* 6: the effort levels as a control you can tap (landing.js) */
+.lp-levels { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 16px; background: rgba(127, 120, 110, 0.16); position: relative; }
+.lp-levels button { position: relative; z-index: 1; min-height: 48px; padding: 0 18px; border: 0; border-radius: 12px; background: none; color: var(--lp-on2); font: inherit; font-size: clamp(16px, 1.6vw, 20px); font-weight: 600; cursor: pointer; transition: color 200ms ease; }
+.lp-levels button[aria-checked="true"] { color: var(--lp-on); }
+.lp-levels .lp-level-ind { position: absolute; z-index: 0; top: 4px; left: 0; height: 48px; border-radius: 12px; background: var(--lp-night); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1), width 420ms cubic-bezier(0.32, 0.72, 0, 1); }
+body.dark .lp-levels .lp-level-ind { background: #2a2825; }
+.lp-level-rec { margin-left: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #dc143c; }
+.lp-level-say { margin: 22px 0 0; min-height: 1.4em; font-size: clamp(20px, 2.2vw, 28px); font-weight: 500; letter-spacing: -0.02em; color: var(--lp-on); }
+.lp-modes-list.is-control { display: none; }
+@media (max-width: 600px) { .lp-levels { display: grid; grid-template-columns: repeat(3, 1fr); } .lp-levels button { padding: 0 8px; font-size: 15px; } .lp-level-rec { display: block; margin: 0; font-size: 9px; } }
+/* 13: a skip link for keyboard users */
+.lp-skip { position: absolute; left: 12px; top: -60px; z-index: 50; padding: 10px 14px; border-radius: 10px; background: #dc143c; color: #fff; font-weight: 600; text-decoration: none; }
+.lp-skip:focus { top: 10px; }
+/* 12: the footer in groups */
+.lp-foot-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 160px)); gap: 24px 40px; margin-bottom: 28px; }
+.lp-foot-groups h3 { margin: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lp-on2); }
+.lp-foot-groups ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lp-foot-groups a { display: inline-flex; align-items: center; min-height: 36px; color: var(--lp-on1); text-decoration: none; font-size: 15px; }
+.lp-foot-groups a:hover { color: var(--lp-on); text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 600px) { .lp-foot-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lp-foot-groups a { min-height: 44px; } }
+.lp-foot .lp-wrap.lp-foot-v2 { display: block; }
+.lp-foot-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-top: 20px; border-top: 1px solid var(--lp-hair); }
+.lp-foot-line .lp-ver { margin-left: auto; }

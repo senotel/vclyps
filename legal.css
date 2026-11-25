@@ -64,3 +64,9 @@ th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom
 th { color: var(--text); font-weight: 600; }
 .table-scroll { overflow-x: auto; }
 .foot { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--t2); font-size: 14px; }
+
+/* 0.97.0 (audit 10): the same brand as the site: the mark, the name, the version */
+.legal-brand { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; text-decoration: none; color: inherit; }
+.legal-mark { width: 22px; height: 22px; }
+.foot { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.legal-ver { margin-left: auto; opacity: 0.7; font-variant-numeric: tabular-nums; }

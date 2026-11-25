@@ -19,7 +19,7 @@
   if (PUBLIC) {
     const stop = (e) => { const c = e.target.closest && e.target.closest(SOON_CTRL); if (!c) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.type === "click") toast("Automatic editing is coming soon"); };
     ["click", "keydown", "focusin"].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === "keydown" && e.key !== "Enter" && e.key !== " ") return; if (ev === "focusin") { const c = e.target.closest && e.target.closest("#semiPrompt"); if (c) c.blur(); return; } stop(e); }, true));
-    const markSoon = () => { document.querySelectorAll(SOON_CTRL).forEach((c) => c.classList.add("is-soon")); const p = document.getElementById("semiPrompt"); if (p) { p.readOnly = true; p.placeholder = "Automatic editing is coming soon"; } };
+    const markSoon = () => { document.querySelectorAll(SOON_CTRL).forEach((c) => c.classList.add("is-soon")); const note = document.querySelector("#addSheet .add-note"); if (note) note.textContent = "Everything you add opens on this device."; const p = document.getElementById("semiPrompt"); if (p) { p.readOnly = true; p.placeholder = "Automatic editing is coming soon"; } };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", markSoon); else markSoon();
   }
 
@@ -746,8 +746,8 @@
     $("addDeviceSub").textContent = !phone ? (ADD_SUB[addCtx] || "Videos, photos and audio")
       : audioFirst ? "Songs, voiceovers and other sound files"
       : addCtx === "extract" ? "From your phone's gallery, for their sound" : "Your phone's gallery";
-    $("addFiles").firstElementChild.textContent = audioFirst ? "Videos" : "Files and other apps";
-    $("addFiles").lastElementChild.textContent = audioFirst ? "From your gallery, for their sound" : "Files, gallery apps, Drive";
+    $("addFiles").querySelector(".add-way-main").textContent = audioFirst ? "Videos" : "Files and other apps";
+    $("addFiles").querySelector(".add-way-sub").textContent = audioFirst ? "From your gallery, for their sound" : "Files, gallery apps, Drive";
     $("addWays").classList.toggle("hidden", !phone);
     $("addCamera").classList.toggle("hidden", !ways.camera);
     openSheet("addSheet");
@@ -5926,7 +5926,27 @@
   }
 
   // 0.96.1 (admin): on the public site the AI tools stay in view marked Coming soon; tapping one only says so
-  function currentTools() { const l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools(); return PUBLIC ? l.map((t) => (t && AI_TOOLS.has(t.id)) ? { id: t.id, label: t.label, icon: t.icon, soon: true, run: () => toast(t.label + " is coming soon") } : t) : l; }
+  function currentTools() {
+    const l = S.sel ? selectionTools() : toolGroup ? groupTools(toolGroup) : mainTools();
+    if (!PUBLIC) return l;
+    // 0.97.0 (admin, audit 4): every automatic tool in one Auto tile that lists them all, marked Coming soon
+    const soon = l.filter((t) => t && AI_TOOLS.has(t.id)), rest = l.filter((t) => !(t && AI_TOOLS.has(t.id)));
+    if (!soon.length) return rest;
+    const at = Math.min(rest.length, Math.max(0, l.indexOf(soon[0])));
+    rest.splice(at, 0, { id: "auto-soon", label: "Auto", soon: true, icon: SOON_ICON, run: () => openSoonSheet(soon.map((t) => t.id)) });
+    return rest;
+  }
+  const SOON_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.7 4.6 4.8 1.7-4.8 1.7L12 16.1l-1.7-4.6-4.8-1.7 4.8-1.7z"/><path d="M18.5 15l.8 2.1 2.2.8-2.2.8-.8 2.1-.8-2.1-2.2-.8 2.2-.8z"/></svg>';
+  const SOON_WHAT = { captions: ["Captions", "Captions from what is said"], lyrics: ["Auto lyrics", "Lyrics timed to the song"], tidy: ["Tidy", "Removes pauses and filler words"], post: ["Post", "A title, description and hashtags"], cutout: ["Remove background", "Cuts the person out of the scene"], retouch: ["Retouch", "Smooths skin and faces"], reframe: ["Auto reframe", "Keeps the subject in the frame"], denoise: ["Reduce noise", "Takes out background noise"], enhance: ["Enhance voice", "Makes voices clearer"], tts: ["Text to speech", "Reads your text aloud"] };
+  function openSoonSheet(ids) {
+    let el = document.getElementById("soonSheet");
+    if (!el) { el = document.createElement("div"); el.id = "soonSheet"; el.className = "soon-sheet"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Automatic tools"); document.body.appendChild(el); el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-soon-close]")) el.hidden = true; }); document.addEventListener("keydown", (e) => { if (e.key === "Escape") el.hidden = true; }); }
+    const rows = [["AI edit", "Edits the whole video for you"], ["Find clips", "Finds the best moments in a long video"]].concat(ids.map((id) => SOON_WHAT[id]).filter(Boolean));
+    el.innerHTML = '<div class="soon-panel"><div class="soon-head"><div><b>Automatic tools</b><span class="pub-tag pub-tag-soon">Coming soon</span></div><button type="button" class="icon-btn" data-soon-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><ul class="soon-list">' + rows.map((r) => '<li><b>' + escHtml(r[0]) + '</b><span>' + escHtml(r[1]) + '</span></li>').join("") + '</ul></div>';
+    el.hidden = false;
+    const panel = el.querySelector(".soon-panel");
+    if (panel.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) panel.animate([{ transform: "translateY(24px) scale(0.98)" }, { transform: "none" }], { duration: 360, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+  }
 
   function renderActionBar() {
     const bar = $("actionBar");

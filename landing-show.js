@@ -636,6 +636,7 @@
      before they land, the wall's slight float), so the loop can stop when
      nothing does. */
   function render(pAll, sayIndex) {
+    if (show) show.style.setProperty("--show-p", Math.max(0, Math.min(1, pAll)).toFixed(4));   // 0.97.0: the thin progress line
     var p = Math.min(1, pAll * STRETCH);
     var tail = ease(span(pAll, 0.70, 0.97));
     var t = clock / 1000, timed = false;

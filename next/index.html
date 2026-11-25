@@ -20,7 +20,11 @@
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Ethlenos. The story was always there." />
   <meta property="og:description" content="Ethlenos watches your footage, finds the story, and edits your video around it, not just the highlights. One upload. One story. One click." />
-  <meta name="twitter:card" content="summary" />
+  <meta property="og:image" content="https://senotel.github.io/vclyps/brand/share.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:image" content="https://senotel.github.io/vclyps/brand/share.png" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Ethlenos. The story was always there." />
   <meta name="twitter:description" content="Every story deserves to be seen. Ethlenos turns raw footage into a polished short, built around your story." />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -40,8 +44,9 @@
   <link rel="icon" type="image/svg+xml" href="brand/favicon.svg?v=0.91.2" />
   <link rel="manifest" href="manifest.webmanifest?v=0.91.2" />
   <link rel="apple-touch-icon" href="brand/icon-180.png?v=0.91.2" />
-  <link rel="stylesheet" href="styles.css?v=0.96.0" />
+  <link rel="stylesheet" href="styles.css?v=0.97.0" />
   <link rel="stylesheet" href="landing.css" />
+  <link rel="stylesheet" href="public.css?v=0.97.0" />
   <link rel="stylesheet" href="next/flow.css">
   <link rel="stylesheet" href="next/auth.css">
   <!-- FAQ structured data (0.79.0): the questions on this page, for search results and AI answers -->
@@ -88,9 +93,10 @@
        short, and becomes a wall of shorts. Few words everywhere else. -->
   <section class="screen active" id="screen-home">
     <div class="lp-root">
+      <a class="lp-skip" href="next/#lpHero">Skip to content</a>
 
       <header class="lp-nav">
-        <a class="lp-brand" href="next/#" aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">Ethlenos</span></a>
+        <a class="lp-brand" href="next/" aria-label="Ethlenos home"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="2" width="18" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-in" x="3" y="9.8" width="5" height="4.4" rx="1.4" fill="currentColor"/><rect class="bm-cut" x="9.5" y="9.8" width="7.5" height="4.4" rx="1.4" fill="#dc143c"/><rect x="3" y="17.6" width="18" height="4.4" rx="1.4" fill="currentColor"/></svg><span class="brand-word">Ethlenos</span></a>
         <nav class="lp-links" aria-label="Site">
           <a href="next/#lpShow">See it edit</a>
         </nav>
@@ -156,11 +162,13 @@
       </main>
 
       <footer class="lp-foot">
-        <div class="lp-wrap">
-          <span>Ethlenos by Senotel</span>
-          <a href="privacy.html">Privacy</a>
-          <a href="terms.html">Terms</a>
-          <span class="lp-ver" data-site-version></span>
+        <div class="lp-wrap lp-foot-v2">
+          <nav class="lp-foot-groups" aria-label="Footer">
+            <div><h3>Make</h3><ul><li><a href="next/#new" data-go="new">New project</a></li><li><a href="next/#editor" data-go="editor">Editor</a></li><li><a href="next/#library" data-go="library">Library</a></li></ul></div>
+            <div><h3>Ethlenos</h3><ul><li><a href="next/#lpShow" data-go="show">See it edit</a></li><li><a href="next/#lpHero" data-go="home">Home</a></li></ul></div>
+            <div><h3>Legal</h3><ul><li><a href="privacy.html">Privacy</a></li><li><a href="terms.html">Terms</a></li></ul></div>
+          </nav>
+          <div class="lp-foot-line"><span>Ethlenos by Senotel</span><span class="lp-ver" data-site-version></span></div>
         </div>
       </footer>
 
@@ -1153,8 +1161,8 @@
   <script defer src="clips.js"></script>
   <script defer src="sources.js"></script>
   <script defer src="addsheet.js"></script>
-  <script defer src="press.js?v=0.96.0"></script>
-  <script defer src="menu.js?v=0.96.0"></script>
+  <script defer src="press.js?v=0.97.0"></script>
+  <script defer src="menu.js?v=0.97.0"></script>
   <script defer src="audio-out.js"></script>
   <script defer src="notifications.js"></script>
   <script defer src="render-clock.js"></script>

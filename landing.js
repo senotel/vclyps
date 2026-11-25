@@ -67,3 +67,44 @@
     });
   });
 })();
+
+/* 0.97.0 (audit 6): the effort levels as a control you can tap. One soft square slides to the level
+   you pick (shape morph, spring) and one line says what that level does. */
+(function () {
+  "use strict";
+  var list = document.querySelector(".lp-modes-list");
+  if (!list) return;
+  var SAY = { Low: "Quick and simple.", Light: "Cleaner cuts.", Standard: "Best for most videos.", Thorough: "Tries two versions and keeps the better one.", Deep: "Extra checks on every cut.", Max: "Everything it has." };
+  var names = Array.prototype.map.call(list.children, function (li) { return (li.firstChild && li.firstChild.textContent || "").trim(); }).filter(Boolean);
+  var wrap = document.createElement("div");
+  wrap.className = "lp-levels"; wrap.setAttribute("role", "radiogroup"); wrap.setAttribute("aria-label", "How hard it works");
+  var ind = document.createElement("span"); ind.className = "lp-level-ind"; ind.setAttribute("aria-hidden", "true"); wrap.appendChild(ind);
+  names.forEach(function (n) {
+    var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio"); b.dataset.level = n;
+    b.innerHTML = n + (n === "Standard" ? '<span class="lp-level-rec">Recommended</span>' : "");
+    wrap.appendChild(b);
+  });
+  var say = document.createElement("p"); say.className = "lp-level-say"; say.setAttribute("aria-live", "polite");
+  list.classList.add("is-control");
+  list.parentNode.insertBefore(say, list.nextSibling); list.parentNode.insertBefore(wrap, say);
+  function pick(n, still) {
+    var b = wrap.querySelector('[data-level="' + n + '"]'); if (!b) return;
+    wrap.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-checked", String(x === b)); x.tabIndex = x === b ? 0 : -1; });
+    if (still) ind.style.transition = "none";
+    ind.style.width = b.offsetWidth + "px"; ind.style.height = b.offsetHeight + "px";
+    ind.style.transform = "translate(" + b.offsetLeft + "px," + (b.offsetTop - 4) + "px)";
+    if (still) { void ind.offsetWidth; ind.style.transition = ""; }
+    say.textContent = SAY[n] || "";
+  }
+  wrap.addEventListener("click", function (e) { var b = e.target.closest("button[data-level]"); if (b) pick(b.dataset.level); });
+  wrap.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    var i = names.indexOf((wrap.querySelector('[aria-checked="true"]') || {}).dataset.level);
+    var n = names[(i + (e.key === "ArrowRight" ? 1 : names.length - 1)) % names.length];
+    pick(n); wrap.querySelector('[data-level="' + n + '"]').focus(); e.preventDefault();
+  });
+  var start = function () { pick("Standard", true); };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(start); else start();
+  start();
+  window.addEventListener("resize", function () { var c = wrap.querySelector('[aria-checked="true"]'); if (c) pick(c.dataset.level, true); });
+})();

@@ -347,3 +347,6 @@ button.flow-start-wall:hover img:nth-child(2) { transform: translateY(-28px) sca
 
 /* 0.94.0 the category row scrolls sideways on phones: it fades at the edge instead of cutting a word */
 @media (max-width: 760px) { .flow-cats { margin-right: -16px; padding-right: 32px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); } }
+
+/* 0.97.0 (audit 11): the top bar words readable, not tiny capitals */
+.flow-nav, .flow-preview { font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; }
