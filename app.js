@@ -6367,25 +6367,63 @@
         requestAnimationFrame(() => drawPresetTile(cv, t, p));
       });
       ins.appendChild(group("Looks", pres));
-      ins.appendChild(group("Text", row(colorIn(t.color, (v) => { t.color = v; }), slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct))));
-      ins.appendChild(group("Outline", row(colorIn(k.strokeColor, (v) => { t.strokeColor = v; }), slider(0, 0.3, 0.01, k.strokeW, (v) => { t.strokeW = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
-      ins.appendChild(group("Background", onOff(k.boxOn, (v) => { t.boxOn = v; })));
-      if (k.boxOn) {
-        ins.appendChild(group("Background colour", row(colorIn(k.boxColor, (v) => { t.boxColor = v; }), slider(0, 1, 0.05, k.boxOpacity, (v) => { t.boxOpacity = v; live(); }, save, pct))));
-        ins.appendChild(group("Corners", slider(0, 1, 0.05, k.boxRadius, (v) => { t.boxRadius = v; live(); }, save, pct)));
+      /* 0.100.2: CapCut-style: one part of the look at a time under a segmented control,
+         a dot on the parts that are switched on, so the panel never becomes a long scroll */
+      const parts = [["text", "Text"], ["outline", "Outline"], ["box", "Background"], ["shadow", "Shadow"], ["glow", "Glow"], ["spacing", "Spacing"]];
+      const onPart = { outline: k.strokeW > 0, box: !!k.boxOn, shadow: !!k.shadow, glow: !!k.glowOn };
+      const seg = mk("div", "ins-seg tx-parts");
+      seg.setAttribute("role", "tablist");
+      parts.forEach(([key, label]) => {
+        const b = mk("button", styleSub === key ? "active" : "", label);
+        b.type = "button";
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", styleSub === key ? "true" : "false");
+        if (onPart[key]) b.classList.add("is-on");
+        b.addEventListener("click", () => { styleSub = key; redo(); });
+        seg.appendChild(b);
+      });
+      ins.appendChild(seg);
+      const card = mk("div", "tx-part");
+      ins.appendChild(card);
+      const add = (el) => card.appendChild(el);
+      if (styleSub === "text") {
+        add(group("Colour", colorIn(t.color, (v) => { t.color = v; })));
+        add(group("Opacity", slider(0, 1, 0.05, k.opacity, (v) => { t.opacity = v; live(); }, save, pct)));
+        add(group("Align", chips([["left", "Left"], ["center", "Centre"], ["right", "Right"]], k.align, (v) => { t.align = v; })));
       }
-      ins.appendChild(group("Shadow", onOff(k.shadow, (v) => { t.shadow = v; })));
-      if (k.shadow) {
-        ins.appendChild(group("Shadow colour", row(colorIn(k.shColor, (v) => { t.shColor = v; }), slider(0, 1, 0.05, k.shOpacity, (v) => { t.shOpacity = v; live(); }, save, pct))));
-        ins.appendChild(group("Blur", slider(0, 1, 0.01, k.shBlur, (v) => { t.shBlur = v; live(); }, save, (v) => Math.round(v * 100) + "")));
-        ins.appendChild(group("Distance", slider(0, 0.3, 0.01, k.shDist, (v) => { t.shDist = v; live(); }, save, (v) => Math.round(v * 100) + "")));
-        ins.appendChild(group("Angle", slider(0, 359, 1, k.shAngle, (v) => { t.shAngle = v; live(); }, save, (v) => v + "°")));
+      if (styleSub === "outline") {
+        add(group("Colour", colorIn(k.strokeColor, (v) => { t.strokeColor = v; })));
+        add(group("Width", slider(0, 0.3, 0.01, k.strokeW, (v) => { t.strokeW = v; live(); }, save, (v) => Math.round(v * 100) + "")));
       }
-      ins.appendChild(group("Glow", onOff(k.glowOn, (v) => { t.glowOn = v; })));
-      if (k.glowOn) ins.appendChild(group("Glow colour", row(colorIn(k.glowColor, (v) => { t.glowColor = v; }), slider(0.1, 1.5, 0.05, k.glowSize, (v) => { t.glowSize = v; live(); }, save, (v) => Math.round(v * 100) + ""))));
-      ins.appendChild(group("Letter spacing", slider(-0.1, 0.5, 0.01, k.spacing, (v) => { t.spacing = v; live(); }, save, (v) => Math.round(v * 100) + "")));
-      ins.appendChild(group("Line spacing", slider(0.8, 2, 0.05, k.lineH, (v) => { t.lineH = v; live(); }, save, (v) => v.toFixed(2))));
-      ins.appendChild(group("Align", chips([["left", "Left"], ["center", "Centre"], ["right", "Right"]], k.align, (v) => { t.align = v; })));
+      if (styleSub === "box") {
+        add(group("Background", onOff(k.boxOn, (v) => { t.boxOn = v; })));
+        if (k.boxOn) {
+          add(group("Colour", colorIn(k.boxColor, (v) => { t.boxColor = v; })));
+          add(group("Opacity", slider(0, 1, 0.05, k.boxOpacity, (v) => { t.boxOpacity = v; live(); }, save, pct)));
+          add(group("Corners", slider(0, 1, 0.05, k.boxRadius, (v) => { t.boxRadius = v; live(); }, save, pct)));
+        }
+      }
+      if (styleSub === "shadow") {
+        add(group("Shadow", onOff(k.shadow, (v) => { t.shadow = v; })));
+        if (k.shadow) {
+          add(group("Colour", colorIn(k.shColor, (v) => { t.shColor = v; })));
+          add(group("Opacity", slider(0, 1, 0.05, k.shOpacity, (v) => { t.shOpacity = v; live(); }, save, pct)));
+          add(group("Blur", slider(0, 1, 0.01, k.shBlur, (v) => { t.shBlur = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+          add(group("Distance", slider(0, 0.3, 0.01, k.shDist, (v) => { t.shDist = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+          add(group("Angle", slider(0, 359, 1, k.shAngle, (v) => { t.shAngle = v; live(); }, save, (v) => v + "°")));
+        }
+      }
+      if (styleSub === "glow") {
+        add(group("Glow", onOff(k.glowOn, (v) => { t.glowOn = v; })));
+        if (k.glowOn) {
+          add(group("Colour", colorIn(k.glowColor, (v) => { t.glowColor = v; })));
+          add(group("Size", slider(0.1, 1.5, 0.05, k.glowSize, (v) => { t.glowSize = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+        }
+      }
+      if (styleSub === "spacing") {
+        add(group("Letters", slider(-0.1, 0.5, 0.01, k.spacing, (v) => { t.spacing = v; live(); }, save, (v) => Math.round(v * 100) + "")));
+        add(group("Lines", slider(0.8, 2, 0.05, k.lineH, (v) => { t.lineH = v; live(); }, save, (v) => v.toFixed(2))));
+      }
     }
 
     if (textTab === "anim" && TA()) {
@@ -9494,6 +9532,7 @@
      frame, so the preview and the export run them identically. */
   let textTab = "text";
   let animKind = "in";   // which list the Animation tab shows
+  var styleSub = "text";   // 0.100.2: which part of the Style tab shows
   const TA = () => window.SenotelTextAnims || null;
   function textAnimAt(t, time) {
     const lib = TA();

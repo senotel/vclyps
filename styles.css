@@ -3754,3 +3754,20 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
 #screen-editor .transport .icon-btn:disabled { opacity: 0.35; }
 .topbar #ratioBtn { border: 0 !important; background: var(--bg1); }
 .topbar #ratioBtn:hover { background: var(--bg3); }
+
+/* 0.100.2 Style tab: one part of the look at a time (CapCut's Text / Stroke / Background / Shadow row),
+   a small crimson dot on the parts that are switched on, the part's controls in one soft card */
+.ins-seg.tx-parts { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; border-radius: 12px; padding: 3px; min-height: 44px; }
+.ins-seg.tx-parts::-webkit-scrollbar { display: none; }
+.ins-seg.tx-parts button { flex: 1 0 auto; min-height: 38px; padding: 0 12px; border-radius: 9px; white-space: nowrap; position: relative; transition: background-color 160ms ease, color 160ms ease, scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.ins-seg.tx-parts button:active { scale: 0.95; }
+.ins-seg.tx-parts button.is-on::after { content: ""; position: absolute; top: 7px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: #dc143c; }
+.tx-part { display: grid; gap: 12px; padding: 14px; margin-top: 10px; border-radius: 14px; background: var(--bg1); border: 1px solid var(--line); }
+.tx-part .ins-group { min-height: 40px; }
+.tx-part .ins-group > label { min-width: 72px; }
+.tx-part .ins-group input[type="range"] { flex: 1; }
+/* phones: the keyframe pair shows only when it applies, and then Mute steps aside, so the play row never crowds Play */
+@media (max-width: 600px) {
+  .tr-right .icon-btn[aria-disabled="true"] { display: none; }
+  .transport:has(#kfBtn:not([aria-disabled="true"])) #muteBtn { display: none; }
+}
