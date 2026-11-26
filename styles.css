@@ -3823,3 +3823,48 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
 .ms-ghost { position: fixed; left: 0; top: 0; z-index: 500; pointer-events: none; border-radius: 10px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28); scale: 0.9; opacity: 0.92; transition: scale 200ms cubic-bezier(0.34, 1.56, 0.64, 1); }
 .ms-ghost.over { scale: 0.8; }
 .ms-drop-mark { position: fixed; z-index: 499; width: 2px; border-radius: 2px; background: #dc143c; pointer-events: none; display: none; }
+
+/* 0.102.0: the focused-editor label never shows empty (it left a pink blank chip in the top bar) */
+.focus-chip:empty { display: none !important; }
+
+/* 0.102.0 Lock on: a switch on the timeline's top row, its explanation one tap away */
+.tl-lock { position: relative; display: flex; align-items: center; gap: 2px; margin-right: 12px; }
+.lock-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg0); color: var(--text); font: inherit; font-size: var(--fs-12); font-weight: 600; cursor: pointer; transition: background-color 160ms ease, color 160ms ease, scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lock-btn::before { content: ""; position: absolute; inset: -4px 0; }
+.lock-btn { position: relative; }
+.lock-btn:hover { background: var(--bg2); }
+.lock-btn:active { scale: 0.95; }
+.lock-btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.lock-btn .lk-shackle { transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lock-btn.is-off { color: var(--t2); }
+.lock-btn.is-off .lk-shackle { transform: translate(3px, -1.5px) rotate(14deg); transform-origin: 16px 10.5px; }
+.lock-sw { position: relative; width: 28px; height: 16px; border-radius: 6px; background: #dc143c; transition: background-color 200ms ease; }
+.lock-sw::after { content: ""; position: absolute; top: 2px; left: 14px; width: 12px; height: 12px; border-radius: 4px; background: #fff; transition: left 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lock-btn.is-off .lock-sw { background: var(--line-2, #bbb); }
+.lock-btn.is-off .lock-sw::after { left: 2px; }
+.lock-info { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--t2); cursor: pointer; position: relative; transition: background-color 160ms ease, color 160ms ease, scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lock-info::before { content: ""; position: absolute; inset: -4px -2px; }
+.lock-info:hover, .lock-info[aria-expanded="true"] { background: var(--bg2); color: var(--text); }
+.lock-info:active { scale: 0.92; }
+.lock-info:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.lock-pop { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 60; width: 300px; max-width: calc(100vw - 24px); padding: 14px 16px; border-radius: 14px; background: var(--bg0); border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18); color: var(--text); font-size: var(--fs-13); line-height: 1.45; animation: lockPop 240ms cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: bottom right; }
+.lock-pop.hidden { display: none; }
+.lock-pop p { margin: 0 0 8px; }
+.lock-pop-title { font-weight: 700; font-size: var(--fs-14, 14px); }
+.lock-pop-note { color: var(--t2); }
+.lock-pop-ok { display: block; width: 100%; min-height: 40px; margin-top: 4px; border: 0; border-radius: 10px; background: var(--text); color: var(--bg0); font: inherit; font-weight: 600; cursor: pointer; transition: scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lock-pop-ok:active { scale: 0.96; }
+.lock-pop-ok:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+@keyframes lockPop { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
+#screen-editor .tl-top { overflow: visible; }
+.ms-drop-mark.cut { width: 3px; }
+@media (max-width: 600px) {
+  .tl-lock { margin-right: auto; }
+  .lock-pop { right: auto; left: 0; transform-origin: bottom left; }
+  .lock-btn { min-height: 40px; }
+  .lock-info { height: 40px; }
+}
+/* the timeline panel clips anything above its top edge: the explanation opens downward */
+.lock-pop { bottom: auto; top: calc(100% + 6px); transform-origin: top right; }
+@media (max-width: 600px) { .lock-pop { transform-origin: top left; } }
+@media (max-width: 600px) { .tl-lock { margin-left: 12px; } }

@@ -238,7 +238,81 @@
     // after the whole tap has run, so it follows the commit and replaces any plainer toast
     queueMicrotask(() => { stepPending = ""; if (say) toast(say(details), { action: "Undo" }); });
   }
+  /* ═══ 0.102.0 Lock on (admin's feature; default on) ═══
+     Each text, sticker, overlay, sound effect, audio clip and effect is anchored to the moment of footage
+     under its start (which clip, which second of that clip's source). After any edit that moves the
+     footage (adding, inserting, deleting, trimming, reordering, speed), each one follows its moment.
+     An item the edit itself moved is left as the edit put it. Music stays where it is: it is the bed
+     under the whole video. Off: everything keeps its time on the ruler (CapCut with Linkage off). */
+  let lockSnap = null;
+  function lockOn() { try { return localStorage.getItem("eth.lockOn") !== "0"; } catch (e) { return true; } }
+  function lockItems() {
+    const out = [];
+    [["t", S.texts], ["b", S.broll], ["s", S.sfx], ["a", S.audio], ["e", S.effects]].forEach(([k, list]) => {
+      (list || []).forEach((x) => { if (x && typeof x.start === "number") out.push([k + x.id, x]); });
+    });
+    return out;
+  }
+  function lockTake() {
+    let acc = 0;
+    const clips = S.clips.map((c) => { const d = dispDur(c); const o = { c: c, id: c.id, mediaId: c.mediaId, in: c.in, out: c.out, start: acc, dur: d }; acc += d; return o; });
+    const items = new Map();
+    lockItems().forEach(([key, x]) => items.set(key, x.start));
+    lockSnap = { clips: clips, items: items, sig: JSON.stringify(clips.map((o) => [o.id, o.in, o.out, o.dur])) };
+  }
+  function lockFollow() {
+    const prev = lockSnap;
+    if (!prev || !lockOn()) return;
+    let acc = 0;
+    const now = S.clips.map((c) => { const d = dispDur(c); const o = { c: c, id: c.id, mediaId: c.mediaId, in: c.in, out: c.out, start: acc, dur: d }; acc += d; return o; });
+    if (JSON.stringify(now.map((o) => [o.id, o.in, o.out, o.dur])) === prev.sig) return;   // the footage did not move
+    const oldIds = new Set(prev.clips.map((o) => o.id));
+    lockItems().forEach(([key, x]) => {
+      const was = prev.items.get(key);
+      if (was == null || Math.abs(was - x.start) > 0.0005) return;   // new, or moved by the edit itself
+      const home = prev.clips.find((o) => x.start >= o.start - 0.0005 && x.start < o.start + o.dur - 0.0005);
+      if (!home) return;
+      const src = home.in + srcOff(home.c, x.start - home.start);
+      const fits = (o) => o.mediaId === home.mediaId && src >= o.in - 0.0005 && src < o.out - 0.0005;
+      const to = now.find((o) => o.id === home.id && fits(o)) || now.find((o) => !oldIds.has(o.id) && fits(o)) || now.find((o) => o.id === home.id);
+      if (!to) return;   // its footage is gone: it stays where it is
+      const off = fits(to) ? dispOff(to.c, src - to.in) : x.start - home.start;
+      const t = Math.max(0, to.start + clamp(off, 0, to.dur));
+      if (Math.abs(t - x.start) > 0.0005) x.start = t;
+    });
+  }
+  // the switch on the timeline's top row and its explanation
+  (function lockUi() {
+    const btn = document.getElementById("lockBtn"), info = document.getElementById("lockInfo"), pop = document.getElementById("lockPop");
+    if (!btn) return;
+    const paint = () => {
+      const on = lockOn();
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+      btn.classList.toggle("is-off", !on);
+      btn.title = on ? "Lock on: texts and sounds stay with their footage" : "Lock off: texts and sounds keep their time";
+    };
+    paint();
+    const flip = () => {
+      const on = !lockOn();
+      try { localStorage.setItem("eth.lockOn", on ? "1" : "0"); } catch (e) {}
+      paint();
+      if (on) lockTake();
+      toast(on ? "Lock on. Texts and sounds stay with their footage" : "Lock off. Texts and sounds keep their time, check they still line up");
+    };
+    btn.addEventListener("click", () => { if (window.ethPress) window.ethPress(btn, flip); else flip(); });
+    const show = (v) => {
+      pop.classList.toggle("hidden", !v);
+      info.setAttribute("aria-expanded", v ? "true" : "false");
+      if (v) document.getElementById("lockPopOk").focus();
+    };
+    info.addEventListener("click", (e) => { e.stopPropagation(); show(pop.classList.contains("hidden")); });
+    document.getElementById("lockPopOk").addEventListener("click", () => { show(false); info.focus(); });
+    pop.addEventListener("click", (e) => e.stopPropagation());
+    pop.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); show(false); info.focus(); } });
+    document.addEventListener("click", () => { if (!pop.classList.contains("hidden")) show(false); });
+  })();
   function commit(name) {
+    try { lockFollow(); } catch (e) {}
     try { kfCapture(); } catch (e) {}   // ccl13: an edit of a keyframed thing is kept as a keyframe
     hist = hist.slice(0, histIdx + 1);
     histMedia = histMedia.slice(0, histIdx + 1);
@@ -259,6 +333,7 @@
     hist.push(JSON.stringify({ media: S.media.map((m) => m.id), c: S.clips, t: S.texts, cap: S.captions, co: S.capOpts, b: S.broll, s: S.sfx, m: S.music, a: S.audio, e: S.effects }));
     if (hist.length > 80) { hist.shift(); histMedia.shift(); histNames.shift(); }
     histIdx = hist.length - 1;
+    try { lockTake(); } catch (e) {}
     if (removeMedia.collect) removeMedia.collect();
     saveSession();   // every edit is also a resume point
   }
@@ -319,6 +394,7 @@
       const name = histNames[histIdx];
       histIdx--;
       restore(hist[histIdx]);
+      try { lockTake(); } catch (e) {}
       toast(name ? "Undid: " + name : "Undone");
     }
     else toast("Nothing to undo");
@@ -327,6 +403,7 @@
     if (histIdx < hist.length - 1) {
       histIdx++;
       restore(hist[histIdx]);
+      try { lockTake(); } catch (e) {}
       toast(histNames[histIdx] ? "Redid: " + histNames[histIdx] : "Redone");
     }
     else toast("Nothing to redo");
@@ -1162,8 +1239,10 @@
     if (m.thumb) {
       const img = document.createElement("img");
       img.src = m.thumb; img.alt = m.name;
+      img.draggable = false;   // 0.102.0: the browser's own image drag stole the drag onto the timeline
       el.appendChild(img);
     }
+    el.addEventListener("dragstart", (e) => e.preventDefault());
     if ((m.type === "video" || m.type === "audio") && m.duration) {
       const d = document.createElement("span");
       d.className = "ms-dur"; d.textContent = fmt(m.duration);
@@ -1252,13 +1331,20 @@
         const ph = $("playhead"), box = (ph.offsetParent || $("tlScroll")).getBoundingClientRect();
         const t = clamp((cx - box.left - padL()) / S.pps, 0, total());
         if (m.type === "audio") return { at: t, x: box.left + padL() + t * S.pps, audio: true };
-        let acc = 0, idx = S.clips.length, at = total();
+        /* 0.102.0: near a cut (within 14 px) it goes in between the clips; anywhere else inside a clip,
+           that clip is split at the spot and it goes in there */
+        const near = 14 / S.pps;
+        let acc = 0;
         for (let i = 0; i < S.clips.length; i++) {
           const d = dispDur(S.clips[i]);
-          if (t < acc + d / 2) { idx = i; at = acc; break; }
+          if (t < acc + d) {
+            if (t - acc <= near || d < 0.3) return { idx: i, x: box.left + padL() + acc * S.pps, gap: true };
+            if (acc + d - t <= near) return { idx: i + 1, x: box.left + padL() + (acc + d) * S.pps, gap: true };
+            return { idx: i, off: t - acc, x: box.left + padL() + t * S.pps };
+          }
           acc += d;
         }
-        return { idx: idx, x: box.left + padL() + at * S.pps };
+        return { idx: S.clips.length, x: box.left + padL() + acc * S.pps, gap: true };
       };
       const move = (ev) => {
         if (!ghost) {
@@ -1284,6 +1370,7 @@
           mark.style.left = Math.round(drop.x - 1) + "px";
           mark.style.top = Math.round(z.top) + "px";
           mark.style.height = Math.round(z.height) + "px";
+          mark.classList.toggle("cut", drop.off != null);
           ghost.classList.add("over");
         } else { mark.style.display = "none"; ghost.classList.remove("over"); }
       };
@@ -1297,6 +1384,7 @@
         ghost.remove(); mark.remove(); el.classList.remove("is-dragging");
         if (!drop) return;
         if (drop.audio) { primeAudioForClick(); addAudioClip(m, { at: drop.at }); return; }
+        if (drop.off != null) { splitClipAt(S.clips[drop.idx], drop.off); drop.idx += 1; }
         S.clips.splice(drop.idx, 0, { id: nextId++, mediaId: m.id, in: 0, out: m.duration || IMG_DUR, speed: 1, volume: 1, muted: false, filter: "none", fadeIn: 0, fadeOut: 0 });
         commit();
         renderTimeline();
@@ -1468,6 +1556,16 @@
       toast("Move the playhead a little further into the clip");
       return;
     }
+    const second = splitClipAt(clip, offset);
+    S.sel = { type: "clip", id: second.id };
+    commit();
+    recordEdit("split", { at: Math.round(S.time * 10) / 10 });
+    renderTimeline();
+    renderInspector();
+  }
+
+  // 0.102.0: cut a clip in two at offset (display seconds from its start); returns the right half, already in S.clips
+  function splitClipAt(clip, offset) {
     const srcT = clip.in + srcOff(clip, offset);
     const second = copyClip(clip, { id: nextId++, in: srcT });
     if (hasCurve(clip)) {
@@ -1480,11 +1578,7 @@
     shiftItemTime(second, offset, dispDur(second));
     shiftItemTime(clip, 0, offset);
     S.clips.splice(S.clips.indexOf(clip) + 1, 0, second);
-    S.sel = { type: "clip", id: second.id };
-    commit();
-    recordEdit("split", { at: Math.round(S.time * 10) / 10 });
-    renderTimeline();
-    renderInspector();
+    return second;
   }
 
   /* ─── Freeze frame (CapCut's Freeze) ───
