@@ -1078,7 +1078,7 @@ body.previewFs .fs-exit:active { filter: brightness(0.92); }
   border-radius: var(--r-2);
   padding: 1px 4px;
 }
-.ms-item .ms-plus {
+.ms-item .ms-x {
   position: absolute;
   top: 3px; right: 3px;
   width: 20px; height: 20px;
@@ -1094,8 +1094,8 @@ body.previewFs .fs-exit:active { filter: brightness(0.92); }
   opacity: 0;
   transition: opacity 0.15s ease;
 }
-.ms-item:hover .ms-plus { opacity: 1; }
-.ms-item .ms-plus:hover { background: var(--acc); }
+.ms-item:hover .ms-x { opacity: 1; }
+.ms-item .ms-x:hover { background: var(--acc); }
 
 .ms-state {
   position: absolute;
@@ -1819,7 +1819,7 @@ body.panel-open .toast { bottom: auto; top: calc(var(--topbar-h) + 8px); }
 /* Touchscreens have no hover, so what hover reveals on a computer is simply
    shown, and the trim handles are wide enough for a finger. */
 @media (hover: none) {
-  .ms-item .ms-plus { opacity: 1; }
+  .ms-item .ms-x { opacity: 1; }
 }
 @media (pointer: coarse) {
   .handle { width: 20px; }
@@ -3487,7 +3487,7 @@ body:not(.previewFs) #screen-editor .transport { height: var(--playrow-h); paddi
   #screen-editor .media-strip .ms-add:hover { border-color: var(--text); color: var(--text); background: var(--bg2); }
   #screen-editor .media-strip .ms-item:hover { border-color: var(--line-2); }
   #screen-editor .media-strip .ms-dur { font-size: var(--fs-11); font-variant-numeric: tabular-nums; }
-  #screen-editor .media-strip .ms-plus { width: 24px; height: 24px; }
+  #screen-editor .media-strip .ms-x { width: 24px; height: 24px; }
 
   /* the properties panel: in the grid, never floating over the picture */
   #inspector.inspector {
@@ -3515,7 +3515,7 @@ body:not(.previewFs) #screen-editor .transport { height: var(--playrow-h); paddi
 /* large touch screens get the four panels with finger-sized targets */
 @media (min-width: 1200px) and (pointer: coarse) {
   #screen-editor .ab-tool { min-height: 60px; }
-  #screen-editor .media-strip .ms-plus { width: 44px; height: 44px; }
+  #screen-editor .media-strip .ms-x { width: 44px; height: 44px; }
 }
 
 /* ===================== APP SCREENS: MODES, SETTINGS, ADMIN ===================== */
@@ -3795,3 +3795,31 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
   body[data-screen="editor"] #screen-editor { transition: grid-template-columns 280ms cubic-bezier(0.32, 0.72, 0, 1); }
 }
 @media (min-width: 1200px) and (pointer: coarse) { #screen-editor > .media-strip .ms-fold { width: 44px; height: 44px; top: 0; } }
+
+/* 0.101.0 media tiles: the tile adds, the corner X removes (after a confirm on the tile), a drag places it */
+.ms-item { touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; transition: scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 160ms ease; }
+.ms-item:active:not(:has(.ms-x:active, .ms-confirm)) { scale: 0.96; }
+.ms-item:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.ms-item.is-dragging { opacity: 0.4; }
+.ms-item .ms-x { width: 22px; height: 22px; border-radius: 7px; background: rgba(17, 18, 16, 0.72); color: #fff; padding: 0; cursor: pointer; transition: opacity 0.15s ease, background-color 160ms ease, scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.ms-item .ms-x::before { content: ""; position: absolute; inset: -6px; }
+.ms-item .ms-x:hover { background: #dc143c; }
+.ms-item .ms-x:active { scale: 0.88; }
+.ms-item .ms-x:focus-visible { opacity: 1; outline: 2px solid #fff; outline-offset: 1px; }
+.ms-item:focus-within .ms-x { opacity: 1; }
+#screen-editor .media-strip .ms-x { width: 24px; height: 24px; }
+.ms-confirm { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 6px; background: rgba(17, 18, 16, 0.9); color: #fff; cursor: default; animation: msConfirm 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.ms-confirm p { margin: 0; font-size: 11px; font-weight: 600; line-height: 1.25; text-align: center; }
+.ms-confirm-row { display: flex; gap: 4px; }
+.ms-confirm-row button { flex: 1; min-height: 28px; padding: 0 4px; border: 0; border-radius: 8px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 160ms ease; }
+.ms-confirm-row button:active { scale: 0.94; }
+.ms-confirm-row button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.ms-keep { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.ms-keep:hover { background: rgba(255, 255, 255, 0.22); }
+.ms-remove { background: #dc143c; color: #fff; }
+.ms-remove:hover { background: #b8102f; }
+@keyframes msConfirm { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
+@media (pointer: coarse) { .ms-confirm-row button { min-height: 36px; } }
+.ms-ghost { position: fixed; left: 0; top: 0; z-index: 500; pointer-events: none; border-radius: 10px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28); scale: 0.9; opacity: 0.92; transition: scale 200ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.ms-ghost.over { scale: 0.8; }
+.ms-drop-mark { position: fixed; z-index: 499; width: 2px; border-radius: 2px; background: #dc143c; pointer-events: none; display: none; }

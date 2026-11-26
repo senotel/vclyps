@@ -1176,22 +1176,136 @@
       el.appendChild(st);
     }
     if (withPlus) {
-      // a sound goes onto the audio track at the playhead, a picture onto the end
+      /* 0.101.0 (admin's design): the whole tile adds it (a sound at the playhead, a picture at the end),
+         dragging it onto the timeline puts it where you let go, and the corner X removes it after one
+         confirm, with Undo. */
       const use = () => {
         if (m.type === "audio") { primeAudioForClick(); addAudioClip(m); }
         else appendClip(m, true);
       };
-      const p = document.createElement("button");
-      p.className = "ms-plus"; p.textContent = "+";
-      p.title = m.type === "audio" ? "Add to the audio track at the playhead" : "Add to timeline";
-      p.addEventListener("click", (e) => {
-        e.stopPropagation();
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "ms-x";
+      x.setAttribute("aria-label", "Remove " + m.name);
+      x.title = "Remove";
+      x.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>';
+      x.addEventListener("pointerdown", (e) => e.stopPropagation());
+      x.addEventListener("click", (e) => { e.stopPropagation(); askRemoveMedia(el, m); });
+      el.appendChild(x);
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", (m.type === "audio" ? "Add the sound " : "Add ") + m.name + " to the timeline");
+      el.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === el) { e.preventDefault(); use(); } });
+      el.addEventListener("click", (e) => {
+        if (el._dragged) { el._dragged = false; return; }
+        if (e.target.closest(".ms-confirm")) return;
         use();
       });
-      el.appendChild(p);
-      el.addEventListener("click", use);
+      mediaDrag(el, m);
     }
     return el;
+  }
+
+  /* the confirm sits on the tile itself: one red Remove, one quiet Keep (owner rule: never typing, never one click) */
+  function askRemoveMedia(el, m) {
+    document.querySelectorAll(".ms-confirm").forEach((c) => c.remove());
+    const used = [...S.clips, ...S.broll, ...S.audio].some((c) => c.mediaId === m.id);
+    const box = document.createElement("div");
+    box.className = "ms-confirm";
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-label", "Remove this clip?");
+    const q = document.createElement("p");
+    q.textContent = used ? "Remove it from your video too?" : "Remove this clip?";
+    const row = document.createElement("div");
+    row.className = "ms-confirm-row";
+    const keep = document.createElement("button");
+    keep.type = "button"; keep.className = "ms-keep"; keep.textContent = "Keep";
+    const go = document.createElement("button");
+    go.type = "button"; go.className = "ms-remove"; go.textContent = "Remove";
+    keep.addEventListener("click", (e) => { e.stopPropagation(); box.remove(); });
+    go.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeMedia(m.id);
+      renderAll();
+      renderTimeline();
+      toast(used ? "Clip removed from your media and video" : "Clip removed", { action: "Undo", ms: 6000, run: () => { undo(); renderAll(); } });
+    });
+    box.addEventListener("pointerdown", (e) => e.stopPropagation());
+    box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); box.remove(); el.focus(); } });
+    row.appendChild(keep); row.appendChild(go);
+    box.appendChild(q); box.appendChild(row);
+    el.appendChild(box);
+    keep.focus();
+  }
+
+  /* drag a tile onto the timeline: a picture goes in between the clips nearest where you let go
+     (a crimson line shows the spot), a sound goes on the audio track at that moment */
+  function mediaDrag(el, m) {
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || e.target.closest(".ms-x, .ms-confirm")) return;
+      const x0 = e.clientX, y0 = e.clientY;
+      let ghost = null, mark = null, drop = null;
+      const zone = document.querySelector("#screen-editor .tl-zone");
+      const place = (cx, cy) => {
+        const z = zone && zone.getBoundingClientRect();
+        if (!z || cx < z.left || cx > z.right || cy < z.top || cy > z.bottom) return null;
+        const ph = $("playhead"), box = (ph.offsetParent || $("tlScroll")).getBoundingClientRect();
+        const t = clamp((cx - box.left - padL()) / S.pps, 0, total());
+        if (m.type === "audio") return { at: t, x: box.left + padL() + t * S.pps, audio: true };
+        let acc = 0, idx = S.clips.length, at = total();
+        for (let i = 0; i < S.clips.length; i++) {
+          const d = dispDur(S.clips[i]);
+          if (t < acc + d / 2) { idx = i; at = acc; break; }
+          acc += d;
+        }
+        return { idx: idx, x: box.left + padL() + at * S.pps };
+      };
+      const move = (ev) => {
+        if (!ghost) {
+          if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+          ghost = el.cloneNode(true);
+          ghost.querySelectorAll(".ms-x, .ms-confirm").forEach((n) => n.remove());
+          ghost.className = "ms-item ms-ghost";
+          const r = el.getBoundingClientRect();
+          ghost.style.width = r.width + "px"; ghost.style.height = r.height + "px";
+          document.body.appendChild(ghost);
+          mark = document.createElement("div");
+          mark.className = "ms-drop-mark";
+          document.body.appendChild(mark);
+          el.classList.add("is-dragging");
+          try { el.setPointerCapture(ev.pointerId); } catch (er) {}
+        }
+        ev.preventDefault();
+        ghost.style.transform = "translate(" + (ev.clientX - 20) + "px," + (ev.clientY - 20) + "px)";
+        drop = place(ev.clientX, ev.clientY);
+        if (drop && zone) {
+          const z = zone.getBoundingClientRect();
+          mark.style.display = "block";
+          mark.style.left = Math.round(drop.x - 1) + "px";
+          mark.style.top = Math.round(z.top) + "px";
+          mark.style.height = Math.round(z.height) + "px";
+          ghost.classList.add("over");
+        } else { mark.style.display = "none"; ghost.classList.remove("over"); }
+      };
+      const end = () => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", end);
+        document.removeEventListener("pointercancel", end);
+        if (!ghost) return;
+        el._dragged = true;
+        setTimeout(() => { el._dragged = false; }, 300);
+        ghost.remove(); mark.remove(); el.classList.remove("is-dragging");
+        if (!drop) return;
+        if (drop.audio) { primeAudioForClick(); addAudioClip(m, { at: drop.at }); return; }
+        S.clips.splice(drop.idx, 0, { id: nextId++, mediaId: m.id, in: 0, out: m.duration || IMG_DUR, speed: 1, volume: 1, muted: false, filter: "none", fadeIn: 0, fadeOut: 0 });
+        commit();
+        renderTimeline();
+        toast("Added at " + fmt(clipStartOf(S.clips[drop.idx])), { action: "Undo" });
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", end);
+      document.addEventListener("pointercancel", end);
+    });
   }
 
   function addTile(ctx, big) {
@@ -1255,7 +1369,7 @@
       if (m.type === "audio") el.insertAdjacentHTML("beforeend", AUDIO_MARK);
       if (pickable) {
         el.addEventListener("click", (ev) => {
-          if (ev.target.classList.contains("li-x")) return;
+          if (ev.target.classList.contains("li-x") || ev.target.closest(".ms-confirm")) return;
           addOverlayAt(m);
           libPick = null;
           closeSheets();
@@ -1274,7 +1388,8 @@
       const x = document.createElement("button");
       x.className = "li-x"; x.textContent = "✕";
       x.title = "Remove from library";
-      x.addEventListener("click", () => removeMedia(m.id));
+      x.setAttribute("aria-label", "Remove " + m.name);
+      x.addEventListener("click", (e) => { e.stopPropagation(); askRemoveMedia(el, m); });   // 0.101.0: confirm + Undo, never one tap
       el.appendChild(x);
       grid.appendChild(el);
     });
