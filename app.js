@@ -1202,9 +1202,33 @@
     return b;
   }
 
+  /* 0.100.3: on a computer the Media column folds to a thin edge and gives the picture the room;
+     the choice is remembered. The button only shows in the desktop layout (styles.css). */
+  function mediaFolded() { try { return localStorage.getItem("eth.mediaFolded") === "1"; } catch (e) { return false; } }
+  function setMediaFolded(on) {
+    document.body.classList.toggle("media-folded", on);
+    try { localStorage.setItem("eth.mediaFolded", on ? "1" : "0"); } catch (e) {}
+    const f = $("mediaStrip").querySelector(".ms-fold");
+    if (f) { f.setAttribute("aria-expanded", on ? "false" : "true"); f.setAttribute("aria-label", on ? "Show media" : "Hide media"); f.title = on ? "Show media" : "Hide media"; }
+    renderTimeline();
+  }
+  document.body.classList.toggle("media-folded", mediaFolded());
   function renderStrips() {
     const ms = $("mediaStrip");
     ms.innerHTML = "";
+    const fold = document.createElement("button");
+    fold.type = "button";
+    fold.className = "ms-fold";
+    fold.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"></rect><line x1="9" y1="4" x2="9" y2="20"></line><polyline class="ms-fold-ch" points="16 10 14 12 16 14"></polyline></svg>';
+    fold.addEventListener("click", () => {
+      const go = () => setMediaFolded(!document.body.classList.contains("media-folded"));
+      if (window.ethPress) window.ethPress(fold, go); else go();
+    });
+    ms.appendChild(fold);
+    const on = document.body.classList.contains("media-folded");
+    fold.setAttribute("aria-expanded", on ? "false" : "true");
+    fold.setAttribute("aria-label", on ? "Show media" : "Hide media");
+    fold.title = on ? "Show media" : "Hide media";
     ms.appendChild(addTile("editor", false));
     S.media.forEach((m) => ms.appendChild(stripItem(m, true)));
   }
