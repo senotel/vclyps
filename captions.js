@@ -286,9 +286,99 @@
      only when the language, the accuracy or speakers change. Words come back
      in SOURCE time, cleaned (see SenotelCaptionTools.words) and, if asked,
      with a speaker number each. */
+  /* ── 0.102.9 the captions model, trickled in ahead of time (admin) ──
+     From the moment someone arrives, the model the Captions page will use is downloaded very slowly, in the
+     background, so it is already on the device when they get there. It follows window.ethBudget (budget.js):
+       - Wi-Fi or a cable only: never mobile data or data saver (it is 100 to 320 MB);
+       - only while nothing is happening: no finger on the screen or scrolling for 2 s, no slow frame for 5 s,
+         page visible, battery not low;
+       - at a pace the device can take (a share of the line, less on a smaller device), streamed straight to
+         storage, never held in memory;
+       - only when the device has room for it.
+     The files go into transformers.js's own cache under the same addresses it uses, so Captions simply finds
+     them. Opening Captions makes it finish at full speed (boost). Files are fetched once; a half file is never
+     kept (the cache only stores a file once it has fully arrived). */
+  var HF = "https://huggingface.co/onnx-community/";
+  var trickle = { running: null, boosted: false, done: false, bytes: 0 };
+  function sfx(dtype) { return { fp32: "", fp16: "_fp16", q8: "_quantized", q4: "_q4", q4f16: "_q4f16", int8: "_int8", uint8: "_uint8" }[dtype] || ""; }
+  // the same choice caption-worker.js makes: the default tier, its GPU or CPU weights
+  var DTYPES = {
+    best: { f16: ["q4f16", "q4f16"], f32: ["q4", "q4"] },
+    balanced: { f16: ["fp16", "q4f16"], f32: ["q4", "q4"] },
+    fast: { f16: ["fp16", "fp16"], f32: ["fp32", "q4"], cpu: ["q8", "q8"] }
+  };
+  async function preloadPlan() {
+    var gpu = null;
+    try { if (global.navigator && navigator.gpu) { var ad = await navigator.gpu.requestAdapter(); if (ad) gpu = { half: ad.features.has("shader-f16") }; } } catch (e) { gpu = null; }
+    var tier = gpu ? defaultTier() : "fast";
+    var dt = gpu ? DTYPES[tier][gpu.half ? "f16" : "f32"] : DTYPES.fast.cpu;
+    var id = TIERS[tier].id;
+    var files = ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json",
+      "onnx/encoder_model" + sfx(dt[0]) + ".onnx", "onnx/decoder_model_merged" + sfx(dt[1]) + ".onnx"];
+    return { tier: tier, mb: TIERS[tier].mb, urls: files.map(function (f) { return HF + id + "/resolve/main/" + f; }) };
+  }
+  function nap(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+  async function pace(B) { if (!trickle.boosted) await B.whenCalm(); }
+  async function trickleFile(cache, url, B) {
+    if (await cache.match(url)) return true;
+    await pace(B);
+    if (!trickle.boosted && !B.unmetered()) return false;
+    var res = await fetch(url, { priority: "low", credentials: "omit" });
+    if (!res.ok || !res.body) return res.status === 404;   // a file this model does not have
+    var reader = res.body.getReader();
+    var paced = new ReadableStream({
+      pull: async function (ctrl) {
+        await pace(B);
+        var got = await reader.read();
+        if (got.done) { ctrl.close(); return; }
+        ctrl.enqueue(got.value);
+        trickle.bytes += got.value.byteLength;
+        // reading slowly makes the network send slowly too; boosted, it runs at full speed
+        if (!trickle.boosted) await nap(got.value.byteLength / B.rate() * 1000);
+      },
+      cancel: function () { try { reader.cancel(); } catch (e) {} }
+    });
+    var headers = new Headers();
+    ["content-type", "content-length", "etag", "last-modified"].forEach(function (h) { var v = res.headers.get(h); if (v) headers.set(h, v); });
+    await cache.put(url, new Response(paced, { status: 200, headers: headers }));
+    return true;
+  }
+  function startTrickle() {
+    if (trickle.running || trickle.done) return trickle.running;
+    var B = global.ethBudget;
+    if (!B || !global.caches || !global.ReadableStream || !global.fetch) return null;
+    trickle.running = (async function () {
+      try {
+        await nap(6000);   // the page settles first
+        if (!B.unmetered()) return;
+        var plan = await preloadPlan();
+        if (await cached(TIERS[plan.tier].id + "/resolve/main/onnx/decoder_model_merged")) { trickle.done = true; return; }
+        if (navigator.storage && navigator.storage.estimate) {
+          var est = await navigator.storage.estimate();
+          if (est.quota && est.quota - (est.usage || 0) < plan.mb * 1.4e6) return;   // not enough room: never fill a phone
+        }
+        var cache = await caches.open("transformers-cache");
+        for (var i = 0; i < plan.urls.length; i++) {
+          var ok = await trickleFile(cache, plan.urls[i], B);
+          if (!ok) return;   // left mobile data, or a file failed: try again on the next visit
+        }
+        trickle.done = true;
+      } catch (e) {} finally { trickle.running = null; }
+    })();
+    return trickle.running;
+  }
+  // Captions is opening: finish now, at full speed (what has already arrived is kept)
+  function boostTrickle() { trickle.boosted = true; return trickle.running || Promise.resolve(); }
+  if (global.document) {
+    if (document.readyState === "complete") startTrickle();
+    else global.addEventListener("load", function () { startTrickle(); }, { once: true });
+  }
+
   async function transcribeCaptions(item, opts, say) {
     opts = opts || {};
     say = say || function () {};
+    // a download already under way finishes first, at full speed, instead of a second copy starting beside it
+    if (trickle.running) { say("Finishing the speech model download…"); await boostTrickle(); }
     var tier = effectiveTier(opts.tier);
     var lang = opts.lang || "auto";
     var key = lang + "|" + tier;
@@ -856,6 +946,8 @@
     keepStorage: keepStorage,
     transcribeCaptions: transcribeCaptions,
     warm: warm,
+    preloadBoost: boostTrickle,   // 0.102.9: Captions opened, finish the trickled download now
+    preloadState: function () { return { running: !!trickle.running, boosted: trickle.boosted, done: trickle.done, bytes: trickle.bytes }; },
     transcribeWords: transcribeWords,
     buildCues: buildCues,
     mapCuesToTimeline: mapCuesToTimeline,

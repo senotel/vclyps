@@ -3545,6 +3545,7 @@
     renderCaptionSheet();
     // the model loads while a style is chosen, if it is already on the device
     const C = global_SenotelCaptions();
+    if (C && C.preloadBoost) C.preloadBoost();   // 0.102.9: the trickled model finishes now, at full speed
     if (C && C.warm && captionSources().length) C.warm(S.capOpts.tier || C.defaultTier());
   }
 
