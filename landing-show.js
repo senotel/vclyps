@@ -276,6 +276,85 @@
       .sort(function (a, b) { return (b._gate === true) - (a._gate === true) || (b._area || 0) - (a._area || 0); })
       .slice(0, MAX_PLAY);
     playing.forEach(function (v) { v._budget = want.indexOf(v) >= 0; tend(v); });
+    gridTend();
+  }
+
+  /* 0.102.5 the wall from ONE video (admin: every short playing, and smooth). site/wall/grid.mp4 holds all
+     fifteen loops side by side (5 x 3 tiles of 320 x 568, the same 3.2 s seamless loops, each starting at its own
+     point), so a phone decodes one video instead of nine. Each card on screen paints its own tile onto a canvas
+     whenever the video shows a new frame; the poster stays underneath until then. If the grid cannot play on a
+     device, the cards fall back to their own videos (the 0.102.3 way). */
+  var GRID = { src: MEDIA + "grid.mp4", cols: 5, tw: 320, th: 568 };
+  var gridOn = true, gridCards = [], gridVid = null, gridLoop = 0;
+  var gridWatch = "IntersectionObserver" in window ? new IntersectionObserver(function (es) {
+    es.forEach(function (e) { e.target._seen = e.isIntersecting && e.intersectionRect.height > 0; if (e.target._seen) e.target._fresh = true; });
+    gridTend();
+  }, { root: home, rootMargin: "60px 0px" }) : null;
+  function gridVideo() {
+    if (gridVid) return gridVid;
+    var v = document.createElement("video");
+    v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto";
+    v.setAttribute("muted", ""); v.setAttribute("playsinline", ""); v.setAttribute("aria-hidden", "true");
+    // decoded but not shown (a display:none video is not decoded on some phones)
+    v.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1";
+    v.addEventListener("error", gridFallback);
+    v.src = GRID.src;
+    document.body.appendChild(v);
+    gridVid = v;
+    return v;
+  }
+  function gridPaint() {
+    var v = gridVid;
+    if (!v || v.readyState < 2) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    gridCards.forEach(function (cv) {
+      if (!cv._seen) return;
+      var w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+      if (!w || !h) return;
+      if (cv.width !== w) cv.width = w;
+      if (cv.height !== h) cv.height = h;
+      var i = cv._tile, sx = (i % GRID.cols) * GRID.tw, sy = Math.floor(i / GRID.cols) * GRID.th;
+      // object-fit: cover, like the video it replaces
+      var s = Math.max(w / GRID.tw, h / GRID.th), cw = w / s, ch = h / s;
+      try { cv.getContext("2d").drawImage(v, sx + (GRID.tw - cw) / 2, sy + (GRID.th - ch) / 2, cw, ch, 0, 0, w, h); } catch (e) {}
+    });
+  }
+  function gridFrames() {
+    if (!gridVid || gridVid.paused) { gridLoop = 0; return; }
+    gridPaint();
+    if (gridVid.requestVideoFrameCallback) gridLoop = gridVid.requestVideoFrameCallback(gridFrames);
+    else gridLoop = requestAnimationFrame(gridFrames);
+  }
+  function gridTend() {
+    if (!gridOn || !gridCards.length) return;
+    var want = canPlay() && gridCards.some(function (c) { return c._seen; });
+    if (want) {
+      var v = gridVideo();
+      if (v.paused) { var pr = v.play(); if (pr && pr.then) pr.then(function () { if (!gridLoop) gridFrames(); }).catch(function () {}); }
+      else if (!gridLoop) gridFrames();
+      gridPaint();   // a card that just came on screen gets its picture now
+    } else if (gridVid && !gridVid.paused) gridVid.pause();
+  }
+  function gridFallback() {
+    if (!gridOn) return;
+    gridOn = false;
+    gridCards.forEach(function (cv) {
+      var s = SHORTS[cv._tile], card = cv.parentNode;
+      if (gridWatch) gridWatch.unobserve(cv);
+      if (card) card.replaceChild(loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp"), cv);
+    });
+    gridCards = [];
+    if (gridVid) { gridVid.pause(); gridVid.removeAttribute("src"); }
+    tendAll();
+  }
+  function gridCard(i) {
+    var cv = document.createElement("canvas");
+    cv.className = "lp-grid-cv";
+    cv.setAttribute("aria-hidden", "true");
+    cv._tile = i;
+    gridCards.push(cv);
+    if (gridWatch) gridWatch.observe(cv); else cv._seen = true;
+    return cv;
   }
   function loop(src, poster) {
     var v = document.createElement("video");
@@ -291,7 +370,7 @@
     var el = document.createElement("div");
     el.className = "lp-short has-media " + CAPS[cap];
     el.style.backgroundImage = "url(" + MEDIA + s.v + ".webp)";
-    if (moving) el.appendChild(loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp"));
+    if (moving) el.appendChild(gridOn ? gridCard(i) : loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp"));
     var capEl = document.createElement("div");
     capEl.className = "lp-short-cap";
     s.t.split(" ").forEach(function (w, k) {
@@ -309,6 +388,7 @@
     return el;
   }
   function forget(scope) {
+    gridCards = gridCards.filter(function (cv) { if (!scope.contains(cv)) return true; if (gridWatch) gridWatch.unobserve(cv); return false; });
     playing = playing.filter(function (v) {
       if (!scope.contains(v)) return true;
       if (watch) watch.unobserve(v);
