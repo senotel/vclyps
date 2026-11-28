@@ -3867,3 +3867,27 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
 .lock-pop { bottom: auto; top: calc(100% + 6px); transform-origin: top right; }
 @media (max-width: 600px) { .lock-pop { transform-origin: top left; } }
 @media (max-width: 600px) { .tl-lock { margin-left: 12px; } }
+
+/* 0.102.4 the timeline, CapCut's way (admin: no boxy lanes, no dashed boxes, no seams).
+   Lanes are open ground: no outline, no tinted box. Clips are rounded strips of frames, edge to edge,
+   with no border until selected. "+ Add text / audio" is one soft filled bar, rounded, no dashes. */
+.track-text, .track-video, .track-overlay, .track-audio, .track-music, .track-uaudio, .track-effect {
+  background: transparent !important; box-shadow: none !important; border: 0 !important;
+}
+.clip { top: 2px; bottom: 2px; border-radius: 8px; border-color: transparent; background: #1b1c1a; }
+.clip .cstrip { gap: 0; }
+.clip .cstrip img { margin: 0; border: 0; }
+.clip.sel { border-color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
+.lane-add {
+  top: 3px; bottom: 3px; padding: 0 12px; gap: 6px;
+  border: 0 !important; border-radius: 8px;
+  background: rgba(127, 120, 110, 0.14); color: var(--t1);
+  font-size: var(--fs-13); font-weight: 600;
+  transition: background-color 160ms ease, color 160ms ease, scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.lane-add:hover { background: rgba(127, 120, 110, 0.22); color: var(--text); border: 0; }
+.lane-add:active { scale: 0.98; }
+body.dark .lane-add { background: rgba(255, 255, 255, 0.07); }
+body.dark .lane-add:hover { background: rgba(255, 255, 255, 0.12); }
+.lane-add .la-tx { position: sticky; left: 12px; white-space: nowrap; }
+.lane-add { overflow: visible; }

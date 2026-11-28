@@ -3905,7 +3905,10 @@
     /* ...except that, as in CapCut, an empty text lane and an empty sound
        lane offer to be filled: "+ Add text", "+ Add audio", along the edit. */
     const offer = (track, label, go) => {
-      const b = mk("button", "lane-add", "+ " + label);
+      const b = mk("button", "lane-add", "");
+      b.setAttribute("aria-label", "Add " + label.replace(/^Add /, ""));
+      // 0.102.4: the words stay at the screen's left edge while the bar scrolls, as in CapCut
+      b.appendChild(mk("span", "la-tx", "+ " + label));
       b.type = "button";
       b.style.width = Math.max(total() * S.pps, 200) + "px";
       b.addEventListener("click", (ev) => { ev.stopPropagation(); go(); });
@@ -4008,7 +4011,7 @@
     // nothing starts before 0 or after the video's end (a thing may run past the end, as a single one can)
     const lo = Math.min(...starts), hi = Math.max(...starts);
     let moved = false;
-    if (e.pointerType === "touch") touchLocked = true;
+    if (e.pointerType === "touch") setTouchLock(true);
     const move = (ev) => {
       const dx = ev.clientX - x0;
       if (!moved && Math.abs(dx) < 4) return;
@@ -4027,7 +4030,7 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      touchLocked = false;
+      setTouchLock(false);
       if (moved) { commit(); renderTimeline(); recordEdit("multi-move", { items: group.length }); }
       else toggleMulti(hit.type, hit.id);
     };
@@ -4119,10 +4122,10 @@
     const timer = setTimeout(() => {
       if (mode !== "wait" || pinching) return;
       finish();
-      touchLocked = true;
+      setTouchLock(true);
       const release = (ev) => {
         if (ev.pointerId !== id) return;
-        touchLocked = false;
+        setTouchLock(false);
         window.removeEventListener("pointerup", release);
         window.removeEventListener("pointercancel", release);
       };
@@ -4436,14 +4439,23 @@
        · two fingers pinch the timeline in and out;
        · with a mouse, the wheel scrolls the timeline sideways and Ctrl or Cmd
          with the wheel (or a trackpad pinch) zooms it. */
-  let touchLocked = false, pinching = false;
+  let pinching = false;
+  var touchLockOn = false;   // var: drags set it before this line runs
   /* On the document, not the timeline: a touch keeps reporting to the
      element it started on even after a redraw has taken that element out of
      the page, and from there it no longer bubbles up to the timeline. That
      is how dragging a text stopped dead on phones until 0.31.1. */
-  document.addEventListener("touchmove", (e) => {
-    if (touchLocked || pinching) e.preventDefault();
-  }, { passive: false, capture: true });
+  /* 0.102.4: this used to be a permanent, blocking (passive: false) touchmove listener on the whole page. A blocking
+     listener makes the phone's browser ask the page before moving ANY scroll, so every busy moment (a video seek,
+     a preview paint) froze the timeline and the home page mid-swipe: the stop-and-go. Now it exists only while a
+     dragged item owns the finger. (Pinch needs none: touch-action already rules out page zoom on the timeline.) */
+  const blockTouch = (e) => { if (e.cancelable) e.preventDefault(); };
+  function setTouchLock(on) {
+    if (on === touchLockOn) return;
+    touchLockOn = on;
+    if (on) document.addEventListener("touchmove", blockTouch, { passive: false, capture: true });
+    else document.removeEventListener("touchmove", blockTouch, { capture: true });
+  }
 
   (function pinchToZoom() {
     const sc = $("tlScroll");
