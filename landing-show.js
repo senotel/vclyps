@@ -279,17 +279,17 @@
     gridTend();
   }
 
-  /* 0.102.5 the wall from ONE video (admin: every short playing, and smooth). site/wall/grid.mp4 holds all
-     fifteen loops side by side (5 x 3 tiles of 320 x 568, the same 3.2 s seamless loops, each starting at its own
-     point), so a phone decodes one video instead of nine. Each card on screen paints its own tile onto a canvas
-     whenever the video shows a new frame; the poster stays underneath until then. If the grid cannot play on a
-     device, the cards fall back to their own videos (the 0.102.3 way). */
-  var GRID = { src: MEDIA + "grid.mp4", cols: 5, tw: 320, th: 568 };
-  var gridOn = true, gridCards = [], gridVid = null, gridLoop = 0;
-  var gridWatch = "IntersectionObserver" in window ? new IntersectionObserver(function (es) {
-    es.forEach(function (e) { e.target._seen = e.isIntersecting && e.intersectionRect.height > 0; if (e.target._seen) e.target._fresh = true; });
-    gridTend();
-  }, { root: home, rootMargin: "60px 0px" }) : null;
+  /* 0.102.6 the wall from ONE video, painted onto one canvas per column.
+     site/wall/grid.mp4 holds all fifteen loops (5 x 3 tiles of 256 x 456, 1280 x 1368 so every phone's hardware
+     decoder takes it; the same 3.2 s seamless loops, each starting at its own point). One hidden video plays it.
+     Each wall column gets ONE canvas behind its cards, inside the moving strip, so it moves with the cards
+     (never out of step) and is big enough that phones draw it on the graphics chip. 0.102.5 gave every card its
+     own small canvas: phones draw small canvases on the processor, so each card copied the whole video frame
+     through memory every frame; that was the lag and the pages that failed to load.
+     On each new video frame only the cards on screen are repainted. The posters stay until the first frame.
+     If the grid cannot play, the cards fall back to their own videos (capped at MAX_PLAY). */
+  var GRID = { src: MEDIA + "grid.mp4", cols: 5, tw: 256, th: 456 };
+  var gridOn = true, gridCards = [], gridCols = [], gridVid = null, gridLoop = 0, gridLive = false, wallSeen = false, wallWatch = null;
   function gridVideo() {
     if (gridVid) return gridVid;
     var v = document.createElement("video");
@@ -303,58 +303,70 @@
     gridVid = v;
     return v;
   }
-  function gridPaint() {
+  function gridColumn(strip) {
+    var cv = document.createElement("canvas");
+    cv.className = "lp-grid-col";
+    cv.setAttribute("aria-hidden", "true");
+    cv._strip = strip;
+    cv._cards = Array.prototype.slice.call(strip.querySelectorAll(".lp-short"));
+    strip.insertBefore(cv, strip.firstChild);
+    gridCols.push(cv);
+  }
+  function gridPaint(all) {
     var v = gridVid;
     if (!v || v.readyState < 2) return;
-    var dpr = Math.min(2, window.devicePixelRatio || 1);
-    gridCards.forEach(function (cv) {
-      if (!cv._seen) return;
-      var w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
-      if (!w || !h) return;
-      if (cv.width !== w) cv.width = w;
-      if (cv.height !== h) cv.height = h;
-      var i = cv._tile, sx = (i % GRID.cols) * GRID.tw, sy = Math.floor(i / GRID.cols) * GRID.th;
-      // object-fit: cover, like the video it replaces
-      var s = Math.max(w / GRID.tw, h / GRID.th), cw = w / s, ch = h / s;
-      try { cv.getContext("2d").drawImage(v, sx + (GRID.tw - cw) / 2, sy + (GRID.th - ch) / 2, cw, ch, 0, 0, w, h); } catch (e) {}
+    var dpr = Math.min(2, window.devicePixelRatio || 1), vh = window.innerHeight;
+    var full = all || !gridLive;
+    gridCols.forEach(function (cv) {
+      var s = cv._strip, W = s.clientWidth, H = s.clientHeight;
+      if (!W || !H) return;
+      var d = Math.min(dpr, 8000 / H), pw = Math.round(W * d), ph = Math.round(H * d), redo = full;
+      if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; cv._geo = null; redo = true; }
+      if (!cv._geo) cv._geo = cv._cards.map(function (c) { return [c.offsetLeft, c.offsetTop, c.offsetWidth, c.offsetHeight, c._tile]; });
+      var top = s.getBoundingClientRect().top, ctx = cv.getContext("2d");
+      cv._geo.forEach(function (g) {
+        if (!redo && (top + g[1] + g[3] < 0 || top + g[1] > vh)) return;   // off screen: repainted when it comes back
+        var i = g[4], sx = (i % GRID.cols) * GRID.tw, sy = Math.floor(i / GRID.cols) * GRID.th;
+        var x = g[0] * d, y = g[1] * d, w = g[2] * d, h = g[3] * d;
+        var k = Math.max(w / GRID.tw, h / GRID.th), cw = w / k, ch = h / k;   // object-fit: cover
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, w, h, 8 * d); else ctx.rect(x, y, w, h);
+        ctx.clip();
+        try { ctx.drawImage(v, sx + (GRID.tw - cw) / 2, sy + (GRID.th - ch) / 2, cw, ch, x, y, w, h); } catch (e) {}
+        ctx.restore();
+      });
     });
+    if (!gridLive && gridCols.length) { gridLive = true; if (wall) wall.classList.add("grid-live"); }
   }
   function gridFrames() {
     if (!gridVid || gridVid.paused) { gridLoop = 0; return; }
-    gridPaint();
+    gridPaint(false);
     if (gridVid.requestVideoFrameCallback) gridLoop = gridVid.requestVideoFrameCallback(gridFrames);
     else gridLoop = requestAnimationFrame(gridFrames);
   }
   function gridTend() {
-    if (!gridOn || !gridCards.length) return;
-    var want = canPlay() && gridCards.some(function (c) { return c._seen; });
-    if (want) {
+    if (!gridOn || !gridCols.length) return;
+    if (!wallWatch && wall && "IntersectionObserver" in window) {
+      wallWatch = new IntersectionObserver(function (es) { wallSeen = es[es.length - 1].isIntersecting; gridTend(); }, { root: home });
+      wallWatch.observe(wall);
+    } else if (!wallWatch) wallSeen = true;
+    if (canPlay() && wallSeen) {
       var v = gridVideo();
       if (v.paused) { var pr = v.play(); if (pr && pr.then) pr.then(function () { if (!gridLoop) gridFrames(); }).catch(function () {}); }
       else if (!gridLoop) gridFrames();
-      gridPaint();   // a card that just came on screen gets its picture now
     } else if (gridVid && !gridVid.paused) gridVid.pause();
   }
   function gridFallback() {
     if (!gridOn) return;
     gridOn = false;
-    gridCards.forEach(function (cv) {
-      var s = SHORTS[cv._tile], card = cv.parentNode;
-      if (gridWatch) gridWatch.unobserve(cv);
-      if (card) card.replaceChild(loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp"), cv);
-    });
+    gridCols.forEach(function (cv) { if (cv.parentNode) cv.parentNode.removeChild(cv); });
+    gridCols = [];
+    gridCards.forEach(function (card) { var s = SHORTS[card._tile]; card.appendChild(loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp")); });
     gridCards = [];
+    if (wall) wall.classList.remove("grid-live");
     if (gridVid) { gridVid.pause(); gridVid.removeAttribute("src"); }
     tendAll();
-  }
-  function gridCard(i) {
-    var cv = document.createElement("canvas");
-    cv.className = "lp-grid-cv";
-    cv.setAttribute("aria-hidden", "true");
-    cv._tile = i;
-    gridCards.push(cv);
-    if (gridWatch) gridWatch.observe(cv); else cv._seen = true;
-    return cv;
   }
   function loop(src, poster) {
     var v = document.createElement("video");
@@ -370,7 +382,7 @@
     var el = document.createElement("div");
     el.className = "lp-short has-media " + CAPS[cap];
     el.style.backgroundImage = "url(" + MEDIA + s.v + ".webp)";
-    if (moving) el.appendChild(gridOn ? gridCard(i) : loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp"));
+    if (moving) { if (gridOn) { el._tile = i; gridCards.push(el); } else el.appendChild(loop(MEDIA + s.v + ".mp4", MEDIA + s.v + ".webp")); }
     var capEl = document.createElement("div");
     capEl.className = "lp-short-cap";
     s.t.split(" ").forEach(function (w, k) {
@@ -388,7 +400,9 @@
     return el;
   }
   function forget(scope) {
-    gridCards = gridCards.filter(function (cv) { if (!scope.contains(cv)) return true; if (gridWatch) gridWatch.unobserve(cv); return false; });
+    gridCards = gridCards.filter(function (c) { return !scope.contains(c); });
+    gridCols = gridCols.filter(function (c) { return !scope.contains(c); });
+    if (scope === wall && gridLive) { gridLive = false; wall.classList.remove("grid-live"); }
     playing = playing.filter(function (v) {
       if (!scope.contains(v)) return true;
       if (watch) watch.unobserve(v);
@@ -420,9 +434,11 @@
       strip.className = "lp-wall-strip";
       // the column twice over, so the loop has no seam
       for (var rep = 0; rep < 2; rep++) list.forEach(function (it) { strip.appendChild(short(it.clip, it.cap, true)); });
+      if (gridOn) gridColumn(strip);
       col.appendChild(strip);
       wall.appendChild(col);
     });
+    gridTend();
   }
 
   /* ── the pause button (T19-08 / F10): stops autoplay, the wall's drift,

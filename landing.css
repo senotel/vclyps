@@ -660,5 +660,9 @@ body.dark .lp-levels .lp-level-ind { background: #2a2825; }
 @media (max-width: 600px) { .lp-levels { grid-template-columns: repeat(3, minmax(0, 1fr)); } .lp-level-dot { top: 7px; right: 7px; } }
 .lp-level-dot, .lp-levels .lp-level-dot { top: auto; bottom: 5px; right: auto; left: 50%; width: 5px; height: 5px; transform: translateX(-50%); }
 
-/* 0.102.5 a wall card's tile of the one grid video (landing-show.js), placed exactly as its video was */
-.lp-short .lp-grid-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* 0.102.6 the wall's grid video is painted on one canvas per column, behind its cards, moving with them */
+.lp-wall-strip { position: relative; }
+.lp-grid-col { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; pointer-events: none; z-index: 0; }
+.lp-wall-strip > .lp-short { z-index: 1; }
+.lp-wall.grid-live .lp-short.has-media { background-image: none !important; background-color: transparent; }
