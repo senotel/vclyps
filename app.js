@@ -10749,9 +10749,13 @@
     ctx.drawImage(img, x, y, w, h);
     ctx.restore();
   }
-  /* 0.94.0: the Ethlenos mark, bottom right, on every frame of the preview and the export until the
-     account has paid (vcAccount.state().paid). No setting turns it off. */
-  function ethMarkOn() { try { return !(window.vcAccount && vcAccount.state().paid); } catch (e) { return true; } }
+  /* 0.94.0: the Ethlenos mark, bottom right, on the preview and the export. 0.102.2 (admin): only on videos
+     Auto clip made, and only until the account is on a paid plan (vcAccount.state().paid). Anything edited
+     by hand never carries it. No setting turns it off. */
+  function ethMarkOn() {
+    if (!S.autoMade) return false;
+    try { return !(window.vcAccount && vcAccount.state().paid); } catch (e) { return true; }
+  }
   function drawEthMark(ctx, f) {
     if (!ethMarkOn()) return;
     const u = Math.min(f.w, f.h) * 0.034;                // mark height
@@ -12304,6 +12308,7 @@
       if (!g || !g.clips.length) throw new Error("The AI Director could not prepare an edit. Reload the app and retry; your timeline has not been changed.");
       if (opts.signal && opts.signal.aborted) throw new Error("Stopped.");
       appliedAt = histIdx;
+      S.autoMade = true;   // 0.102.2: an Auto clip edit (the free-plan mark goes on these only)
       applyGenerated(g, keep);
       // Business mode: the product name and call to action, as the video's last clip
       if (g.endCard) {
@@ -14868,7 +14873,7 @@
         // snapshot it can no longer read, instead of restoring it wrongly
         by: window.SenotelVersion ? window.SenotelVersion.stamp() : null,
         name: $("projectName").value,
-        format: S.format, mode: S.mode, brief: S.brief, tbrief: S.tbrief, vertical: S.vertical, aspect: S.aspect, nextId: nextId,
+        format: S.format, mode: S.mode, autoMade: !!S.autoMade, brief: S.brief, tbrief: S.tbrief, vertical: S.vertical, aspect: S.aspect, nextId: nextId,
         media: S.media.map((m) => ({ id: m.id, name: m.name, type: m.type, duration: m.duration, w: m.w, h: m.h,
           fromVideo: !!m.fromVideo, soundSaved: !!m.soundSaved,
           // the transcript, so captions can be restyled after a reload without listening again
@@ -14948,6 +14953,7 @@
     loadMusicElement();
     S.format = "auto";
     S.mode = snap.mode === "business" || snap.mode === "trailer" ? snap.mode : "entertainment";
+    S.autoMade = !!snap.autoMade;
     S.brief = Object.assign({ name: "", what: "", cta: "", tone: "polished" }, snap.brief && typeof snap.brief === "object" ? snap.brief : {});
     S.tbrief = Object.assign({ name: "", what: "", cta: "", tone: "epic" }, snap.tbrief && typeof snap.tbrief === "object" ? snap.tbrief : {});
     applyModeUI();
@@ -15033,6 +15039,7 @@
     S.time = 0;
     S.seed = 1;
     S.format = "auto";
+    S.autoMade = false;
     S.vertical = false;
     S.found = null;
     renderClipsChip();
