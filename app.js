@@ -3733,13 +3733,15 @@
     return out;
   }
 
+  var stripCache = new Map();   // 0.102.3: clip picture strips kept between redraws
   function renderTimeline() {
     const vt = $("videoTrack"), tt = $("textTrack"), ruler = $("ruler");
     const ot = $("overlayTrack"), at = $("audioTrack"), mt = $("musicTrack"), ut = $("uaudioTrack"), et = $("effectTrack");
     vt.innerHTML = ""; tt.innerHTML = ""; ot.innerHTML = ""; at.innerHTML = ""; mt.innerHTML = ""; ut.innerHTML = ""; et.innerHTML = "";
 
-    const totSec = Math.max(total(), 12);
-    const W = Math.max(totSec * S.pps + 200, $("tlScroll").clientWidth - PADX * 2);
+    const deskTl = deskTimeline();
+    const totSec = deskTl ? Math.max(total(), 12) : total();
+    const W = deskTl ? Math.max(totSec * S.pps + 200, $("tlScroll").clientWidth - PADX * 2) : Math.max(1, Math.round(totSec * S.pps));
     [vt, tt, ot, at, mt, ut, et, ruler].forEach((x) => { x.style.width = W + "px"; });
 
     /* Half a viewport of padding at each end so the first and last frame can
@@ -3778,16 +3780,22 @@
       /* Pictures from inside the clip, edge to edge (the frame strip), the
          way CapCut shows footage. Only what helps is written on top: a name
          you gave the clip, and its length while it is selected. */
-      const strip = mk("div", "cstrip");
       const tile = CLIP_TILE;
       const n = Math.min(240, Math.ceil(w / tile));
-      for (let i = 0; i < n; i++) {
-        const src = m && m.type === "video" ? frameAt(m, c.in + srcOff(c, (i + 0.5) * tile / S.pps)) : m && m.thumb;
-        const img = document.createElement("img");
-        img.draggable = false;
-        img.alt = "";
-        if (src) img.src = src;
-        strip.appendChild(img);
+      const sKey = [c.mediaId, c.in, c.out, c.speed || 1, c.curve ? JSON.stringify(c.curve) : "", S.pps, n, m ? (m.frames || []).length + (m.thumb || "").length : 0].join("|");
+      let strip = stripCache.get(sKey);
+      if (!strip || strip.isConnected) {
+        strip = mk("div", "cstrip");
+        for (let i = 0; i < n; i++) {
+          const src = m && m.type === "video" ? frameAt(m, c.in + srcOff(c, (i + 0.5) * tile / S.pps)) : m && m.thumb;
+          const img = document.createElement("img");
+          img.draggable = false;
+          img.alt = "";
+          if (src) img.src = src;
+          strip.appendChild(img);
+        }
+        if (stripCache.size > 160) stripCache.clear();
+        stripCache.set(sKey, strip);
       }
       cel.appendChild(strip);
       if (c.name) {
@@ -4094,13 +4102,14 @@
      through to the drag. (Until 2026-10-22 the swipe was done by hand here:
      it stopped dead on release and could scroll the whole editor up and
      down, which CapCut never does.) */
-  const HOLD_MS = 280;
+  const HOLD_MS = 450;
   // one tap of the phone's vibration motor, wherever Ethlenos runs (platform.js haptic)
   function buzz(kind) { try { if (window.SenotelPlatform && SenotelPlatform.haptic) SenotelPlatform.haptic(kind); } catch (e) {} }
   function holdToDrag(e, start) {
     if (e.pointerType !== "touch") { start(e); return; }
     const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
-    let mode = "wait";
+    // a finger that lands while the timeline is still gliding is catching the glide: never a tap or a pick-up
+    let mode = performance.now() - userScrollAt < 250 ? "swipe" : "wait";
     const finish = () => {
       clearTimeout(timer);
       window.removeEventListener("pointermove", move);
@@ -4366,9 +4375,27 @@
   /* Scroll position IS the playhead position. One listener closes the loop, so
      a flick, a trackpad, a scrollbar and the drag above all scrub identically. */
   let scrubRaf = 0;
+  /* 0.102.3: scrollLock used to drop every scroll event for a frame after we moved the timeline, so a swipe
+     that began in that frame was lost and the next re-centre pulled the timeline back (the "goofy" jumps).
+     Now only the scroll event our own write causes is ignored (it lands on the value we wrote). */
+  var ownScroll = -1, tlTouch = false, userScrollAt = -1e9;   // var: read by code that can run before this line
+  function setTlScroll(v) {
+    const sc = $("tlScroll");
+    scrollLock = true;
+    sc.scrollLeft = v;
+    ownScroll = sc.scrollLeft;
+    requestAnimationFrame(() => { scrollLock = false; });
+  }
+  function userScrolling() { return tlTouch || performance.now() - userScrollAt < 180; }
+  $("tlScroll").addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") tlTouch = true; }, { passive: true });
+  $("tlScroll").addEventListener("touchstart", () => { tlTouch = true; }, { passive: true });
+  ["pointerup", "pointercancel", "touchend", "touchcancel"].forEach((ev) => window.addEventListener(ev, () => { tlTouch = false; }, { passive: true }));
   $("tlScroll").addEventListener("scroll", () => {
-    if (scrollLock || S.playing || deskTimeline()) return;   // on a computer, scrolling only looks along the edit
-    const t = clamp($("tlScroll").scrollLeft / S.pps, 0, total());
+    const sl = $("tlScroll").scrollLeft;
+    if (scrollLock && Math.abs(sl - ownScroll) < 1) return;   // the echo of our own write
+    if (S.playing || deskTimeline()) return;   // on a computer, scrolling only looks along the edit
+    userScrollAt = performance.now();
+    const t = clamp(sl / S.pps, 0, total());
     if (Math.abs(t - S.time) < 0.0005) return;
     /* 0.99.2: the time follows the finger at once (a re-centre must never pull the timeline back to an older
        time); the heavy part (moving the video, redrawing overlays) runs once per frame. */
@@ -4376,7 +4403,7 @@
     $("playhead").style.left = padL() + S.time * S.pps + "px";
     updateTransport();
     if (scrubRaf) return;
-    scrubRaf = requestAnimationFrame(() => { scrubRaf = 0; resetSfxCursor(); syncMedia(); syncOverlays(); });
+    scrubRaf = requestAnimationFrame(() => { scrubRaf = 0; resetSfxCursor(); });
   });
 
   $("zoomSlider").addEventListener("input", () => zoomTimeline(+$("zoomSlider").value));
@@ -4392,11 +4419,7 @@
     S.pps = next;
     $("zoomSlider").value = String(Math.round(next));
     renderTimeline();   // ends in updatePlayheadUI, which re-centres on the playhead
-    if (deskTimeline()) {
-      scrollLock = true;
-      sc.scrollLeft = Math.max(0, padL() + S.time * S.pps - onScreen);
-      requestAnimationFrame(() => { scrollLock = false; });
-    }
+    if (deskTimeline()) setTlScroll(Math.max(0, padL() + S.time * S.pps - onScreen));
   }
 
   /* ═══════════ TOUCH AND WHEEL, THE CAPCUT WAY (2026-10-22) ═══════════
@@ -11254,7 +11277,15 @@
   let cropEdit = null;   // the clip whose crop is being set (drawCropEditor), or null
 
   // The preview: renderPicture into the picture's box on the stage canvas
-  const previewPic = { cv: null };
+  const previewPic = { cv: null, ok: false };
+  // the clip under the playhead is a video whose frame is not ready yet (a seek or a new file loading)
+  function mainVideoBusy() {
+    if (!S.clips.length) return false;
+    const info = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
+    const m = info && mediaById(info.clip.mediaId);
+    if (!m || m.type !== "video" || transitionAt(S.time)) return false;
+    return pv.dataset.mid !== String(m.id) || pv.readyState < 2;
+  }
   function drawPreviewPicture() {
     const cv = $("layoutCanvas");
     const stage = $("stage");
@@ -11273,12 +11304,14 @@
     const W = Math.max(2, Math.round(box.w * dpr)), H = Math.max(2, Math.round(box.h * dpr));
     if (!previewPic.cv) previewPic.cv = document.createElement("canvas");
     const P = previewPic.cv;
+    const sized = P.width === W && P.height === H;
     if (P.width !== W) P.width = W;
     if (P.height !== H) P.height = H;
     pvTUsed = false;
     if (cropEdit) cropEdit.view = { box: box, dpr: dpr };
     if (cropEdit) drawCropEditor(P.getContext("2d"), W, H);
-    else renderPicture(P.getContext("2d"), W, H, S.time, previewSrc);
+    else if (sized && previewPic.ok && mainVideoBusy()) { /* 0.102.3: seeking: keep the last picture */ }
+    else { renderPicture(P.getContext("2d"), W, H, S.time, previewSrc); previewPic.ok = true; }
     if (!pvTUsed && !pvT.paused) pvT.pause();
     ctx.drawImage(P, Math.round(box.x * dpr), Math.round(box.y * dpr));
     // ccl8: while a mask is being set, its outline and handles over the picture (never in the export)
@@ -11471,22 +11504,13 @@
       let to = null;
       if (S.playing) { if (x > sc.scrollLeft + w - 60 || x < sc.scrollLeft) to = x - 60; }
       else if (x < sc.scrollLeft + 20 || x > sc.scrollLeft + w - 20) to = x - w / 3;
-      if (to != null) {
-        scrollLock = true;
-        sc.scrollLeft = Math.max(0, to);
-        requestAnimationFrame(() => { scrollLock = false; });
-      }
+      if (to != null) setTlScroll(Math.max(0, to));
       return;
     }
+    // never while a finger is on the timeline or it is still gliding: the finger owns it (0.102.3)
+    if (userScrolling() && !S.playing) return;
     const want = S.time * S.pps;
-    if (Math.abs(sc.scrollLeft - want) > 0.5) {
-      scrollLock = true;
-      sc.scrollLeft = want;
-      /* Released on the next frame, not immediately: the scroll event this
-         assignment causes is delivered asynchronously, and clearing the flag
-         synchronously would let it through and fight the playhead. */
-      requestAnimationFrame(() => { scrollLock = false; });
-    }
+    if (Math.abs(sc.scrollLeft - want) > 1.5) setTlScroll(want);
   }
 
   // Advance the timeline. When a video clip is playing, DERIVE the time from
@@ -11582,6 +11606,24 @@
   }
 
   const pvWrapEl = $("previewWrap");
+  if (/[?&#]perf\b/.test(location.href)) (function perfHud() {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:8px;top:8px;z-index:99999;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.78);color:#fff;font:12px/1.35 ui-monospace,monospace;pointer-events:none;white-space:pre";
+    document.body.appendChild(box);
+    let n = 0, worst = 0, last = performance.now(), slow = 0, mark = last, lt = 0;
+    try { new PerformanceObserver((l) => { lt += l.getEntries().length; }).observe({ type: "longtask", buffered: false }); } catch (e) {}
+    const tick = (t) => {
+      const d = t - last; last = t; n++; if (d > worst) worst = d; if (d > 34) slow++;
+      if (t - mark > 1000) {
+        const vids = document.querySelectorAll("video"); let play = 0; vids.forEach((v) => { if (!v.paused) play++; });
+        box.textContent = "fps " + Math.round(n * 1000 / (t - mark)) + "  worst " + Math.round(worst) + " ms\nslow frames " + slow + "  long tasks " + lt +
+          "\nvideos playing " + play + "/" + vids.length + "  screen " + (document.body.dataset.screen || "") + "\npreview paint " + PERF.cost.toFixed(1) + " ms";
+        n = 0; worst = 0; slow = 0; lt = 0; mark = t;
+      }
+      window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+  })();
   function loop(ts) {
     // Exactly one owner advances playback: worker while exporting, rAF otherwise.
     if (!EXP.active || !window.SenotelRenderClock || !SenotelRenderClock.running) frameTick(ts);

@@ -7,13 +7,13 @@
    window.EthAdd.open({ title, ways, onFiles, sources }) ; window.EthAdd.icon(name) for other sheets. */
 (function () {
   "use strict";
-  const svg = (body) => `<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">${body}</svg>`;
-  // filled glyphs on a coloured tile (never thin outlines)
+  const svg = (body) => `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  // 0.102.3: the app's own icon style, thin line icons on flat soft squares (they were filled glyphs on gradients)
   const GLYPH = {
-    gallery: svg('<rect x="6.5" y="3.5" width="13" height="11" rx="2.4" fill="#fff" opacity=".45"/><rect x="3.5" y="7" width="14.5" height="13" rx="2.6" fill="#fff"/><circle cx="8" cy="11.2" r="1.6" fill="#c8102e"/><path d="M4.6 18.6l4.1-4.2a1.2 1.2 0 0 1 1.7 0l1.6 1.6 2.6-2.9a1.2 1.2 0 0 1 1.8 0l1.2 1.4v3.9a1.6 1.6 0 0 1-1.6 1.6H6.1a1.6 1.6 0 0 1-1.5-1.4z" fill="#c8102e"/>'),
-    camera: svg('<rect x="2.5" y="6" width="13.5" height="12" rx="3" fill="#f4f2ed"/><path d="M17.2 10.4l3.6-2.3a.8.8 0 0 1 1.2.7v6.4a.8.8 0 0 1-1.2.7l-3.6-2.3z" fill="#f4f2ed"/><circle cx="6.4" cy="9.6" r="1.2" fill="#dc143c"/>'),
-    files: svg('<path d="M2.8 7.2A2.4 2.4 0 0 1 5.2 4.8h3.6c.6 0 1.2.3 1.6.7l1.3 1.4h7.1a2.4 2.4 0 0 1 2.4 2.4v.6H2.8z" fill="#f4f2ed" opacity=".55"/><rect x="2.8" y="8.7" width="18.4" height="10.5" rx="2.4" fill="#f4f2ed"/>'),
-    computer: svg('<rect x="4" y="4.5" width="16" height="11" rx="2" fill="#fff"/><rect x="6" y="6.5" width="12" height="7" rx=".8" fill="#c8102e"/><path d="M2 17.2h20l-.7 1.4a1.6 1.6 0 0 1-1.4.9H4.1a1.6 1.6 0 0 1-1.4-.9z" fill="#fff"/>')
+    gallery: svg('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M21 15.5l-4.6-4.6a1.2 1.2 0 0 0-1.7 0L6 19.6"/>'),
+    camera: svg('<rect x="2.5" y="6" width="13.5" height="12" rx="3"/><path d="M16 10.4l4.6-2.7a.6.6 0 0 1 .9.5v7.6a.6.6 0 0 1-.9.5L16 13.6"/>'),
+    files: svg('<path d="M3 7.6A2.6 2.6 0 0 1 5.6 5h3.6c.5 0 .9.2 1.2.5l1.6 1.7h6.4A2.6 2.6 0 0 1 21 9.8v7.6a2.6 2.6 0 0 1-2.6 2.6H5.6A2.6 2.6 0 0 1 3 17.4z"/>'),
+    computer: svg('<rect x="3" y="4" width="18" height="12" rx="2.6"/><path d="M8.5 20h7M12 16v4"/>')
   };
   const SOURCES = [["gphotos", "Google Photos", "google-photos"], ["drive", "Google Drive", "google-drive"], ["dropbox", "Dropbox", "dropbox"], ["zoom", "Zoom", "zoom"], ["vimeo", "Vimeo", "vimeo"]];
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -45,12 +45,11 @@
   .ea-tile{display:flex;flex-direction:column;align-items:center;gap:8px;min-height:44px;padding:8px 2px 6px;border:0;border-radius:14px;background:none;color:var(--ea-ink);
     font:inherit;font-size:13px;font-weight:500;letter-spacing:-.01em;text-align:center;cursor:pointer;transition:background .12s ease}
   .ea-tile:hover{background:var(--ea-tile)}
-  .ea-tile:active .ea-ic{transform:scale(.94)}
+  .ea-tile:active .ea-ic{scale:.92}
   .ea-tile:disabled{opacity:.45;cursor:default}
-  .ea-ic{display:grid;place-items:center;width:58px;height:58px;border-radius:17px;transition:transform .12s ease}
-  .ea-ic-gallery,.ea-ic-computer{background:linear-gradient(160deg,#ef3b58,#c8102e 62%,#a50d27)}
-  .ea-ic-camera,.ea-ic-files{background:linear-gradient(160deg,#3b3833,#1b1a17)}
-  body.dark .ea-ic-camera,body.dark .ea-ic-files{background:linear-gradient(160deg,#45423c,#2a2824)}
+  .ea-ic{display:grid;place-items:center;width:56px;height:56px;border-radius:16px;transition:scale .22s cubic-bezier(.34,1.56,.64,1)}
+  .ea-ic-gallery,.ea-ic-computer{background:#dc143c;color:#fff}
+  .ea-ic-camera,.ea-ic-files{background:rgba(127,120,110,.14);color:var(--ea-ink)}
   .ea-ic-brand{background:var(--ea-tile);border:1px solid var(--ea-hair)}
   .ea-wide{grid-template-columns:1fr}
   .ea-wide .ea-tile{flex-direction:row;gap:14px;padding:10px 12px;font-size:15px;text-align:left;background:var(--ea-tile)}

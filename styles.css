@@ -3546,10 +3546,9 @@ svg.about-logo { color: var(--text); filter: none !important; opacity: 1; }
 #addSheet.add-dressed .add-src{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 2px 6px;border:0;border-radius:14px;background:none;color:var(--text);font-size:var(--fs-13,13px);font-weight:500;text-align:center}
 #addSheet.add-dressed .add-src.hidden{display:none}
 #addSheet.add-dressed .add-src:hover,#addSheet.add-dressed .add-src.on{background:var(--surface-2,rgba(127,127,127,.08))}
-#addSheet .ea-ic{display:grid;place-items:center;width:58px;height:58px;border-radius:17px}
-#addSheet .ea-ic-gallery,#addSheet .ea-ic-computer{background:linear-gradient(160deg,#ef3b58,#c8102e 62%,#a50d27)}
-#addSheet .ea-ic-camera,#addSheet .ea-ic-files{background:linear-gradient(160deg,#3b3833,#1b1a17)}
-body.dark #addSheet .ea-ic-camera,body.dark #addSheet .ea-ic-files{background:linear-gradient(160deg,#45423c,#2a2824)}
+#addSheet .ea-ic{display:grid;place-items:center;width:56px;height:56px;border-radius:16px}
+#addSheet .ea-ic-gallery,#addSheet .ea-ic-computer{background:#dc143c;color:#fff}
+#addSheet .ea-ic-camera,#addSheet .ea-ic-files{background:rgba(127,120,110,.14);color:var(--text)}
 #addSheet .ea-ic-brand{background:var(--surface-2,#f4f2ed);border:1px solid var(--border,#e7e4dd)}
 
 /* 0.95.3 (admin): a held button darkens; press.js shrinks it and springs it back past its size on release */

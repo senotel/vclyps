@@ -252,17 +252,31 @@
   // loops play only while they are on screen (and the home page is showing)
   var playing = [];
   var watch = "IntersectionObserver" in window ? new IntersectionObserver(function (es) {
-    es.forEach(function (e) { e.target._seen = e.isIntersecting && e.intersectionRect.height > 0; tend(e.target); });
-  }, { root: home, rootMargin: "0px" }) : null;
+    es.forEach(function (e) { e.target._seen = e.isIntersecting && e.intersectionRect.height > 0; e.target._area = e.intersectionRect.width * e.intersectionRect.height; });
+    tendAll();
+  }, { root: home, rootMargin: "0px", threshold: [0, 0.25, 0.5, 0.75, 1] }) : null;
+  /* 0.102.3: a phone has only a few hardware video decoders. Six to nine loops playing at once pushed the rest
+     onto the processor and the whole page stuttered. Now only the most visible few play; the others show their still. */
+  var MAX_PLAY = (function () {
+    var mem = navigator.deviceMemory || 8, cores = navigator.hardwareConcurrency || 8;
+    var phone = matchMedia("(pointer: coarse)").matches;
+    if (mem <= 3 || cores <= 4) return 2;
+    return phone ? 3 : 6;
+  })();
   function canPlay() { return !still.matches && !paused && !saveData() && !document.hidden && onHome(); }
   function tend(v) {
     // _gate false: on screen only in the geometric sense (the show's phone before it appears)
-    if ((watch ? v._seen : true) && v._gate !== false && canPlay()) {
+    if ((watch ? v._seen : true) && v._gate !== false && v._budget !== false && canPlay()) {
       if (!v.src) v.src = v.dataset.src;
       var pr = v.play(); if (pr && pr.catch) pr.catch(function () {});
     } else if (!v.paused) v.pause();
   }
-  function tendAll() { playing.forEach(tend); }
+  function tendAll() {
+    var want = playing.filter(function (v) { return (watch ? v._seen : true) && v._gate !== false && canPlay(); })
+      .sort(function (a, b) { return (b._gate === true) - (a._gate === true) || (b._area || 0) - (a._area || 0); })
+      .slice(0, MAX_PLAY);
+    playing.forEach(function (v) { v._budget = want.indexOf(v) >= 0; tend(v); });
+  }
   function loop(src, poster) {
     var v = document.createElement("video");
     v.muted = true; v.loop = true; v.playsInline = true;
