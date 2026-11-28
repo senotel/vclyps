@@ -289,6 +289,7 @@
      On each new video frame only the cards on screen are repainted. The posters stay until the first frame.
      If the grid cannot play, the cards fall back to their own videos (capped at MAX_PLAY). */
   var GRID = { src: MEDIA + "grid.mp4", cols: 5, tw: 256, th: 456 };
+  var WALL_GAP = 12;   // set from landing.css --wall-gap at each build: card places and the drift are worked out from it, never measured
   var gridOn = true, gridCards = [], gridCols = [], gridVid = null, gridLoop = 0, gridLive = false, wallSeen = false, wallWatch = null;
   function gridVideo() {
     if (gridVid) return gridVid;
@@ -310,22 +311,40 @@
     cv._strip = strip;
     cv._cards = Array.prototype.slice.call(strip.querySelectorAll(".lp-short"));
     strip.insertBefore(cv, strip.firstChild);
+    strip._gridCv = cv;
+
+    if (gridCardWatch) cv._cards.forEach(function (c) { gridCardWatch.observe(c); });
     gridCols.push(cv);
   }
-  function gridPaint(all) {
+  /* 0.102.7 (phone-speed audit): no measuring per frame. Measuring a moving column forced the browser to
+     recompute the wall's styles every frame (getBoundingClientRect, clientWidth). Column sizes now come from a
+     ResizeObserver, on-screen cards from an IntersectionObserver, and only cards on screen are painted. */
+  var gridSizeWatch = "ResizeObserver" in window ? new ResizeObserver(function (es) {
+    es.forEach(function (e) {
+      var strip = e.target, cv = strip._gridCv;
+      if (strip._driftH !== Math.round(e.contentRect.height)) { strip._driftH = Math.round(e.contentRect.height); wallDrift(strip); }
+      if (!cv) return; cv._W = e.contentRect.width; cv._H = e.contentRect.height; cv._geo = null;
+    });
+  }) : null;
+  var gridCardWatch = "IntersectionObserver" in window ? new IntersectionObserver(function (es) {
+    es.forEach(function (e) { e.target._seen = e.isIntersecting; });
+  }, { root: home, rootMargin: "120px 0px" }) : null;
+  function gridPaint() {
     var v = gridVid;
     if (!v || v.readyState < 2) return;
-    var dpr = Math.min(2, window.devicePixelRatio || 1), vh = window.innerHeight;
-    var full = all || !gridLive;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
     gridCols.forEach(function (cv) {
-      var s = cv._strip, W = s.clientWidth, H = s.clientHeight;
+      var W = cv._W, H = cv._H;
+      if (W == null) { W = cv._W = cv._strip.clientWidth; H = cv._H = cv._strip.clientHeight; }
       if (!W || !H) return;
-      var d = Math.min(dpr, 8000 / H), pw = Math.round(W * d), ph = Math.round(H * d), redo = full;
-      if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; cv._geo = null; redo = true; }
-      if (!cv._geo) cv._geo = cv._cards.map(function (c) { return [c.offsetLeft, c.offsetTop, c.offsetWidth, c.offsetHeight, c._tile]; });
-      var top = s.getBoundingClientRect().top, ctx = cv.getContext("2d");
+      var d = Math.min(dpr, 8000 / H), pw = Math.round(W * d), ph = Math.round(H * d);
+      if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; cv._geo = null; cv._cards.forEach(function (c) { c._painted = false; }); }
+      if (!cv._geo) { var ch0 = W * 16 / 9; cv._geo = cv._cards.map(function (c, k) { return [0, k * (ch0 + WALL_GAP), W, ch0, c._tile, c]; }); }
+      var ctx = null;
       cv._geo.forEach(function (g) {
-        if (!redo && (top + g[1] + g[3] < 0 || top + g[1] > vh)) return;   // off screen: repainted when it comes back
+        var card = g[5];
+        if (gridCardWatch ? !card._seen : false) return;   // off screen: repainted when it comes back
+        ctx = ctx || cv.getContext("2d");
         var i = g[4], sx = (i % GRID.cols) * GRID.tw, sy = Math.floor(i / GRID.cols) * GRID.th;
         var x = g[0] * d, y = g[1] * d, w = g[2] * d, h = g[3] * d;
         var k = Math.max(w / GRID.tw, h / GRID.th), cw = w / k, ch = h / k;   // object-fit: cover
@@ -335,13 +354,14 @@
         ctx.clip();
         try { ctx.drawImage(v, sx + (GRID.tw - cw) / 2, sy + (GRID.th - ch) / 2, cw, ch, x, y, w, h); } catch (e) {}
         ctx.restore();
+        if (!card._painted) { card._painted = true; card.classList.add("gpaint"); }   // its poster gives way only once painted
       });
     });
-    if (!gridLive && gridCols.length) { gridLive = true; if (wall) wall.classList.add("grid-live"); }
+    gridLive = true;
   }
   function gridFrames() {
     if (!gridVid || gridVid.paused) { gridLoop = 0; return; }
-    gridPaint(false);
+    gridPaint();
     if (gridVid.requestVideoFrameCallback) gridLoop = gridVid.requestVideoFrameCallback(gridFrames);
     else gridLoop = requestAnimationFrame(gridFrames);
   }
@@ -357,6 +377,35 @@
       else if (!gridLoop) gridFrames();
     } else if (gridVid && !gridVid.paused) gridVid.pause();
   }
+  /* 0.102.7: the wall's drift. The CSS keyframes used calc(-50% - var(--wall-gap) / 2); a custom property in
+     keyframes kept the animation off the graphics chip, so the browser recomputed styles every frame (75 a second
+     at phone speed). The same motion in exact pixels, started from script, runs entirely on the graphics chip. */
+  function wallDrift(strip) {
+    var keep = strip._drift ? (strip._drift.currentTime || 0) / strip._driftMs : Math.random() * 0;
+    if (strip._drift) { strip._drift.cancel(); strip._drift = null; }
+    if (still.matches || !strip.animate) { strip.classList.remove("js-drift"); return; }
+    var h = strip._driftH;
+    if (!h) return;
+    var gap = WALL_GAP;
+    var ms = parseFloat(strip.parentNode.style.getPropertyValue("--dur")) * 1000 || 50000;
+    var down = strip.parentNode.classList.contains("is-down");
+    strip.classList.add("js-drift");
+    strip._driftMs = ms;
+    strip._drift = strip.animate([{ transform: "translateY(0px)" }, { transform: "translateY(" + (-(h / 2 + gap / 2)).toFixed(2) + "px)" }],
+      { duration: ms, iterations: Infinity, easing: "linear", direction: down ? "reverse" : "normal" });
+    strip._drift.currentTime = (keep || 0) * ms;
+    if (paused) strip._drift.pause();
+  }
+  var driftWatch = "ResizeObserver" in window ? new ResizeObserver(function (es) {
+    es.forEach(function (e) {
+      var strip = e.target, hh = Math.round(e.contentRect.height);
+      if (strip._driftH !== hh) { strip._driftH = hh; wallDrift(strip); }
+      var cv = strip._gridCv;
+      if (cv) { cv._W = e.contentRect.width; cv._H = e.contentRect.height; cv._geo = null; }
+    });
+  }) : null;
+  function driftAll() { if (wall) Array.prototype.forEach.call(wall.querySelectorAll(".lp-wall-strip"), wallDrift); }
+  if (still.addEventListener) still.addEventListener("change", driftAll);
   function gridFallback() {
     if (!gridOn) return;
     gridOn = false;
@@ -401,7 +450,12 @@
   }
   function forget(scope) {
     gridCards = gridCards.filter(function (c) { return !scope.contains(c); });
-    gridCols = gridCols.filter(function (c) { return !scope.contains(c); });
+    gridCols = gridCols.filter(function (c) {
+      if (!scope.contains(c)) return true;
+      if (gridSizeWatch) gridSizeWatch.unobserve(c._strip);
+      if (gridCardWatch) c._cards.forEach(function (k) { gridCardWatch.unobserve(k); });
+      return false;
+    });
     if (scope === wall && gridLive) { gridLive = false; wall.classList.remove("grid-live"); }
     playing = playing.filter(function (v) {
       if (!scope.contains(v)) return true;
@@ -420,6 +474,7 @@
     var w = wall.clientWidth, h = wall.clientHeight;
     if (!w || !h) return;
     var cs = getComputedStyle(wall), gap = parseFloat(cs.columnGap) || 14;
+    WALL_GAP = gap;   // 0.102.7: the real gap (phones use a smaller one), read once per build, never per frame
     var inner = w - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
     var n = Logic.wallColumns(inner, h, gap);
     if (n === wallCols) return;
@@ -438,6 +493,7 @@
       col.appendChild(strip);
       wall.appendChild(col);
     });
+    Array.prototype.forEach.call(wall.querySelectorAll(".lp-wall-strip"), function (st) { if (driftWatch) driftWatch.observe(st); else { st._driftH = st.offsetHeight; wallDrift(st); } });
     gridTend();
   }
 
@@ -452,6 +508,7 @@
       b.title = on ? "Play motion" : "Pause motion";
     });
     if (auto) auto.setPaused(on);
+    if (wall) Array.prototype.forEach.call(wall.querySelectorAll(".lp-wall-strip"), function (s) { if (s._drift) { if (on) s._drift.pause(); else s._drift.play(); } });
     tendAll();
     kick();
   }

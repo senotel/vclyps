@@ -11507,22 +11507,23 @@
 
   function updatePlayheadUI() {
     const sc = $("tlScroll");
+    const curScroll = sc.scrollLeft, curW = tlW || sc.clientWidth;   // 0.102.7: reads first, then writes
     $("playhead").style.left = padL() + S.time * S.pps + "px";
     if (deskTimeline()) {
       // follow the playhead only when it moved (an edit's redraw leaves the view where you put it)
       if (S.time === deskShown) return;
       deskShown = S.time;
-      const x = padL() + S.time * S.pps, w = sc.clientWidth;
+      const x = padL() + S.time * S.pps, w = curW;
       let to = null;
-      if (S.playing) { if (x > sc.scrollLeft + w - 60 || x < sc.scrollLeft) to = x - 60; }
-      else if (x < sc.scrollLeft + 20 || x > sc.scrollLeft + w - 20) to = x - w / 3;
+      if (S.playing) { if (x > curScroll + w - 60 || x < curScroll) to = x - 60; }
+      else if (x < curScroll + 20 || x > curScroll + w - 20) to = x - w / 3;
       if (to != null) setTlScroll(Math.max(0, to));
       return;
     }
     // never while a finger is on the timeline or it is still gliding: the finger owns it (0.102.3)
     if (userScrolling() && !S.playing) return;
     const want = S.time * S.pps;
-    if (Math.abs(sc.scrollLeft - want) > 1.5) setTlScroll(want);
+    if (Math.abs(curScroll - want) > 1.5) setTlScroll(want);
   }
 
   // Advance the timeline. When a video clip is playing, DERIVE the time from
@@ -11587,7 +11588,7 @@
     // the fast export owns S.time while it renders; the preview sits still
     if (EXP.fast) { lastTs = ts; return; }
     // the editor is not on screen (home, New project, settings): nothing to keep in step
-    if (!S.playing && !EXP.active && !pvWrapEl.getClientRects().length) { lastTs = ts; return; }
+    if (!S.playing && !EXP.active && !pvShown) { lastTs = ts; return; }
     const dt = Math.min((ts - lastTs) / 1000, 0.1);
     lastTs = ts;
     if (S.playing) {
@@ -11618,6 +11619,10 @@
   }
 
   const pvWrapEl = $("previewWrap");
+  /* 0.102.7: measured at phone speed, getClientRects() here cost 243 ms every 5 s on the home page: each call
+     forced the browser to recompute the moving wall's styles. A watcher reports it instead, off the frame. */
+  var pvShown = true;
+  if ("IntersectionObserver" in window) new IntersectionObserver((es) => { pvShown = es[es.length - 1].isIntersecting; if (pvShown) PERF.key = ""; }).observe(pvWrapEl);
   if (/[?&#]perf\b/.test(location.href)) (function perfHud() {
     const box = document.createElement("div");
     box.style.cssText = "position:fixed;left:8px;top:8px;z-index:99999;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.78);color:#fff;font:12px/1.35 ui-monospace,monospace;pointer-events:none;white-space:pre";
@@ -11639,7 +11644,11 @@
   function loop(ts) {
     // Exactly one owner advances playback: worker while exporting, rAF otherwise.
     if (!EXP.active || !window.SenotelRenderClock || !SenotelRenderClock.running) frameTick(ts);
-    requestAnimationFrame(loop);
+    /* 0.102.7: with the editor off screen and nothing playing or exporting there is nothing to draw, so the loop
+       checks back four times a second instead of asking the browser for a frame 60 to 120 times a second
+       (measured at phone speed: the asking alone kept the page busy). It is back on frames within 250 ms. */
+    if (!S.playing && !EXP.active && !pvShown) setTimeout(() => requestAnimationFrame(loop), 250);
+    else requestAnimationFrame(loop);
   }
 
   /* ═══════════ AI EDIT ENGINE ═══════════ */
