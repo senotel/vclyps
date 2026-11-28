@@ -1322,6 +1322,7 @@
   function mediaDrag(el, m) {
     el.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || e.target.closest(".ms-x, .ms-confirm")) return;
+      el.classList.add("pressing");
       const x0 = e.clientX, y0 = e.clientY;
       let ghost = null, mark = null, drop = null;
       const zone = document.querySelector("#screen-editor .tl-zone");
@@ -1378,6 +1379,7 @@
         document.removeEventListener("pointermove", move);
         document.removeEventListener("pointerup", end);
         document.removeEventListener("pointercancel", end);
+        el.classList.remove("pressing");
         if (!ghost) return;
         el._dragged = true;
         setTimeout(() => { el._dragged = false; }, 300);
@@ -6390,7 +6392,7 @@
     strip.addEventListener("scroll", edges, { passive: true });
     requestAnimationFrame(edges); setTimeout(edges, 80);
     // it may be drawn while the editor is still hidden (everything measures 0): check again once it has a size
-    if (window.ResizeObserver) new ResizeObserver(edges).observe(strip);
+    if (window.ResizeObserver) { if (renderActionBar.ro) renderActionBar.ro.disconnect(); renderActionBar.ro = new ResizeObserver(edges); renderActionBar.ro.observe(strip); }
   }
 
   /* A tool's panel can be pulled down to its title bar and back up, so the
@@ -9280,11 +9282,15 @@
     const show = !!(K && tg && tg.inside);
     const on = show && K.keyAt(tg.item, tg.t) != null;
     // dimmed, never hidden: the play row keeps its shape so Play stays put (round 3, R4)
-    b.setAttribute("aria-disabled", show ? "false" : "true");
-    b.classList.toggle("on", on);
-    b.setAttribute("aria-label", on ? "Remove keyframe" : "Add keyframe");
-    b.title = on ? "Remove keyframe" : "Add keyframe";
-    e.setAttribute("aria-disabled", on ? "false" : "true");
+    const set = (el, a, v) => { if (el.getAttribute(a) !== v) el.setAttribute(a, v); };
+    set(b, "aria-disabled", show ? "false" : "true");
+    if (b.classList.contains("on") !== on) b.classList.toggle("on", on);
+    set(b, "aria-label", on ? "Remove keyframe" : "Add keyframe");
+    set(b, "title", on ? "Remove keyframe" : "Add keyframe");
+    set(e, "aria-disabled", on ? "false" : "true");
+    // a class, not a CSS :has() rule, so the phone play row is not re-styled every frame
+    const tr = b.closest(".transport");
+    if (tr && tr.classList.contains("kf-live") !== show) tr.classList.toggle("kf-live", show);
   }
   function kfToggle() {
     const K = KF(), tg = kfTarget();
@@ -11410,11 +11416,16 @@
     }
   }
 
+  const trShown = {};
+  function setShown(id, v) { if (trShown[id] !== v) { trShown[id] = v; $(id).textContent = v; } }
   function updateTransport() {
-    $("tCur").textContent = fmt(S.time);
-    $("tTot").textContent = fmt(total());
-    if (!seekDragging) { $("seekBar").value = total() ? (S.time / total()) * 1000 : 0; paintSeek(); }
-    $("tlTimecode").textContent = fmt1(S.time);
+    setShown("tCur", fmt(S.time));
+    setShown("tTot", fmt(total()));
+    if (!seekDragging) {
+      const v = String(total() ? Math.round((S.time / total()) * 1000) : 0);
+      if (trShown.seek !== v) { trShown.seek = v; $("seekBar").value = v; paintSeek(); }
+    }
+    setShown("tlTimecode", fmt1(S.time));
   }
 
   /* The playhead does not travel — the timeline does, and the playhead stays
@@ -11442,7 +11453,7 @@
 
   function padL() {
     if (deskTimeline()) return PADX;
-    return Math.max(PADX, Math.round($("tlScroll").clientWidth / 2));
+    return Math.max(PADX, Math.round((tlW || $("tlScroll").clientWidth) / 2));
   }
 
   function updatePlayheadUI() {
@@ -11495,9 +11506,48 @@
     }
   }
 
+  /* 0.102.1 performance: the preview used to be fully re-rendered (picture, effects, texts, captions,
+     logo) on every screen frame, 60 to 120 times a second, even when paused and even on the home page,
+     and the play row rewrote its labels and buttons every frame, forcing the page to re-measure itself.
+     Now a frame does work only when something it shows has changed. */
+  const PERF = { key: "", at: 0, cost: 0, ph: "", phAt: 0 };
+  let tlW = 0;   // the timeline's width, kept by a ResizeObserver so the frame loop never forces a re-measure
+  if (window.ResizeObserver) new ResizeObserver((en) => { tlW = Math.round(en[0].contentRect.width); }).observe($("tlScroll"));
+  // anything the person does repaints the next frame, so a drag or a slider never shows a stale picture
+  ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "input", "change"].forEach((ev) => document.addEventListener(ev, (e) => { if (e.type !== "pointermove" || e.buttons) PERF.key = ""; }, { capture: true, passive: true }));
+  function previewKey() {
+    const sel = S.sel ? S.sel.type + S.sel.id : "";
+    return S.time.toFixed(4) + "|" + histIdx + "|" + hist.length + "|" + sel + "|" + (cropEdit ? 1 : 0) + "|" +
+      pv.readyState + (pv.seeking ? "s" : "") + pv.currentTime.toFixed(3) + "|" + S.pps + "|" + S.clips.length + "|" + S.texts.length;
+  }
+  /* while playing, the picture is redrawn when the video shows a new frame (most footage has 30 a
+     second; screens refresh 60 to 120 times), else at 30 a second for photos and moving effects; a
+     device that needs over 12 ms a frame gets 25 a second. The sound is never affected. */
+  let pvFrames = 0;
+  if (pv.requestVideoFrameCallback) { const onFrame = () => { pvFrames++; pv.requestVideoFrameCallback(onFrame); }; pv.requestVideoFrameCallback(onFrame); }
+  const HAS_RVFC = !!pv.requestVideoFrameCallback;
+  function frameOverlays(ts) {
+    const gap = ts - PERF.at;
+    if (S.playing) {
+      const fresh = HAS_RVFC && pvFrames !== PERF.vf;
+      const min = PERF.cost > 12 ? 40 : fresh ? 15 : 33;
+      if (gap < min) return;
+    } else {
+      const key = previewKey();
+      if (key === PERF.key && gap < 500) return;   // nothing changed: a safety repaint twice a second
+      PERF.key = key;
+    }
+    const t0 = performance.now();
+    syncOverlays();
+    PERF.cost = PERF.cost * 0.8 + (performance.now() - t0) * 0.2;
+    PERF.at = ts; PERF.vf = pvFrames;
+    if (S.playing) PERF.key = "";
+  }
   function frameTick(ts) {
     // the fast export owns S.time while it renders; the preview sits still
     if (EXP.fast) { lastTs = ts; return; }
+    // the editor is not on screen (home, New project, settings): nothing to keep in step
+    if (!S.playing && !EXP.active && !pvWrapEl.getClientRects().length) { lastTs = ts; return; }
     const dt = Math.min((ts - lastTs) / 1000, 0.1);
     lastTs = ts;
     if (S.playing) {
@@ -11520,12 +11570,14 @@
     mixBlend();
     syncAudioClips();
     applyBleep();
-    syncOverlays();
+    if (EXP.active) syncOverlays(); else frameOverlays(ts);
     updateTransport();
-    updatePlayheadUI();
+    const ph = S.time + "|" + S.pps + "|" + tlW;
+    if (S.playing || ph !== PERF.ph || ts - PERF.phAt > 500) { PERF.ph = ph; PERF.phAt = ts; updatePlayheadUI(); }
     if (EXP.active && !EXP.suspended) { drawExportFrame(); watchExportStall(ts); }
   }
 
+  const pvWrapEl = $("previewWrap");
   function loop(ts) {
     // Exactly one owner advances playback: worker while exporting, rAF otherwise.
     if (!EXP.active || !window.SenotelRenderClock || !SenotelRenderClock.running) frameTick(ts);

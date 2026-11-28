@@ -3769,7 +3769,7 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
 /* phones: the keyframe pair shows only when it applies, and then Mute steps aside, so the play row never crowds Play */
 @media (max-width: 600px) {
   .tr-right .icon-btn[aria-disabled="true"] { display: none; }
-  .transport:has(#kfBtn:not([aria-disabled="true"])) #muteBtn { display: none; }
+  .transport.kf-live #muteBtn { display: none; }
 }
 
 /* 0.100.3 the Media column folds (desktop only): a soft-square button at its top right; folded, the
@@ -3798,7 +3798,7 @@ body[data-focus="template"][data-screen="editor"] .topbar #focusSave { display: 
 
 /* 0.101.0 media tiles: the tile adds, the corner X removes (after a confirm on the tile), a drag places it */
 .ms-item { touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; transition: scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 160ms ease; }
-.ms-item:active:not(:has(.ms-x:active, .ms-confirm)) { scale: 0.96; }
+.ms-item.pressing { scale: 0.96; }
 .ms-item:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .ms-item.is-dragging { opacity: 0.4; }
 .ms-item .ms-x { width: 22px; height: 22px; border-radius: 7px; background: rgba(17, 18, 16, 0.72); color: #fff; padding: 0; cursor: pointer; transition: opacity 0.15s ease, background-color 160ms ease, scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
