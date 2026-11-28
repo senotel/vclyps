@@ -1124,9 +1124,11 @@
     v.muted = true;
     v.playsInline = true;
     v.src = item.url;
+    /* 0.103.0: the picture's own shape, 320 px on its long side (was a 96 px square crop). The strip crops it
+       square on screen (object-fit: cover) exactly as before; the preview shows it while a scrub's exact frame
+       is still being decoded, the way CapCut never shows a frozen picture. */
     const cnv = document.createElement("canvas");
-    const SZ = 96;
-    cnv.width = SZ; cnv.height = SZ;
+    const LONG = 320;
     const ctx = cnv.getContext("2d");
     const out = [];
     let times = [], i = 0, lastDraw = 0;
@@ -1140,15 +1142,18 @@
     v.addEventListener("loadedmetadata", () => {
       const d = isFinite(v.duration) ? v.duration : 0;
       if (!d) { done(); return; }
-      const n = Math.max(2, Math.min(60, Math.ceil(d)));
+      const n = Math.max(2, Math.min(60, Math.ceil(d * 2)));   // two a second for short clips, never more than 60
       for (let k = 0; k < n; k++) times.push(Math.min(d - 0.05, (k + 0.5) * d / n));
       v.currentTime = times[0];
     });
     v.addEventListener("seeked", () => {
       try {
-        const vw = v.videoWidth, vh = v.videoHeight, s = Math.min(vw, vh);
-        ctx.drawImage(v, (vw - s) / 2, (vh - s) / 2, s, s, 0, 0, SZ, SZ);
-        out.push({ t: times[i], url: cnv.toDataURL("image/jpeg", 0.62) });
+        const vw = v.videoWidth, vh = v.videoHeight, k = LONG / Math.max(vw, vh);
+        const fw = Math.max(2, Math.round(vw * k)), fh = Math.max(2, Math.round(vh * k));
+        if (cnv.width !== fw) cnv.width = fw;
+        if (cnv.height !== fh) cnv.height = fh;
+        ctx.drawImage(v, 0, 0, fw, fh);
+        out.push({ t: times[i], url: cnv.toDataURL("image/jpeg", 0.7), w: fw, h: fh });
       } catch (e) {}
       i++;
       // show the strip filling in as it goes, without redrawing on every frame
@@ -11268,6 +11273,32 @@
     return im.complete && im.naturalWidth ? { el: im, w: im.naturalWidth, h: im.naturalHeight } : null;
   }
   const vidSrc = (v) => (v.readyState >= 2 && v.videoWidth ? { el: v, w: v.videoWidth, h: v.videoHeight } : null);
+  /* 0.103.0 scrubbing like CapCut: a phone video is compressed in long groups of frames, so each exact jump takes
+     a while (measured on a Galaxy S24 FE recording: the preview changed on 7 of ~60 frames while the timeline moved).
+     While a jump is in flight the preview shows the nearest full-shape thumbnail at once, then the exact frame. */
+  const scrubImgs = new Map();
+  let pvStood = false;
+  const scrubWarm = new WeakSet();   // the last preview paint used a thumbnail (for the ?perf counters)
+  function thumbFor(m, srcT) {
+    if (window.__noStand) return null;   // test switch: the old behaviour, for a side-by-side measurement
+    const f = m && m.frames;
+    if (!f || !f.length || !f[0].w) return null;
+    // the first scrub of a clip decodes all its thumbnails at once (about 8 MB for 60), so each is ready the moment it is needed
+    if (!scrubWarm.has(f)) { scrubWarm.add(f); f.forEach((x) => { if (x.w && !scrubImgs.has(x.url)) { const pre = new Image(); pre.decoding = "async"; pre.src = x.url; scrubImgs.set(x.url, pre); } }); }
+    let best = f[0];
+    for (let i = 1; i < f.length; i++) if (Math.abs(f[i].t - srcT) < Math.abs(best.t - srcT)) best = f[i];
+    let im = scrubImgs.get(best.url);
+    if (!im) {
+      if (scrubImgs.size > 600) scrubImgs.clear();
+      im = new Image();
+      im.decoding = "async";
+      im.onload = () => { try { window.ethWake(); } catch (e) {} };
+      im.src = best.url;
+      scrubImgs.set(best.url, im);
+    }
+    return im.complete && im.naturalWidth ? { el: im, w: im.naturalWidth, h: im.naturalHeight, stand: true } : null;
+  }
+  function scrubbing() { return !S.playing && (pv.seeking || pv.readyState < 2); }
   let pvTUsed = false;
   function previewSrc(item, srcT) {
     const m = mediaById(item.mediaId);
@@ -11275,7 +11306,7 @@
     if (m.type !== "video") return imageOf(m);
     if (S.broll.indexOf(item) >= 0) return overlayPreviewSrc(item);
     const main = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
-    if (main && main.clip === item && pv.dataset.mid === String(m.id)) return vidSrc(pv);
+    if (main && main.clip === item && pv.dataset.mid === String(m.id)) { const st = scrubbing() && thumbFor(m, srcT); if (st) { pvStood = true; return st; } return vidSrc(pv); }
     pvTUsed = true;
     if (pvT.dataset.mid !== String(m.id)) { pvT.src = m.url; pvT.dataset.mid = String(m.id); }
     if (pvT.readyState >= 1) {
@@ -11302,7 +11333,8 @@
     const info = clipAt(Math.min(S.time, Math.max(total() - 0.001, 0)));
     const m = info && mediaById(info.clip.mediaId);
     if (!m || m.type !== "video" || transitionAt(S.time)) return false;
-    return pv.dataset.mid !== String(m.id) || pv.readyState < 2;
+    if (!(pv.dataset.mid !== String(m.id) || pv.readyState < 2)) return false;
+    return !thumbFor(m, info.clip.in + srcOff(info.clip, info.offset));   // a thumbnail can stand in: draw it
   }
   function drawPreviewPicture() {
     const cv = $("layoutCanvas");
@@ -11328,8 +11360,8 @@
     pvTUsed = false;
     if (cropEdit) cropEdit.view = { box: box, dpr: dpr };
     if (cropEdit) drawCropEditor(P.getContext("2d"), W, H);
-    else if (sized && previewPic.ok && mainVideoBusy()) { /* 0.102.3: seeking: keep the last picture */ }
-    else { renderPicture(P.getContext("2d"), W, H, S.time, previewSrc); previewPic.ok = true; }
+    else if (sized && previewPic.ok && mainVideoBusy()) { if (window.__pvStat) window.__pvStat.held++; /* 0.102.3: seeking: keep the last picture */ }
+    else { renderPicture(P.getContext("2d"), W, H, S.time, previewSrc); previewPic.ok = true; if (window.__pvStat) { window.__pvStat[pvStood ? "stand" : pv.seeking ? "stale" : "exact"] = (window.__pvStat[pvStood ? "stand" : pv.seeking ? "stale" : "exact"] || 0) + 1; window.__pvStat.thumbs = Math.max(window.__pvStat.thumbs || 0, ...S.media.map((m) => (m.frames || []).filter((f) => f.w).length)); } pvStood = false; }
     if (!pvTUsed && !pvT.paused) pvT.pause();
     ctx.drawImage(P, Math.round(box.x * dpr), Math.round(box.y * dpr));
     // ccl8: while a mask is being set, its outline and handles over the picture (never in the export)
