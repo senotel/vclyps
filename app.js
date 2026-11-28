@@ -312,6 +312,7 @@
     document.addEventListener("click", () => { if (!pop.classList.contains("hidden")) show(false); });
   })();
   function commit(name) {
+    try { window.ethWake(); } catch (e) {}
     try { lockFollow(); } catch (e) {}
     try { kfCapture(); } catch (e) {}   // ccl13: an edit of a keyframed thing is kept as a keyframe
     hist = hist.slice(0, histIdx + 1);
@@ -1211,6 +1212,8 @@
   /* background footage understanding (brain.js) — starts the moment a file lands */
   function queueAnalysis(item) {
     if (!window.SenotelBrain || item.type === "audio") return;   // nothing to watch in a sound
+    // 0.102.8: the public site has no Auto clip yet, so nothing uses this; it must not work in the background there
+    if (PUBLIC) return;
     item._an = "working";
     SenotelBrain.analyze(item).then(() => {
       item._an = "done";
@@ -3735,6 +3738,7 @@
 
   var stripCache = new Map();   // 0.102.3: clip picture strips kept between redraws
   function renderTimeline() {
+    try { window.ethWake(); } catch (e) {}   // 0.102.8: what the timeline shows changed, so the labels and picture follow
     const vt = $("videoTrack"), tt = $("textTrack"), ruler = $("ruler");
     const ot = $("overlayTrack"), at = $("audioTrack"), mt = $("musicTrack"), ut = $("uaudioTrack"), et = $("effectTrack");
     vt.innerHTML = ""; tt.innerHTML = ""; ot.innerHTML = ""; at.innerHTML = ""; mt.innerHTML = ""; ut.innerHTML = ""; et.innerHTML = "";
@@ -6766,6 +6770,7 @@
   let lastTs = 0;
 
   function play() {
+    try { window.ethWake(); } catch (e) {}
     if (!S.clips.length) { toast("Add footage to the timeline first"); return; }
     if (S.time >= total() - 0.05) S.time = 0;
     S.playing = true;
@@ -11619,10 +11624,11 @@
   }
 
   const pvWrapEl = $("previewWrap");
+  var loopAsleep = false, lastWake = performance.now();
   /* 0.102.7: measured at phone speed, getClientRects() here cost 243 ms every 5 s on the home page: each call
      forced the browser to recompute the moving wall's styles. A watcher reports it instead, off the frame. */
   var pvShown = true;
-  if ("IntersectionObserver" in window) new IntersectionObserver((es) => { pvShown = es[es.length - 1].isIntersecting; if (pvShown) PERF.key = ""; }).observe(pvWrapEl);
+  if ("IntersectionObserver" in window) new IntersectionObserver((es) => { pvShown = es[es.length - 1].isIntersecting; if (pvShown) wakeLoop(); }).observe(pvWrapEl);
   if (/[?&#]perf\b/.test(location.href)) (function perfHud() {
     const box = document.createElement("div");
     box.style.cssText = "position:fixed;left:8px;top:8px;z-index:99999;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.78);color:#fff;font:12px/1.35 ui-monospace,monospace;pointer-events:none;white-space:pre";
@@ -11644,12 +11650,25 @@
   function loop(ts) {
     // Exactly one owner advances playback: worker while exporting, rAF otherwise.
     if (!EXP.active || !window.SenotelRenderClock || !SenotelRenderClock.running) frameTick(ts);
-    /* 0.102.7: with the editor off screen and nothing playing or exporting there is nothing to draw, so the loop
-       checks back four times a second instead of asking the browser for a frame 60 to 120 times a second
-       (measured at phone speed: the asking alone kept the page busy). It is back on frames within 250 ms. */
-    if (!S.playing && !EXP.active && !pvShown) setTimeout(() => requestAnimationFrame(loop), 250);
-    else requestAnimationFrame(loop);
+    /* 0.102.8 (admin: nothing runs where you cannot see it): the loop stops completely when nothing is playing
+       or exporting and either the editor is off screen or nothing has happened for 1.5 s. Anything that can change
+       the picture wakes it at once: a touch, a key, the wheel, a slider, a video or picture finishing loading,
+       an edit, the preview coming on screen, play. */
+    if (!S.playing && !EXP.active && (!pvShown || performance.now() - lastWake > 1500)) { loopAsleep = true; return; }
+    requestAnimationFrame(loop);
   }
+  function wakeLoop() {
+    lastWake = performance.now();
+    PERF.key = "";
+    if (loopAsleep) { loopAsleep = false; requestAnimationFrame(loop); }
+  }
+  window.ethWake = wakeLoop;
+  ["pointerdown", "pointerup", "keydown", "wheel", "input", "change", "touchstart"].forEach((ev) => document.addEventListener(ev, wakeLoop, { capture: true, passive: true }));
+  document.addEventListener("pointermove", (e) => { if (e.buttons) wakeLoop(); }, { capture: true, passive: true });
+  // media and pictures finishing a load or a seek (these do not bubble, so they are caught on the way down)
+  ["load", "loadedmetadata", "durationchange", "loadeddata", "seeked", "canplay", "play", "pause", "ended"].forEach((ev) => document.addEventListener(ev, wakeLoop, true));
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener("loadingdone", wakeLoop);
+  $("tlScroll").addEventListener("scroll", wakeLoop, { passive: true });
 
   /* ═══════════ AI EDIT ENGINE ═══════════ */
 

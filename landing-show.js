@@ -371,7 +371,14 @@
       wallWatch = new IntersectionObserver(function (es) { wallSeen = es[es.length - 1].isIntersecting; gridTend(); }, { root: home });
       wallWatch.observe(wall);
     } else if (!wallWatch) wallSeen = true;
-    if (canPlay() && wallSeen) {
+    var on = canPlay() && wallSeen;
+    // 0.102.8: the drift stops too while nobody can see the wall (it kept moving off screen before)
+    Array.prototype.forEach.call(wall.querySelectorAll(".lp-wall-strip"), function (st) {
+      if (!st._drift) return;
+      if (on && st._drift.playState === "paused") st._drift.play();
+      else if (!on && st._drift.playState === "running") st._drift.pause();
+    });
+    if (on) {
       var v = gridVideo();
       if (v.paused) { var pr = v.play(); if (pr && pr.then) pr.then(function () { if (!gridLoop) gridFrames(); }).catch(function () {}); }
       else if (!gridLoop) gridFrames();
@@ -394,7 +401,7 @@
     strip._drift = strip.animate([{ transform: "translateY(0px)" }, { transform: "translateY(" + (-(h / 2 + gap / 2)).toFixed(2) + "px)" }],
       { duration: ms, iterations: Infinity, easing: "linear", direction: down ? "reverse" : "normal" });
     strip._drift.currentTime = (keep || 0) * ms;
-    if (paused) strip._drift.pause();
+    if (paused || !wallSeen || !canPlay()) strip._drift.pause();
   }
   var driftWatch = "ResizeObserver" in window ? new ResizeObserver(function (es) {
     es.forEach(function (e) {
